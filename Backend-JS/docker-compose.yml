@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: microservices-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=secure-password
+
+  api-gateway:
+    build: 
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - MAIN_SERVICE_URL=http://main-service:4000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4001
+      - FEED_SERVICE_URL=http://feed-service:4002
+    depends_on:
+      - mongodb
+      - main-service
+      - notification-service
+      - feed-service
+
+  main-service:
+    build: 
+      context: ./main-service
+      dockerfile: Dockerfile
+    container_name: main-service
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/maindb
+    depends_on:
+      - mongodb
+
+  notification-service:
+    build: 
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "4001:4001"
+    environment:
+      - PORT=4001
+      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/notificationdb
+    depends_on:
+      - mongodb
+
+  feed-service:
+    build: 
+      context: ./feed-service
+      dockerfile: Dockerfile
+    container_name: feed-service
+    ports:
+      - "4002:4002"
+    environment:
+      - PORT=4002
+      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/feeddb
+    depends_on:
+      - mongodb
+
+volumes:
+  mongodb_data:

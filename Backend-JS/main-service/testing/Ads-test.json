@@ -1,0 +1,434 @@
+{
+	"info": {
+		"_postman_id": "ad-management-collection",
+		"name": "Ad Management APIs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Home Slider Ads",
+			"item": [
+				{
+					"name": "Create Home Ad",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "title",
+									"value": "Summer Sale",
+									"type": "text"
+								},
+								{
+									"key": "content",
+									"value": "Get 50% off on all items",
+									"type": "text"
+								},
+								{
+									"key": "dirURL",
+									"value": "https://example.com/sale",
+									"type": "text"
+								},
+								{
+									"key": "modal",
+									"value": "true",
+									"type": "text"
+								},
+								{
+									"key": "prority",
+									"value": "1",
+									"type": "text"
+								},
+								{
+									"key": "image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseURL}}/home-ads",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"home-ads"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Home Ads",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseURL}}/home-ads",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"home-ads"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Home Ad",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "title",
+									"value": "Updated Summer Sale",
+									"type": "text"
+								},
+								{
+									"key": "image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseURL}}/home-ads/{{adId}}",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"home-ads",
+								"{{adId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Home Ad",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{baseURL}}/home-ads/{{adId}}",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"home-ads",
+								"{{adId}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Feed Ads",
+			"item": [
+				{
+					"name": "Create Feed Ad",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "title",
+									"value": "New Product Launch",
+									"type": "text"
+								},
+								{
+									"key": "content",
+									"value": "Check out our latest innovation",
+									"type": "text"
+								},
+								{
+									"key": "dirURL",
+									"value": "https://example.com/product",
+									"type": "text"
+								},
+								{
+									"key": "image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseURL}}/feed-ads",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"feed-ads"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Feed Ads",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseURL}}/feed-ads",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"feed-ads"
+							]
+						}
+					}
+				},
+				{
+					"name": "Track Feed Ad Impression",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseURL}}/feed-ads/{{adId}}/impression",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"feed-ads",
+								"{{adId}}",
+								"impression"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Reel Ads",
+			"item": [
+				{
+					"name": "Create Reel Ad",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "title",
+									"value": "Cool Product Reel",
+									"type": "text"
+								},
+								{
+									"key": "content",
+									"value": "Watch our awesome product in action",
+									"type": "text"
+								},
+								{
+									"key": "dirURL",
+									"value": "https://example.com/reel",
+									"type": "text"
+								},
+								{
+									"key": "image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseURL}}/reel-ads",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"reel-ads"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Reel Ads",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseURL}}/reel-ads",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"reel-ads"
+							]
+						}
+					}
+				},
+				{
+					"name": "Track Reel Ad Impression",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseURL}}/reel-ads/{{adId}}/impression",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"reel-ads",
+								"{{adId}}",
+								"impression"
+							]
+						}
+					}
+				},
+				{
+					"name": "Track Reel Ad View",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseURL}}/reel-ads/{{adId}}/view",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"reel-ads",
+								"{{adId}}",
+								"view"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "News Ads",
+			"item": [
+				{
+					"name": "Create News Ad",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "title",
+									"value": "Breaking News Ad",
+									"type": "text"
+								},
+								{
+									"key": "content",
+									"value": "Exciting news happening now",
+									"type": "text"
+								},
+								{
+									"key": "dirURL",
+									"value": "https://example.com/news",
+									"type": "text"
+								},
+								{
+									"key": "image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseURL}}/news-ads",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"news-ads"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get News Ads",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseURL}}/news-ads",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"news-ads"
+							]
+						}
+					}
+				},
+				{
+					"name": "Track News Ad Impression",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseURL}}/news-ads/{{adId}}/impression",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"news-ads",
+								"{{adId}}",
+								"impression"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Display Settings",
+			"item": [
+				{
+					"name": "Get Dynamic Display",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseURL}}/display",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"display"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Display Settings",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Slider\": true,\n    \"SplashScreen\": true,\n    \"HomeScreenAdOne\": true,\n    \"FeedAds\": true,\n    \"ReelAds\": true,\n    \"NewsAds\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/display-settings",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"display-settings"
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseURL",
+			"value": "http://localhost:3002/api"
+		},
+		{
+			"key": "adId",
+			"value": "replace_with_actual_ad_id"
+		}
+	]
+}
