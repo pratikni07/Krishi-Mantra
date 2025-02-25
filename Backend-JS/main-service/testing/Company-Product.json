@@ -1,0 +1,148 @@
+{
+    "companies": [
+      {
+        "name": "GreenTech Agriculture Solutions",
+        "email": "info@greentech-ag.com",
+        "address": {
+          "street": "123 Farmland Road",
+          "city": "Agriville",
+          "state": "California",
+          "zip": "95123"
+        },
+        "phone": "+15551234567",
+        "website": "https://www.greentech-ag.com",
+        "description": "Innovative agricultural technology solutions for modern farming",
+        "logo": "https://example.com/greentech-logo.png",
+        "rating": 4.5
+      },
+      {
+        "name": "EcoHarvest Innovations",
+        "email": "contact@ecoharvest.com",
+        "address": {
+          "street": "456 Crop Circle Lane",
+          "city": "Farmsburg",
+          "state": "Iowa",
+          "zip": "52233"
+        },
+        "phone": "+15559876543",
+        "website": "https://www.ecoharvest.com",
+        "description": "Sustainable agricultural products and solutions",
+        "logo": "https://example.com/ecoharvest-logo.png",
+        "rating": 4.2
+      }
+    ],
+    "products": [
+      {
+        "name": "NutriGrow Fertilizer",
+        "image": "https://example.com/nutrigrow-fertilizer.jpg",
+        "usage": "Organic nitrogen-rich fertilizer for corn and wheat crops",
+        "usedFor": "corn" 
+      },
+      {
+        "name": "AquaSmart Irrigation System",
+        "image": "https://example.com/aquasmart-irrigation.jpg",
+        "usage": "Advanced water-efficient irrigation technology",
+        "usedFor": "wheat"
+      }
+    ],
+    "postman_collection": {
+      "info": {
+        "_postman_id": "agriculture-app-collection",
+        "name": "Agriculture App API",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+      },
+      "item": [
+        {
+          "name": "Companies",
+          "item": [
+            {
+              "name": "Create Company",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"GreenTech Agriculture Solutions\",\n  \"email\": \"info@greentech-ag.com\",\n  \"address\": {\n    \"street\": \"123 Farmland Road\",\n    \"city\": \"Agriville\",\n    \"state\": \"California\",\n    \"zip\": \"95123\"\n  },\n  \"phone\": \"+15551234567\",\n  \"website\": \"https://www.greentech-ag.com\",\n  \"description\": \"Innovative agricultural technology solutions for modern farming\",\n  \"logo\": \"https://example.com/greentech-logo.png\",\n  \"rating\": 4.5\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/companies",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "companies"]
+                }
+              }
+            },
+            {
+              "name": "Get All Companies",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/api/companies",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "companies"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Products",
+          "item": [
+            {
+              "name": "Create Product",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"NutriGrow Fertilizer\",\n  \"image\": \"https://example.com/nutrigrow-fertilizer.jpg\",\n  \"usage\": \"Organic nitrogen-rich fertilizer for corn and wheat crops\",\n  \"companyId\": \"{{companyId}}\",\n  \"usedFor\": \"{{cropsId}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "products"]
+                }
+              }
+            },
+            {
+              "name": "Get All Products",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/api/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "products"]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "variable": [
+        {
+          "key": "base_url",
+          "value": "http://localhost:3000",
+          "type": "string"
+        },
+        {
+          "key": "companyId",
+          "value": "",
+          "type": "string"
+        },
+        {
+          "key": "cropsId",
+          "value": "",
+          "type": "string"
+        }
+      ]
+    }
+  }
