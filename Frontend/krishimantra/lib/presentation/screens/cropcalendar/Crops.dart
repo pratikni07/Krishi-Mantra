@@ -10,7 +10,7 @@ class CropsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final CropController cropController = Get.put(CropController(Get.find()));
+    final CropController cropController = Get.find<CropController>();
     final TextEditingController searchController = TextEditingController();
 
     return Scaffold(

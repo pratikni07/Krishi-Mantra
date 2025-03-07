@@ -1,6 +1,7 @@
 // ignore_for_file: constant_identifier_names
 
 import 'package:get/get.dart';
+import 'package:krishimantra/presentation/screens/ai_chat/ai_chat_screen.dart';
 import 'package:krishimantra/presentation/screens/auth/LoginScreen.dart';
 import 'package:krishimantra/presentation/screens/company/allcompanyscreen.dart';
 import 'package:krishimantra/presentation/screens/cropcalendar/Crops.dart';
@@ -9,10 +10,10 @@ import 'package:krishimantra/presentation/screens/feed/create_post_screen.dart';
 import 'package:krishimantra/presentation/screens/home/home_screen.dart';
 import 'package:krishimantra/presentation/screens/main_screen.dart';
 import 'package:krishimantra/presentation/screens/splash/splash_screen.dart';
+import 'package:krishimantra/presentation/screens/video_tutorial/video_list_screen.dart';
 
 import '../presentation/screens/products/product_list_screen.dart';
 import '../presentation/screens/schemes/gov_schemes_screen.dart';
-
 
 class AppRoutes {
   static const String SPLASH = '/splash';
@@ -41,8 +42,8 @@ class AppRoutes {
     GetPage(name: CROP_CALENDAR, page: () => CropsScreen()),
     GetPage(name: COMPANIES, page: () => CompanyListScreen()),
     GetPage(name: FERTILIZERS, page: () => ProductListScreen()),
-    GetPage(name: KRISHI_AI, page: () => ChatListScreen()),
-    // GetPage(name: KRISHI_VIDEOS, page: () => KrishiVideosScreen()),
+    GetPage(name: KRISHI_AI, page: () => AIChatScreen()),
+    GetPage(name: KRISHI_VIDEOS, page: () => VideoListScreen()),
     // GetPage(name: NEWS, page: () => NewsScreen()),
     GetPage(name: SCHEMES, page: () => GovSchemesScreen()),
   ];

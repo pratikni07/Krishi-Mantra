@@ -4,6 +4,7 @@ const Chat = require("../models/chat.model");
 const Group = require("../models/group.model");
 const User = require("../models/user.model");
 const MessageService = require("../services/message.service");
+const AISocketService = require("./ai-socket.service");
 const { DataExchange } = require("aws-sdk");
 
 class SocketService {
@@ -21,6 +22,9 @@ class SocketService {
 
     this.userSocketMap = new Map();
     this.initialize();
+
+    // Initialize AI Socket Service
+    this.aiSocketService = new AISocketService(this.io, this.userSocketMap);
   }
 
   initialize() {

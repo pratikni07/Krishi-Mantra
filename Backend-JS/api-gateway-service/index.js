@@ -3,6 +3,7 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
+const uploadRoutes = require("./routes/uploadRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -48,69 +49,6 @@ console.log("Environment Variables:", {
   REEL_SERVICE_URL: process.env.REEL_SERVICE_URL,
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
 });
-
-// Modify the service proxy creation to include default values and validation
-// const createServiceProxy = (serviceName, serviceUrl, pathRewrite) => {
-//   console.log('Creating service proxy for:', serviceName, serviceUrl, pathRewrite);
-//   if (!serviceUrl) {
-//     throw new Error(`${serviceName} URL is not configured. Please check your .env file.`);
-//   }
-
-//   return createProxyMiddleware({
-//     target: serviceUrl.trim(),
-//     changeOrigin: true,
-//     pathRewrite: pathRewrite,
-//     on: {
-//       proxyReq: (proxyReq, req, res) => {
-//         // Log the incoming request
-//         console.log('--------------------------------');
-//         console.log('Request received:', req.method, req.url, proxyReq);
-//         // Handle POST/PUT/PATCH requests with body
-//         if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
-//           const bodyData = JSON.stringify(req.body);
-//           console.log('Body data:', bodyData);
-//           // Remove content-length header if exists
-//           proxyReq.removeHeader('Content-Length');
-//           // Set new headers
-//           proxyReq.setHeader('Content-Type', 'application/json');
-//           proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-//           // Write body data
-//           proxyReq.write(bodyData);
-//         }
-
-//         // Add forwarded headers
-//         proxyReq.setHeader('x-forwarded-for', req.ip);
-//         proxyReq.setHeader('x-forwarded-host', req.headers.host);
-//         proxyReq.setHeader('x-forwarded-proto', req.protocol);
-//       },
-//       proxyRes: (proxyRes, req, res) => {
-//         // Log the proxy response
-//         console.log(`[${serviceName}] Proxy response status: ${proxyRes.statusCode}`);
-//       },
-//       error: (err, req, res) => {
-//         console.error(`Proxy Error (${serviceName}): ${err.message}`);
-//         res.status(502).json({
-//           status: "error",
-//           message: `${serviceName} unavailable`,
-//           error: process.env.NODE_ENV === "development" ? err.message : undefined
-//         });
-//       },
-//     },
-
-//     // onError: (err, req, res) => {
-//     //   console.error(`Proxy Error (${serviceName}): ${err.message}`);
-//     //   res.status(502).json({
-//     //     status: "error",
-//     //     message: `${serviceName} unavailable`,
-//     //     error: process.env.NODE_ENV === "development" ? err.message : undefined
-//     //   });
-//     // },
-//     // onProxyRes: (proxyRes, req, res) => {
-//     //   // Log the proxy response
-//     //   console.log(`[${serviceName}] Proxy response status: ${proxyRes.statusCode}`);
-//     // }
-//   });
-// };
 
 const createServiceProxy = (serviceName, serviceUrl, pathRewrite) => {
   console.log(
@@ -208,6 +146,7 @@ try {
   app.use("/api/messages", messageServiceProxy);
   app.use("/api/feed", feedServiceProxy);
   app.use("/api/reels", reelServiceProxy);
+  app.use("/api/upload", uploadRoutes);
 } catch (error) {
   console.error("Error setting up proxies:", error.message);
   process.exit(1);

@@ -12,9 +12,15 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/rendering.dart';
 
-
 class ReelsPage extends StatefulWidget {
-  const ReelsPage({Key? key}) : super(key: key);
+  final int? initialIndex;
+  final List<ReelModel>? reels;
+
+  const ReelsPage({
+    Key? key,
+    this.initialIndex,
+    this.reels,
+  }) : super(key: key);
 
   @override
   State<ReelsPage> createState() => _ReelsPageState();
@@ -22,15 +28,24 @@ class ReelsPage extends StatefulWidget {
 
 class _ReelsPageState extends State<ReelsPage> {
   final ReelController _reelController = Get.find<ReelController>();
-  final PageController _pageController = PageController();
-  RxString activeTag = ''.obs;  // Add this to track active tag
+  late PageController _pageController;
+  RxString activeTag = ''.obs; // Add this to track active tag
   final RxBool _isDescriptionExpanded = false.obs;
 
   @override
   void initState() {
     super.initState();
-    print('ReelsPage initialized');
-    _reelController.fetchReels(refresh: true);
+    _pageController = PageController(
+      initialPage: widget.initialIndex ?? 0,
+    );
+
+    if (widget.reels != null) {
+      // Use provided reels if available
+      _reelController.reels.value = widget.reels!;
+    } else {
+      // Otherwise fetch new reels
+      _reelController.fetchReels(refresh: true);
+    }
     _reelController.fetchTrendingTags();
   }
 
@@ -51,8 +66,9 @@ class _ReelsPageState extends State<ReelsPage> {
             () {
               print('Reels count: ${_reelController.reels.length}');
               print('Loading state: ${_reelController.isLoading.value}');
-              
-              return _reelController.isLoading.value && _reelController.reels.isEmpty
+
+              return _reelController.isLoading.value &&
+                      _reelController.reels.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : PageView.builder(
                       controller: _pageController,
@@ -64,17 +80,19 @@ class _ReelsPageState extends State<ReelsPage> {
                           await _reelController.fetchReels();
                         }
 
-                        final currentContext = _pageController.position.haveDimensions
-                            ? (_pageController.page?.round() ?? 0)
-                            : 0;
-                        
+                        final currentContext =
+                            _pageController.position.haveDimensions
+                                ? (_pageController.page?.round() ?? 0)
+                                : 0;
+
                         if ((index - currentContext).abs() > 2) {
-                          _ReelVideoCardState._videoCache.removeWhere((url, controller) {
+                          _ReelVideoCardState._videoCache
+                              .removeWhere((url, controller) {
                             final shouldRemove = !_reelController.reels
                                 .sublist(
-                                  max(0, index - 2),
-                                  min(_reelController.reels.length, index + 3)
-                                )
+                                    max(0, index - 2),
+                                    min(_reelController.reels.length,
+                                        index + 3))
                                 .any((reel) => reel.mediaUrl == url);
                             if (shouldRemove) {
                               controller.dispose();
@@ -115,66 +133,69 @@ class _ReelsPageState extends State<ReelsPage> {
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Obx(() => ElevatedButton(
-                          onPressed: () {
-                            activeTag.value = 'trending';
-                            _reelController.fetchTrendingReels();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: activeTag.value == 'trending'
-                                ? Colors.white
-                                : Colors.white.withOpacity(0.2),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            minimumSize: Size.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: Text(
-                            '🔥 Trending',
-                            style: TextStyle(
-                              color: activeTag.value == 'trending'
-                                  ? Colors.black
-                                  : Colors.white,
-                              fontSize: 13,
-                            ),
-                          ),
-                        )),
+                              onPressed: () {
+                                activeTag.value = 'trending';
+                                _reelController.fetchTrendingReels();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: activeTag.value == 'trending'
+                                    ? Colors.white
+                                    : Colors.white.withOpacity(0.2),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                minimumSize: Size.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: Text(
+                                '🔥 Trending',
+                                style: TextStyle(
+                                  color: activeTag.value == 'trending'
+                                      ? Colors.black
+                                      : Colors.white,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            )),
                       );
                     }
 
                     final tag = _reelController.trendingTags[index - 1];
                     final tagName = tag['name'] as String;
-                    
+
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Obx(() => ElevatedButton(
-                        onPressed: () async {
-                          activeTag.value = tagName;
-                          _reelController.isLoading.value = true;
-                          final tagReels = await _reelController.getReelsByTag(tagName);
-                          _reelController.reels.value = tagReels;
-                          _reelController.isLoading.value = false;
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: activeTag.value == tagName
-                              ? Colors.white
-                              : Colors.white.withOpacity(0.2),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          minimumSize: Size.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Text(
-                          '#$tagName',
-                          style: TextStyle(
-                            color: activeTag.value == tagName
-                                ? Colors.black
-                                : Colors.white,
-                            fontSize: 13,
-                          ),
-                        ),
-                      )),
+                            onPressed: () async {
+                              activeTag.value = tagName;
+                              _reelController.isLoading.value = true;
+                              final tagReels =
+                                  await _reelController.getReelsByTag(tagName);
+                              _reelController.reels.value = tagReels;
+                              _reelController.isLoading.value = false;
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: activeTag.value == tagName
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              minimumSize: Size.zero,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              '#$tagName',
+                              style: TextStyle(
+                                color: activeTag.value == tagName
+                                    ? Colors.black
+                                    : Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                          )),
                     );
                   },
                 );
@@ -204,9 +225,12 @@ class ReelVideoCard extends StatefulWidget {
 class _ReelVideoCardState extends State<ReelVideoCard> {
   final ReelController _reelController = Get.find<ReelController>();
   late VideoPlayerController _videoPlayerController;
-  static const int PRELOAD_AHEAD = 2; // Number of videos to preload ahead and behind
-  static final Map<String, VideoPlayerController> _videoCache = {}; // Cache for video controllers
-  static const int MAX_CACHE_SIZE = 7; // Increased cache size to accommodate both directions
+  static const int PRELOAD_AHEAD =
+      2; // Number of videos to preload ahead and behind
+  static final Map<String, VideoPlayerController> _videoCache =
+      {}; // Cache for video controllers
+  static const int MAX_CACHE_SIZE =
+      7; // Increased cache size to accommodate both directions
   bool _isVideoInitialized = false;
   bool _isPlaying = false;
   final RxBool _isDescriptionExpanded = false.obs;
@@ -300,11 +324,11 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
             _isVideoInitialized = true;
             _isPlaying = true;
           });
-          
+
           await _videoPlayerController.setPlaybackSpeed(1.0);
           await _videoPlayerController.setLooping(true);
           await _videoPlayerController.play();
-          
+
           // Start preloading videos in both directions
           _preloadVideos();
         }
@@ -336,10 +360,10 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
   void _showCommentsModal(BuildContext context) async {
     final TextEditingController commentController = TextEditingController();
     final comments = await _reelController.fetchComments(widget.reel.id);
-    RxString replyingTo = ''.obs;  // Track which comment we're replying to
-    
+    RxString replyingTo = ''.obs; // Track which comment we're replying to
+
     if (!mounted) return;
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -379,8 +403,9 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
               ),
               Expanded(
                 child: Obx(() {
-                  final reelComments = _reelController.reelComments[widget.reel.id] ?? [];
-                  
+                  final reelComments =
+                      _reelController.reelComments[widget.reel.id] ?? [];
+
                   if (reelComments.isEmpty) {
                     return const Center(
                       child: Text(
@@ -389,49 +414,63 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                       ),
                     );
                   }
-                  
+
                   return ListView.builder(
                     controller: scrollController,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: reelComments.length,
                     itemBuilder: (context, index) {
                       final comment = reelComments[index];
-                      final replies = comment['replies'] as List<dynamic>? ?? [];
+                      final replies =
+                          comment['replies'] as List<dynamic>? ?? [];
                       final hasReplies = replies.isNotEmpty;
                       final showAllReplies = RxBool(false);
-                      
+
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Main Comment
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: _buildCommentItem(comment, replyingTo, commentController),
+                            child: _buildCommentItem(
+                                comment, replyingTo, commentController),
                           ),
 
                           // Replies Section
                           if (hasReplies)
                             Obx(() {
-                              final displayReplies = showAllReplies.value 
-                                  ? replies 
-                                  : (replies.length > 2 ? replies.sublist(0, 2) : replies);
+                              final displayReplies = showAllReplies.value
+                                  ? replies
+                                  : (replies.length > 2
+                                      ? replies.sublist(0, 2)
+                                      : replies);
 
                               return Padding(
                                 padding: const EdgeInsets.only(left: 32),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    ...displayReplies.map((reply) => Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      child: _buildCommentItem(reply, replyingTo, commentController),
-                                    )).toList(),
-                                    
+                                    ...displayReplies
+                                        .map((reply) => Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 8),
+                                              child: _buildCommentItem(
+                                                  reply,
+                                                  replyingTo,
+                                                  commentController),
+                                            ))
+                                        .toList(),
+
                                     // Show More Replies Button
-                                    if (replies.length > 2 && !showAllReplies.value)
+                                    if (replies.length > 2 &&
+                                        !showAllReplies.value)
                                       Padding(
-                                        padding: const EdgeInsets.only(top: 4, bottom: 8),
+                                        padding: const EdgeInsets.only(
+                                            top: 4, bottom: 8),
                                         child: GestureDetector(
-                                          onTap: () => showAllReplies.value = true,
+                                          onTap: () =>
+                                              showAllReplies.value = true,
                                           child: Text(
                                             'Show ${replies.length - 2} more replies',
                                             style: const TextStyle(
@@ -470,31 +509,32 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Obx(() => replyingTo.value.isNotEmpty
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Text(
-                                'Replying to ${replyingTo.value}',
-                                style: const TextStyle(
-                                  color: AppColors.textGrey,
-                                  fontSize: 12,
-                                ),
+                    Obx(
+                      () => replyingTo.value.isNotEmpty
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'Replying to ${replyingTo.value}',
+                                    style: const TextStyle(
+                                      color: AppColors.textGrey,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  IconButton(
+                                    icon: const Icon(Icons.close, size: 16),
+                                    onPressed: () {
+                                      replyingTo.value = '';
+                                      commentController.clear();
+                                    },
+                                    color: AppColors.textGrey,
+                                  ),
+                                ],
                               ),
-                              const Spacer(),
-                              IconButton(
-                                icon: const Icon(Icons.close, size: 16),
-                                onPressed: () {
-                                  replyingTo.value = '';
-                                  commentController.clear();
-                                },
-                                color: AppColors.textGrey,
-                              ),
-                            ],
-                          ),
-                        )
-                      : const SizedBox.shrink(),
+                            )
+                          : const SizedBox.shrink(),
                     ),
                     Row(
                       children: [
@@ -514,26 +554,30 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                           onPressed: () async {
                             if (commentController.text.trim().isNotEmpty) {
                               try {
-                                final parentComment = replyingTo.value.isNotEmpty
-                                    ? _reelController.reelComments.value[widget.reel.id]
-                                        ?.where((comment) => 
-                                            comment['userName'] != null && 
-                                            comment['userName'].toString() == replyingTo.value
-                                        )
+                                final parentComment = replyingTo
+                                        .value.isNotEmpty
+                                    ? _reelController
+                                        .reelComments.value[widget.reel.id]
+                                        ?.where((comment) =>
+                                            comment['userName'] != null &&
+                                            comment['userName'].toString() ==
+                                                replyingTo.value)
                                         .firstOrNull
                                     : null;
 
-                                final parentCommentId = parentComment?['_id'] as String?;
+                                final parentCommentId =
+                                    parentComment?['_id'] as String?;
 
                                 await _reelController.addComment(
                                   widget.reel.id,
                                   commentController.text.trim(),
                                   parentCommentId: parentCommentId,
                                 );
-                                
+
                                 commentController.clear();
                                 replyingTo.value = '';
-                                await _reelController.fetchComments(widget.reel.id);
+                                await _reelController
+                                    .fetchComments(widget.reel.id);
                               } catch (e) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -624,17 +668,24 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                             Row(
                               children: [
                                 CircleAvatar(
-                                  backgroundImage: NetworkImage(widget.reel.profilePhoto),
-                                  onBackgroundImageError: (exception, stackTrace) {
-                                    print('Error loading profile image: $exception');
+                                  backgroundImage:
+                                      NetworkImage(widget.reel.profilePhoto),
+                                  onBackgroundImageError:
+                                      (exception, stackTrace) {
+                                    print(
+                                        'Error loading profile image: $exception');
                                   },
                                   backgroundColor: AppColors.textGrey,
                                   child: widget.reel.profilePhoto.isEmpty
-                                    ? Text(
-                                        widget.reel.userName?.substring(0, 1).toUpperCase() ?? '?',
-                                        style: const TextStyle(color: Colors.white),
-                                      )
-                                    : null,
+                                      ? Text(
+                                          widget.reel.userName
+                                                  ?.substring(0, 1)
+                                                  .toUpperCase() ??
+                                              '?',
+                                          style: const TextStyle(
+                                              color: Colors.white),
+                                        )
+                                      : null,
                                   radius: 16,
                                 ),
                                 const SizedBox(width: 8),
@@ -673,21 +724,27 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                                 children: [
                                   RichText(
                                     text: TextSpan(
-                                      children: _isDescriptionExpanded.value 
+                                      children: _isDescriptionExpanded.value
                                           ? styledDescription
-                                          : [...styledDescription.take(15), 
+                                          : [
+                                              ...styledDescription.take(15),
                                               if (words.length > 15)
                                                 const TextSpan(text: '... ')
                                             ],
                                     ),
-                                    maxLines: _isDescriptionExpanded.value ? null : 2,
+                                    maxLines:
+                                        _isDescriptionExpanded.value ? null : 2,
                                     overflow: TextOverflow.clip,
                                   ),
                                   if (words.length > 15)
                                     GestureDetector(
-                                      onTap: () => _isDescriptionExpanded.value = !_isDescriptionExpanded.value,
+                                      onTap: () =>
+                                          _isDescriptionExpanded.value =
+                                              !_isDescriptionExpanded.value,
                                       child: Text(
-                                        _isDescriptionExpanded.value ? 'Show less' : 'Show more',
+                                        _isDescriptionExpanded.value
+                                            ? 'Show less'
+                                            : 'Show more',
                                         style: const TextStyle(
                                           color: AppColors.green,
                                           fontSize: 12,
@@ -698,11 +755,13 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                                 ],
                               );
                             }),
-                            if (widget.reel.location != null && widget.reel.location.isNotEmpty) ...[
+                            if (widget.reel.location != null &&
+                                widget.reel.location.isNotEmpty) ...[
                               const SizedBox(height: 6),
                               Row(
                                 children: [
-                                  const Icon(Icons.location_on, color: Colors.white, size: 16),
+                                  const Icon(Icons.location_on,
+                                      color: Colors.white, size: 16),
                                   const SizedBox(width: 4),
                                 ],
                               ),
@@ -718,13 +777,14 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _buildInteractionButton(
-                            widget.reel.like['isLiked'] ?? false 
-                              ? Icons.favorite 
-                              : Icons.favorite_border,
+                            widget.reel.like['isLiked'] ?? false
+                                ? Icons.favorite
+                                : Icons.favorite_border,
                             widget.reel.like['count'].toString(),
                             onTap: () async {
                               try {
-                                await _reelController.toggleLike(widget.reel.id);
+                                await _reelController
+                                    .toggleLike(widget.reel.id);
                               } catch (e) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -743,17 +803,18 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                           ),
                           const SizedBox(height: 16),
                           _buildInteractionButton(
-                            _videoPlayerController.value.volume > 0 
-                                ? Icons.volume_up 
+                            _videoPlayerController.value.volume > 0
+                                ? Icons.volume_up
                                 : Icons.volume_off,
-                            _videoPlayerController.value.volume > 0 
+                            _videoPlayerController.value.volume > 0
                                 ? 'Audio'
-                                : 'Muted',  // Updated label
+                                : 'Muted', // Updated label
                             onTap: () {
                               setState(() {
                                 _videoPlayerController.setVolume(
-                                  _videoPlayerController.value.volume > 0 ? 0 : 1
-                                );
+                                    _videoPlayerController.value.volume > 0
+                                        ? 0
+                                        : 1);
                               });
                             },
                           ),
@@ -768,18 +829,21 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                                 builder: (context) => Container(
                                   decoration: const BoxDecoration(
                                     color: Colors.white,
-                                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                    borderRadius: BorderRadius.vertical(
+                                        top: Radius.circular(20)),
                                   ),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Container(
-                                        margin: const EdgeInsets.symmetric(vertical: 10),
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: 10),
                                         width: 40,
                                         height: 4,
                                         decoration: BoxDecoration(
                                           color: Colors.grey[300],
-                                          borderRadius: BorderRadius.circular(2),
+                                          borderRadius:
+                                              BorderRadius.circular(2),
                                         ),
                                       ),
                                       const Padding(
@@ -796,20 +860,25 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                                       GridView.count(
                                         shrinkWrap: true,
                                         crossAxisCount: 4,
-                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 24, vertical: 8),
                                         children: [
                                           _buildShareOption(
                                             icon: Icons.copy,
                                             label: 'Copy Link',
                                             onTap: () {
                                               Clipboard.setData(ClipboardData(
-                                                text: 'https://yourdomain.com/reels/${widget.reel.id}',
+                                                text:
+                                                    'https://yourdomain.com/reels/${widget.reel.id}',
                                               )).then((_) {
                                                 Navigator.pop(context);
-                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
                                                   const SnackBar(
-                                                    content: Text('Link copied to clipboard'),
-                                                    backgroundColor: AppColors.green,
+                                                    content: Text(
+                                                        'Link copied to clipboard'),
+                                                    backgroundColor:
+                                                        AppColors.green,
                                                   ),
                                                 );
                                               });
@@ -866,7 +935,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                           const SizedBox(height: 16),
                           _buildInteractionButton(
                             Icons.more_vert,
-                            '',  // Empty label
+                            '', // Empty label
                             onTap: () {
                               showModalBottomSheet(
                                 context: context,
@@ -874,18 +943,21 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                                 builder: (context) => Container(
                                   decoration: const BoxDecoration(
                                     color: Colors.white,
-                                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                    borderRadius: BorderRadius.vertical(
+                                        top: Radius.circular(20)),
                                   ),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Container(
-                                        margin: const EdgeInsets.symmetric(vertical: 10),
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: 10),
                                         width: 40,
                                         height: 4,
                                         decoration: BoxDecoration(
                                           color: Colors.grey[300],
-                                          borderRadius: BorderRadius.circular(2),
+                                          borderRadius:
+                                              BorderRadius.circular(2),
                                         ),
                                       ),
                                       const Padding(
@@ -900,53 +972,69 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                                         ),
                                       ),
                                       ListTile(
-                                        leading: const Icon(Icons.report_problem, color: AppColors.textGrey),
-                                        title: const Text('Inappropriate Content'),
+                                        leading: const Icon(
+                                            Icons.report_problem,
+                                            color: AppColors.textGrey),
+                                        title:
+                                            const Text('Inappropriate Content'),
                                         onTap: () {
                                           // Handle report
                                           Navigator.pop(context);
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             const SnackBar(
-                                              content: Text('Thank you for reporting'),
+                                              content: Text(
+                                                  'Thank you for reporting'),
                                               backgroundColor: AppColors.green,
                                             ),
                                           );
                                         },
                                       ),
                                       ListTile(
-                                        leading: const Icon(Icons.copyright, color: AppColors.textGrey),
-                                        title: const Text('Copyright Infringement'),
+                                        leading: const Icon(Icons.copyright,
+                                            color: AppColors.textGrey),
+                                        title: const Text(
+                                            'Copyright Infringement'),
                                         onTap: () {
                                           Navigator.pop(context);
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             const SnackBar(
-                                              content: Text('Thank you for reporting'),
+                                              content: Text(
+                                                  'Thank you for reporting'),
                                               backgroundColor: AppColors.green,
                                             ),
                                           );
                                         },
                                       ),
                                       ListTile(
-                                        leading: const Icon(Icons.dangerous, color: AppColors.textGrey),
-                                        title: const Text('Harmful or Dangerous'),
+                                        leading: const Icon(Icons.dangerous,
+                                            color: AppColors.textGrey),
+                                        title:
+                                            const Text('Harmful or Dangerous'),
                                         onTap: () {
                                           Navigator.pop(context);
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             const SnackBar(
-                                              content: Text('Thank you for reporting'),
+                                              content: Text(
+                                                  'Thank you for reporting'),
                                               backgroundColor: AppColors.green,
                                             ),
                                           );
                                         },
                                       ),
                                       ListTile(
-                                        leading: const Icon(Icons.block, color: AppColors.textGrey),
+                                        leading: const Icon(Icons.block,
+                                            color: AppColors.textGrey),
                                         title: const Text('Spam or Misleading'),
                                         onTap: () {
                                           Navigator.pop(context);
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             const SnackBar(
-                                              content: Text('Thank you for reporting'),
+                                              content: Text(
+                                                  'Thank you for reporting'),
                                               backgroundColor: AppColors.green,
                                             ),
                                           );
@@ -1004,7 +1092,8 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
     );
   }
 
-  Widget _buildInteractionButton(IconData icon, String label, {VoidCallback? onTap}) {
+  Widget _buildInteractionButton(IconData icon, String label,
+      {VoidCallback? onTap}) {
     // Special handling for like button
     if (icon == Icons.favorite || icon == Icons.favorite_border) {
       final isLiked = widget.reel.like['isLiked'] ?? false;
@@ -1092,7 +1181,8 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
           ),
         );
       }
-      return TextSpan(text: '$word ', style: const TextStyle(color: AppColors.textGrey));
+      return TextSpan(
+          text: '$word ', style: const TextStyle(color: AppColors.textGrey));
     }).toList();
 
     return Row(
@@ -1105,11 +1195,11 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
           },
           backgroundColor: AppColors.textGrey,
           child: widget.reel.profilePhoto.isEmpty
-            ? Text(
-                comment['userName']?.substring(0, 1).toUpperCase() ?? '?',
-                style: const TextStyle(color: Colors.white),
-              )
-            : null,
+              ? Text(
+                  comment['userName']?.substring(0, 1).toUpperCase() ?? '?',
+                  style: const TextStyle(color: Colors.white),
+                )
+              : null,
           radius: 16,
         ),
         const SizedBox(width: 12),
@@ -1138,34 +1228,35 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
               ),
               const SizedBox(height: 4),
               Obx(() => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RichText(
-                    text: TextSpan(
-                      children: isExpanded.value 
-                          ? styledContent
-                          : [...styledContent.take(50), 
-                              if (content.length > 50)
-                                const TextSpan(text: '... ')
-                            ],
-                    ),
-                    maxLines: isExpanded.value ? null : 2,
-                    overflow: TextOverflow.clip,
-                  ),
-                  if (content.length > 50)
-                    GestureDetector(
-                      onTap: () => isExpanded.value = !isExpanded.value,
-                      child: Text(
-                        isExpanded.value ? 'Show less' : 'Show more',
-                        style: const TextStyle(
-                          color: AppColors.green,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RichText(
+                        text: TextSpan(
+                          children: isExpanded.value
+                              ? styledContent
+                              : [
+                                  ...styledContent.take(50),
+                                  if (content.length > 50)
+                                    const TextSpan(text: '... ')
+                                ],
                         ),
+                        maxLines: isExpanded.value ? null : 2,
+                        overflow: TextOverflow.clip,
                       ),
-                    ),
-                ],
-              )),
+                      if (content.length > 50)
+                        GestureDetector(
+                          onTap: () => isExpanded.value = !isExpanded.value,
+                          child: Text(
+                            isExpanded.value ? 'Show less' : 'Show more',
+                            style: const TextStyle(
+                              color: AppColors.green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  )),
               const SizedBox(height: 4),
               GestureDetector(
                 onTap: () {
@@ -1179,7 +1270,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                 child: const Text(
                   'Reply',
                   style: TextStyle(
-                    color: AppColors.green,  // Changed to green
+                    color: AppColors.green, // Changed to green
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
