@@ -425,3 +425,100 @@
 {"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-24T14:47:49.214Z"}
 {"level":"error","message":"Error: Expected double-quoted property name in JSON at position 286 (line 8 column 1)","method":"POST","path":"/products","stack":"SyntaxError: Expected double-quoted property name in JSON at position 286 (line 8 column 1)\n    at JSON.parse (<anonymous>)\n    at parse (/Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/body-parser/lib/types/json.js:92:19)\n    at /Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/body-parser/lib/read.js:128:18\n    at AsyncResource.runInAsyncScope (node:async_hooks:211:14)\n    at invokeCallback (/Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/raw-body/index.js:238:16)\n    at done (/Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/raw-body/index.js:227:7)\n    at IncomingMessage.onEnd (/Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/raw-body/index.js:287:7)\n    at IncomingMessage.emit (node:events:513:28)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","timestamp":"2025-02-24T14:47:54.676Z"}
 {"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-25T02:46:59.179Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-25T15:47:04.974Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:37:55.074Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:37:55.413Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:37:58.616Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:38:00.860Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:38:04.490Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:38:22.074Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:39:29.313Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:39:31.850Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:39:33.550Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:39:35.029Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:39:36.326Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:39:39.185Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:39:40.587Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:39:45.914Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:39:57.688Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:40:36.330Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:40:42.494Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:40:51.344Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:40:53.585Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:41:21.864Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:41:23.872Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:41:36.301Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:41:37.784Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:41:40.259Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:41:41.354Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:41:42.572Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:42:08.562Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:42:12.432Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:42:18.848Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:42:22.037Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:42:26.915Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:42:30.496Z"}
+{"level":"info","message":"Server is running on port 3003","timestamp":"2025-02-26T01:42:44.101Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:42:49.235Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:43:22.181Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:43:23.398Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T01:43:28.954Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-02-26T01:43:30.505Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T02:05:56.096Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-26T11:49:40.963Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-02-27T04:33:57.235Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-01T13:08:26.487Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-01T13:33:34.952Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-01T13:33:36.539Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-02T18:50:01.454Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-05T20:49:23.424Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-05T21:37:16.357Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-05T21:37:26.937Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-05T21:40:35.218Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-05T21:40:40.156Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T10:45:15.356Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T10:50:27.899Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T10:50:30.095Z"}
+{"headers":{"accept":"*/*","accept-encoding":"gzip, deflate, br","connection":"close","host":"localhost:3002","postman-token":"e3ef6582-67f5-4831-b105-55a0ec88dc2c","user-agent":"PostmanRuntime/7.43.0","x-forwarded-for":"::1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"ip":"::1","level":"info","message":"Health check received","timestamp":"2025-03-06T10:50:52.394Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T10:52:32.868Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T10:52:34.632Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T10:53:39.184Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T10:55:11.560Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T10:55:43.762Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T10:57:14.851Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T10:57:59.858Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T10:58:02.066Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T11:00:57.140Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T11:00:57.737Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T11:01:27.626Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T11:01:41.156Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T11:01:44.033Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T11:02:05.519Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T11:02:58.738Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T11:04:28.055Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T11:04:29.460Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T11:04:33.519Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T11:11:28.522Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/videos"},"timestamp":"2025-03-06T11:22:32.762Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/videos"},"timestamp":"2025-03-06T11:22:41.264Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/videos"},"timestamp":"2025-03-06T11:22:48.775Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/videos"},"timestamp":"2025-03-06T11:24:43.962Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/videos"},"timestamp":"2025-03-06T11:24:53.584Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T13:29:59.876Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T13:30:02.608Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T19:45:57.110Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T19:46:03.865Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T19:46:06.244Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T19:46:18.843Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T19:48:10.934Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T19:48:26.653Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T19:48:57.357Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T19:49:00.302Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T19:49:06.625Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T19:49:14.405Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T20:11:29.532Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T20:11:34.096Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T20:12:26.387Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T20:12:29.038Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-06T20:12:59.932Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-06T20:13:01.381Z"}

@@ -34,6 +34,7 @@ class App {
       credentials: true,
       maxAge: 86400,
     };
+    this.app.use(cors(corsOptions));
     this.app.use(express.json({ limit: "20mb" }));
     this.app.use(express.urlencoded({ extended: true, limit: "20mb" }));
     this.app.use(compression());
@@ -50,6 +51,7 @@ class App {
     this.app.use("/api/chat", require("./routes/chat.routes"));
     this.app.use("/api/group", require("./routes/group.routes"));
     this.app.use("/api/message", require("./routes/message.routes"));
+    this.app.use("/api/ai", require("./routes/ai.routes"));
     this.app.use((req, res) => {
       res.status(404).json({ error: "Not found" });
     });

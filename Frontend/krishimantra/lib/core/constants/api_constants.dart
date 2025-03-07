@@ -2,7 +2,8 @@
 
 class ApiConstants {
   // Base URLs
-  static const String BASE_URL = 'http://localhost:3001';
+  static const String BASE_URL =
+      'http://localhost:3001'; // Change this to your actual server address when deploying
   static const String IMAGE_BASE_URL = 'https://cdn.yourapp.com';
 
   // Authentication endpoints
@@ -24,6 +25,14 @@ class ApiConstants {
   // Company Endpoints
   static const String COMPANIES = '/companies';
   static const String COMPANY_DETAIL = '/companies/:id';
+
+  // Video Tutorial Endpoints
+  static const String VIDEO_TUTORIALS = '/api/reels/videos';
+  static const String VIDEO_TUTORIAL_DETAIL = '/api/reels/videos/:id';
+  static const String VIDEO_TUTORIAL_COMMENTS =
+      '/api/reels/videos/:id/comments';
+  static const String VIDEO_TUTORIAL_LIKE = '/api/reels/videos/:id/like';
+  static const String VIDEO_TUTORIAL_RELATED = '/api/reels/videos/:id/related';
 
   // API Headers
   static const Map<String, String> headers = {

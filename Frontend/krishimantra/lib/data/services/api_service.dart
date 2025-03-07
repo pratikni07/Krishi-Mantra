@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import '../../core/constants/api_constants.dart';
 
 class ApiService {
@@ -7,8 +6,14 @@ class ApiService {
 
   ApiService(this._dio) {
     _dio.options.baseUrl = ApiConstants.BASE_URL;
-    _dio.options.connectTimeout = const Duration(seconds: 5);
-    _dio.options.receiveTimeout = const Duration(seconds: 3);
+    _dio.options.connectTimeout = const Duration(seconds: 15);
+    _dio.options.receiveTimeout = const Duration(seconds: 10);
+
+    _dio.interceptors.add(LogInterceptor(
+      requestBody: true,
+      responseBody: true,
+      logPrint: (obj) => print('🌐 Dio: $obj'),
+    ));
   }
 
   Future<Response> get(String path,
@@ -56,11 +61,21 @@ class ApiService {
     }
   }
 
+  Future<Response> patch(String path, {dynamic data}) async {
+    try {
+      final response = await _dio.patch(path, data: data);
+      if (response.data == null) {
+        throw Exception('Received null response data');
+      }
+      return response;
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   Exception _handleError(dynamic error) {
     if (error is DioException) {
-      if (kDebugMode) {
-        print('🔍 DioError type: ${error.type}');
-      }
+      print('🔍 DioError type: ${error.type}');
     }
     return Exception('API request failed: ${error.toString()}');
   }

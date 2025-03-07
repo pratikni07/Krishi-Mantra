@@ -12,7 +12,7 @@ import 'widgets/list_item.dart';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-
+import '../../../data/services/language_service.dart';
 
 import '../../controllers/ads_controller.dart';
 import 'widgets/services.dart';
@@ -47,12 +47,25 @@ class _HomeScreenState extends State<HomeScreen> {
   final FeedController _feedController = Get.find<FeedController>();
   final WeatherService _weatherService = WeatherService();
   Position? _currentPosition;
+  late LanguageService _languageService;
+  String servicesText = '🌾 Services';
+  String locationServiceDisabledText = "Location Service Disabled";
+  String enableLocationText = "Please enable location services.";
+  String permissionDeniedText = "Permission Denied";
+  String allowLocationText =
+      "Please allow location access to use this feature.";
+  String permissionDeniedForeverText = "Permission Denied Forever";
+  String goToSettingsText =
+      "You have denied location permission permanently. Go to settings to enable it.";
+  String errorFetchingLocationText = "Error fetching location";
+  String closeText = "Close";
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
     _loadUserData();
+    _initializeLanguage();
     _fetchLocation();
     _initializeAds();
     _initializeSlider();
@@ -74,14 +87,46 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _initializeLanguage() async {
+    _languageService = await LanguageService.getInstance();
+    await _updateTranslations();
+  }
+
+  Future<void> _updateTranslations() async {
+    final translations = await Future.wait([
+      _languageService.translate('🌾 Services'),
+      _languageService.translate('Location Service Disabled'),
+      _languageService.translate('Please enable location services.'),
+      _languageService.translate('Permission Denied'),
+      _languageService
+          .translate('Please allow location access to use this feature.'),
+      _languageService.translate('Permission Denied Forever'),
+      _languageService.translate(
+          'You have denied location permission permanently. Go to settings to enable it.'),
+      _languageService.translate('Error fetching location'),
+      _languageService.translate('Close'),
+    ]);
+
+    setState(() {
+      servicesText = translations[0];
+      locationServiceDisabledText = translations[1];
+      enableLocationText = translations[2];
+      permissionDeniedText = translations[3];
+      allowLocationText = translations[4];
+      permissionDeniedForeverText = translations[5];
+      goToSettingsText = translations[6];
+      errorFetchingLocationText = translations[7];
+      closeText = translations[8];
+    });
+  }
+
   Future<void> _fetchLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      _showLocationDialog(
-          "Location Service Disabled", "Please enable location services.");
+      _showLocationDialog(locationServiceDisabledText, enableLocationText);
       return;
     }
 
@@ -89,17 +134,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        _showLocationDialog("Permission Denied",
-            "Please allow location access to use this feature.");
+        _showLocationDialog(permissionDeniedText, allowLocationText);
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      _showLocationDialog(
-          "Permission Denied Forever",
-          "You have denied location permission permanently. "
-              "Go to settings to enable it.");
+      _showLocationDialog(permissionDeniedForeverText, goToSettingsText);
       return;
     }
 
@@ -134,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       setState(() {
-        _location = "Error fetching location";
+        _location = errorFetchingLocationText;
       });
     }
   }
@@ -144,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       setState(() => _isLoadingWeather = true);
-      
+
       // For demo purposes, using mock data to avoid API key requirement
       // Replace this with actual API call when you have the API key
       await Future.delayed(Duration(seconds: 1)); // Simulate network delay
@@ -185,23 +226,53 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchAds() async {
     try {
       print('Fetching ads...');
-      _splashAds = await _adsController.fetchSplashAds();
-      _homeScreenAds = await _adsController.fetchHomeScreenAds();
-      
+      await _fetchAdsWithRetry();
+
       // Sort home screen ads by priority
-      _homeScreenAds.sort((a, b) => (a['priority'] ?? 0).compareTo(b['priority'] ?? 0));
-      
+      if (_homeScreenAds.isNotEmpty) {
+        _homeScreenAds
+            .sort((a, b) => (a['priority'] ?? 0).compareTo(b['priority'] ?? 0));
+      }
+
       // Debug prints
       print('Splash ads response: $_splashAds');
       print('Number of splash ads: ${_splashAds.length}');
       if (_splashAds.isNotEmpty) {
         print('First splash ad: ${_splashAds.first}');
       }
-      
+
       setState(() {});
     } catch (e, stackTrace) {
       print('Error fetching ads: $e');
       print('Stack trace: $stackTrace');
+    }
+  }
+
+  Future<void> _fetchAdsWithRetry() async {
+    const maxRetries = 3;
+    int retryCount = 0;
+    Duration delay = const Duration(seconds: 1);
+
+    while (retryCount < maxRetries) {
+      try {
+        // Attempt to fetch both types of ads
+        _splashAds = await _adsController.fetchSplashAds();
+        _homeScreenAds = await _adsController.fetchHomeScreenAds();
+        return; // Success, exit the function
+      } catch (e) {
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          print('Max retries reached for fetching ads');
+          rethrow; // We've reached max retries, rethrow the exception
+        }
+
+        // Log retry attempt
+        print('Retry $retryCount for fetching ads after error: $e');
+
+        // Wait with exponential backoff before next retry
+        await Future.delayed(delay);
+        delay *= 2; // Double the delay for next retry
+      }
     }
   }
 
@@ -211,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final prefs = await SharedPreferences.getInstance();
       final lastShownTime = prefs.getInt(LAST_SPLASH_SHOWN_KEY) ?? 0;
       final currentTime = DateTime.now().millisecondsSinceEpoch;
-      
+
       print('Time since last shown: ${currentTime - lastShownTime}ms');
       print('Has splash ads: ${_splashAds.isNotEmpty}');
 
@@ -219,10 +290,10 @@ class _HomeScreenState extends State<HomeScreen> {
         if (currentTime - lastShownTime >= 7200000) {
           print('Showing splash ad...');
           if (!mounted) return;
-          
+
           await Future.delayed(const Duration(milliseconds: 500));
           _showSplashAd(_splashAds.first);
-          
+
           await prefs.setInt(LAST_SPLASH_SHOWN_KEY, currentTime);
         } else {
           print('Not showing splash ad - too soon since last shown');
@@ -235,11 +306,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showSplashAd(dynamic splashAd) {
     if (!mounted) return;
-    
+
     // Debug print to check the splash ad data
     print('Splash Ad Data: $splashAd');
-    final String imageUrl = splashAd[0]['dirURL'] ?? '';
+
+    // Handle different possible data structures safely
+    String imageUrl = '';
+    try {
+      if (splashAd is List && splashAd.isNotEmpty) {
+        imageUrl = splashAd[0]['dirURL'] ?? '';
+      } else if (splashAd is Map) {
+        imageUrl = splashAd['dirURL'] ?? '';
+      }
+    } catch (e) {
+      print('Error parsing splash ad data: $e');
+    }
+
     print('Image URL: $imageUrl');
+
+    // Don't show dialog if no valid image URL
+    if (imageUrl.isEmpty) {
+      print('No valid image URL found in splash ad data');
+      return;
+    }
 
     showDialog(
       context: context,
@@ -259,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (imageUrl.isNotEmpty) 
+                  if (imageUrl.isNotEmpty)
                     Container(
                       constraints: BoxConstraints(
                         maxHeight: MediaQuery.of(context).size.height * 0.7,
@@ -277,7 +366,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               height: 200,
                               child: Center(
                                 child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes != null
+                                  value: loadingProgress.expectedTotalBytes !=
+                                          null
                                       ? loadingProgress.cumulativeBytesLoaded /
                                           loadingProgress.expectedTotalBytes!
                                       : null,
@@ -294,7 +384,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.error, size: 40, color: Colors.red),
+                                  Icon(Icons.error,
+                                      size: 40, color: Colors.red),
                                   SizedBox(height: 8),
                                   Text('Failed to load image',
                                       style: TextStyle(color: Colors.red)),
@@ -311,13 +402,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.black,
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                         side: BorderSide(color: Colors.grey),
                       ),
                     ),
-                    child: Text('Close'),
+                    child: Text(closeText),
                   ),
                 ],
               ),
@@ -334,15 +426,45 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => LocationDialog(
         title: title,
         message: message,
-        showSettingsButton: title == "Permission Denied Forever",
+        showSettingsButton: title == permissionDeniedForeverText,
       ),
     );
   }
 
   Future<void> _initializeSlider() async {
-    _homeScreenSlider = await _adsController.fetchHomeScreenSlider();
-    if (_homeScreenSlider.isNotEmpty) {
-      _startAutoScroll();
+    try {
+      await _fetchSliderWithRetry();
+      if (_homeScreenSlider.isNotEmpty) {
+        _startAutoScroll();
+      }
+    } catch (e) {
+      print('Error initializing slider: $e');
+    }
+  }
+
+  Future<void> _fetchSliderWithRetry() async {
+    const maxRetries = 3;
+    int retryCount = 0;
+    Duration delay = const Duration(seconds: 1);
+
+    while (retryCount < maxRetries) {
+      try {
+        _homeScreenSlider = await _adsController.fetchHomeScreenSlider();
+        return; // Success, exit the function
+      } catch (e) {
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          print('Max retries reached for fetching slider');
+          rethrow; // We've reached max retries, rethrow the exception
+        }
+
+        // Log retry attempt
+        print('Retry $retryCount for fetching slider after error: $e');
+
+        // Wait with exponential backoff before next retry
+        await Future.delayed(delay);
+        delay *= 2; // Double the delay for next retry
+      }
     }
   }
 
@@ -350,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _timer?.cancel();
     _timer = Timer.periodic(Duration(seconds: 8), (timer) {
       if (_homeScreenSlider.isEmpty) return;
-      
+
       if (_currentPage < _homeScreenSlider.length - 1) {
         _currentPage++;
       } else {
@@ -416,7 +538,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(
                   margin: EdgeInsets.only(top: 20.0, bottom: 0.0),
                   child: Text(
-                    '🌾 Services',
+                    servicesText,
                     style: TextStyle(
                       color: AppColors.green,
                       fontSize: 22,
@@ -441,44 +563,46 @@ class _HomeScreenState extends State<HomeScreen> {
                 //     textAlign: TextAlign.center,
                 //   ),
                 // ),
-                if (_homeScreenAds.isNotEmpty) Container(
-                  margin: EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8.0),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        offset: Offset(0, 2),
-                        blurRadius: 6.0,
+                if (_homeScreenAds.isNotEmpty)
+                  Container(
+                    margin:
+                        EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          offset: Offset(0, 2),
+                          blurRadius: 6.0,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: Image.network(
+                        _homeScreenAds[0]['dirURL'],
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 200,
+                            color: Colors.grey[200],
+                            child: Icon(Icons.error, color: Colors.red),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8.0),
-                    child: Image.network(
-                      _homeScreenAds[0]['dirURL'],
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 200,
-                          color: Colors.grey[200],
-                          child: Icon(Icons.error, color: Colors.red),
-                        );
-                      },
                     ),
                   ),
-                ),
                 // Container(
                 //   margin: EdgeInsets.only(top: 20.0, bottom: 0.0),
                 //   child: Text(
@@ -495,53 +619,66 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_feedController.isLoadingTopFeeds.value) {
                     return Center(child: CircularProgressIndicator());
                   }
-                  
+
                   return Column(
-                    children: _feedController.topFeeds.map((feed) => FeedCard(
-                      feed: feed,
-                      onLike: () => _feedController.likeFeed(feed.id),
-                      onSave: () {}, // Implement save functionality if needed
-                    )).toList(),
+                    children: _feedController.topFeeds
+                        .map((feed) => FeedCard(
+                              feed: feed,
+                              onLike: () => _feedController.likeFeed(feed.id),
+                              onSave:
+                                  () {}, // Implement save functionality if needed
+                            ))
+                        .toList(),
                   );
                 }),
-                if (_homeScreenAds.length > 1) ..._homeScreenAds.sublist(1, min(_homeScreenAds.length, 3)).map((ad) => Container(
-                  margin: EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8.0),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        offset: Offset(0, 2),
-                        blurRadius: 6.0,
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8.0),
-                    child: Image.network(
-                      ad['dirURL'],
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 200,
-                          color: Colors.grey[200],
-                          child: Icon(Icons.error, color: Colors.red),
-                        );
-                      },
-                    ),
-                  ),
-                )).toList(),
+                if (_homeScreenAds.length > 1)
+                  ..._homeScreenAds
+                      .sublist(1, min(_homeScreenAds.length, 3))
+                      .map((ad) => Container(
+                            margin: EdgeInsets.symmetric(
+                                horizontal: 10.0, vertical: 8.0),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8.0),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  offset: Offset(0, 2),
+                                  blurRadius: 6.0,
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8.0),
+                              child: Image.network(
+                                ad['dirURL'],
+                                fit: BoxFit.cover,
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Center(
+                                    child: CircularProgressIndicator(
+                                      value:
+                                          loadingProgress.expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                              : null,
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    height: 200,
+                                    color: Colors.grey[200],
+                                    child: Icon(Icons.error, color: Colors.red),
+                                  );
+                                },
+                              ),
+                            ),
+                          ))
+                      .toList(),
               ],
             ),
           ),

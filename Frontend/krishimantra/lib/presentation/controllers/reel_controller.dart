@@ -5,56 +5,46 @@ import 'package:flutter/material.dart';
 
 class ReelController extends GetxController {
   final ReelRepository _reelRepository;
-  
+
   RxList<ReelModel> reels = <ReelModel>[].obs;
   RxList<Map<String, dynamic>> trendingTags = <Map<String, dynamic>>[].obs;
   RxBool isLoading = false.obs;
   RxInt currentPage = 1.obs;
   RxBool hasMorePages = true.obs;
-  RxMap<String, List<Map<String, dynamic>>> reelComments = <String, List<Map<String, dynamic>>>{}.obs;
+  RxMap<String, List<Map<String, dynamic>>> reelComments =
+      <String, List<Map<String, dynamic>>>{}.obs;
 
   ReelController(this._reelRepository);
 
   Future<void> fetchReels({bool refresh = false}) async {
     if (refresh) {
-      print('Refreshing reels - resetting to page 1');
       currentPage.value = 1;
       reels.clear();
     }
 
     if (!hasMorePages.value && !refresh) {
-      print('No more pages available to fetch');
       return;
     }
 
     try {
-      print('Fetching reels - page ${currentPage.value}');
       isLoading.value = true;
       final response = await _reelRepository.getReels(
         page: currentPage.value,
         limit: 10,
       );
 
-      print('Reels API Response: $response');
-
       final List<ReelModel> newReels = (response['data']['data'] as List)
           .map((reel) => ReelModel.fromJson(reel))
           .toList();
 
-      print('Fetched ${newReels.length} new reels');
       reels.addAll(newReels);
-      
+
       final pagination = response['data']['pagination'];
       hasMorePages.value = pagination['hasNextPage'];
       if (hasMorePages.value) {
         currentPage.value++;
-        print('More pages available, next page: ${currentPage.value}');
-      } else {
-        print('No more pages available');
-      }
+      } else {}
     } catch (e) {
-      print('Error fetching reels: $e');
-      print('Stack trace: ${StackTrace.current}');
     } finally {
       isLoading.value = false;
     }
@@ -64,17 +54,14 @@ class ReelController extends GetxController {
     try {
       final tags = await _reelRepository.getTrendingTags();
       trendingTags.value = tags;
-    } catch (e) {
-      print('Error fetching trending tags: $e');
-    }
+    } catch (e) {}
   }
 
-  Future<void> addComment(String reelId, String content, {String? parentCommentId}) async {
+  Future<void> addComment(String reelId, String content,
+      {String? parentCommentId}) async {
     try {
-      print('Adding comment to reel: $reelId');
-      
-      final response = await _reelRepository.addComment(reelId, content, parentCommentId: parentCommentId);
-      print('Comment added successfully: $response');
+      final response = await _reelRepository.addComment(reelId, content,
+          parentCommentId: parentCommentId);
 
       if (response['status'] == 'success' && response['data'] != null) {
         // Update comment count in the reel
@@ -94,10 +81,11 @@ class ReelController extends GetxController {
         // Add the new comment to the existing comments list
         final newComment = response['data'];
         final currentComments = reelComments.value[reelId] ?? [];
-        
+
         if (parentCommentId != null) {
           // If it's a reply, insert it after the parent comment
-          final parentIndex = currentComments.indexWhere((c) => c['_id'] == parentCommentId);
+          final parentIndex =
+              currentComments.indexWhere((c) => c['_id'] == parentCommentId);
           if (parentIndex != -1) {
             currentComments.insert(parentIndex + 1, newComment);
           } else {
@@ -107,7 +95,7 @@ class ReelController extends GetxController {
           // If it's a top-level comment, add it to the beginning
           currentComments.insert(0, newComment);
         }
-        
+
         reelComments.value = {
           ...reelComments.value,
           reelId: currentComments,
@@ -115,8 +103,6 @@ class ReelController extends GetxController {
         reelComments.refresh();
       }
     } catch (e, stackTrace) {
-      print('Error adding comment: $e');
-      print('Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -125,7 +111,6 @@ class ReelController extends GetxController {
     try {
       return await _reelRepository.getReelsByTag(tagName);
     } catch (e) {
-      print('Error fetching reels by tag: $e');
       rethrow;
     }
   }
@@ -139,7 +124,6 @@ class ReelController extends GetxController {
           .toList();
       reels.value = trendingReels;
     } catch (e) {
-      print('Error fetching trending reels: $e');
     } finally {
       isLoading.value = false;
     }
@@ -147,18 +131,18 @@ class ReelController extends GetxController {
 
   Future<List<Map<String, dynamic>>> fetchComments(String reelId) async {
     try {
-      print('Fetching comments for reel: $reelId'); // Debug log
-      
+      // Debug log
+
       final comments = await _reelRepository.getComments(reelId);
-      print('Fetched ${comments.length} comments'); // Debug log
-      
+      // Debug log
+
       // Update the comments in our state
       reelComments[reelId] = comments;
       reelComments.refresh(); // Force UI update
-      
+
       return comments;
     } catch (e) {
-      print('Error fetching comments: $e'); // Debug log
+      // Debug log
       return [];
     }
   }
@@ -173,10 +157,12 @@ class ReelController extends GetxController {
 
       // Optimistically update UI
       final optimisticLikeData = {
-        'count': isLiked ? (reel.like['count'] ?? 0) - 1 : (reel.like['count'] ?? 0) + 1,
+        'count': isLiked
+            ? (reel.like['count'] ?? 0) - 1
+            : (reel.like['count'] ?? 0) + 1,
         'isLiked': !isLiked,
       };
-      
+
       reels[reelIndex] = reel.copyWith(like: optimisticLikeData);
       reels.refresh();
 
@@ -190,7 +176,8 @@ class ReelController extends GetxController {
 
         // Update with actual server response
         if (response['status'] == 'success' && response['data'] != null) {
-          final updatedLikeData = response['data']['like'] ?? optimisticLikeData;
+          final updatedLikeData =
+              response['data']['like'] ?? optimisticLikeData;
           reels[reelIndex] = reel.copyWith(like: updatedLikeData);
           reels.refresh();
         }
@@ -201,7 +188,6 @@ class ReelController extends GetxController {
         rethrow;
       }
     } catch (e) {
-      print('Error toggling like: $e');
       Get.snackbar(
         'Error',
         'Failed to update like status',

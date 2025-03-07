@@ -1,0 +1,581 @@
+1. AI Message APIs
+1.1 Send Message to AI
+Purpose: Send a message to the AI and get a response, maintaining conversation context.
+Endpoint: POST /api/ai/chat
+Request Data:
+
+{
+  "userId": "user123",
+  "userName": "John Doe",
+  "userProfilePhoto": "https://example.com/profile.jpg",
+  "chatId": "chat456",  // Optional, if continuing an existing chat
+  "message": "How do I treat tomato leaf blight?",
+  "preferredLanguage": "en",
+  "location": {
+    "lat": 28.6139,
+    "lon": 77.2090
+  },
+  "weather": {
+    "temperature": 32,
+    "humidity": 65
+  }
+}
+
+Response:
+{
+  "chatId": "chat456",
+  "message": "Tomato leaf blight is a fungal disease that...",
+  "context": {
+    "currentTopic": "plant disease",
+    "lastContext": "tomato leaf blight",
+    "identifiedIssues": ["fungal infection", "leaf spots"],
+    "suggestedSolutions": ["fungicide", "proper spacing"]
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "How do I treat tomato leaf blight?",
+      "timestamp": "2023-06-15T10:30:00Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Tomato leaf blight is a fungal disease that...",
+      "timestamp": "2023-06-15T10:30:05Z"
+    }
+  ],
+  "subscription": {
+    "plan": "free",
+    "remaining": 4,
+    "total": 5
+  },
+  "rateLimit": {
+    "remaining": 19,
+    "reset": 1623761400
+  }
+}
+
+
+
+1.2 Analyze Crop Image
+Purpose: Upload an image of a crop for AI analysis to identify diseases and provide recommendations.
+Endpoint: POST /api/ai/analyze-image
+Request Data (multipart/form-data)
+
+userId: "user123"
+userName: "John Doe"
+userProfilePhoto: "https://example.com/profile.jpg"
+chatId: "chat456"  // Optional
+preferredLanguage: "en"
+location: { "lat": 28.6139, "lon": 77.2090 }
+weather: { "temperature": 32, "humidity": 65 }
+image: [binary file data]
+
+Response:
+{
+  "chatId": "chat789",
+  "analysis": "The image shows signs of powdery mildew on your cucumber plants...",
+  "context": {
+    "currentTopic": "plant health",
+    "lastContext": "powdery mildew",
+    "identifiedIssues": ["fungal infection", "white powder on leaves"],
+    "suggestedSolutions": ["neem oil", "improved air circulation"]
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Uploaded crop image for analysis",
+      "imageUrl": "image_processed",
+      "timestamp": "2023-06-15T11:30:00Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The image shows signs of powdery mildew on your cucumber plants...",
+      "timestamp": "2023-06-15T11:30:15Z"
+    }
+  ],
+  "subscription": {
+    "plan": "free",
+    "remaining": 1,
+    "total": 2
+  }
+}
+
+
+1.3 Get Chat History
+Purpose: Retrieve a list of all AI chat conversations for a user.
+Endpoint: GET /api/ai/history?userId=user123&page=1&limit=10
+Response:
+{
+  "chats": [
+    {
+      "_id": "chat456",
+      "title": "Tomato leaf blight treatment",
+      "lastMessageAt": "2023-06-15T10:30:05Z",
+      "context": {
+        "currentTopic": "plant disease",
+        "identifiedIssues": ["fungal infection", "leaf spots"]
+      },
+      "messages": [
+        {
+          "content": "How do I treat tomato leaf blight?",
+          "timestamp": "2023-06-15T10:30:00Z"
+        },
+        {
+          "content": "Tomato leaf blight is a fungal disease that...",
+          "timestamp": "2023-06-15T10:30:05Z"
+        }
+      ],
+      "metadata": {
+        "preferredLanguage": "en"
+      }
+    }
+  ],
+  "pagination": {
+    "total": 5,
+    "page": 1,
+    "pages": 1
+  },
+  "subscription": {
+    "plan": "free",
+    "remaining": 4,
+    "total": 5
+  }
+}
+
+
+
+1.4 Get Chat by ID
+Purpose: Retrieve a specific AI chat conversation by its ID.
+Endpoint: GET /api/ai/chat/:chatId
+Response:
+{
+  "chat": {
+    "_id": "chat456",
+    "userId": "user123",
+    "userName": "John Doe",
+    "title": "Tomato leaf blight treatment",
+    "messages": [
+      {
+        "role": "user",
+        "content": "How do I treat tomato leaf blight?",
+        "timestamp": "2023-06-15T10:30:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Tomato leaf blight is a fungal disease that...",
+        "timestamp": "2023-06-15T10:30:05Z"
+      }
+    ],
+    "context": {
+      "currentTopic": "plant disease",
+      "lastContext": "tomato leaf blight",
+      "identifiedIssues": ["fungal infection", "leaf spots"],
+      "suggestedSolutions": ["fungicide", "proper spacing"]
+    },
+    "metadata": {
+      "preferredLanguage": "en",
+      "location": {
+        "lat": 28.6139,
+        "lon": 77.2090
+      },
+      "weather": {
+        "temperature": 32,
+        "humidity": 65
+      }
+    },
+    "lastMessageAt": "2023-06-15T10:30:05Z"
+  },
+  "subscription": {
+    "plan": "free",
+    "remaining": 4,
+    "total": 5
+  }
+}
+
+
+1.5 Update Chat Title
+Purpose: Update the title of an AI chat conversation.
+Endpoint: PATCH /api/ai/chat/:chatId/title
+Request Data:
+{
+  "title": "Dealing with tomato diseases"
+}
+
+Response:
+{
+  "message": "Chat title updated successfully",
+  "chat": {
+    "_id": "chat456",
+    "title": "Dealing with tomato diseases"
+  }
+}
+
+
+1.6 Delete Chat
+Purpose: Soft delete an AI chat conversation (marks as inactive).
+Endpoint: DELETE /api/ai/chat/:chatId
+Response:
+{
+  "message": "Chat deleted successfully"
+}
+
+
+2. Subscription Management APIs
+2.1 Get User Subscription
+Purpose: Get details about a user's subscription plan and usage.
+Endpoint: GET /api/subscription?userId=user123
+Response:
+{
+  "subscription": {
+    "plan": "free",
+    "startDate": "2023-06-01T00:00:00Z",
+    "endDate": null,
+    "isActive": true,
+    "autoRenew": false
+  },
+  "usage": {
+    "messageCount": 1,
+    "imageAnalysisCount": 0,
+    "remainingMessages": 4,
+    "remainingImageAnalyses": 2
+  },
+  "limits": {
+    "dailyMessages": 5,
+    "dailyImageAnalysis": 2
+  }
+}
+
+
+2.2 Update Subscription
+Purpose: Update a user's subscription plan.
+Endpoint: POST /api/subscription/update
+Request Data:
+{
+  "userId": "user123",
+  "plan": "premium",
+  "paymentDetails": {
+    "paymentId": "pay_123456",
+    "paymentMethod": "credit_card",
+    "autoRenew": true
+  }
+}
+
+Response:
+{
+  "message": "Subscription updated successfully",
+  "subscription": {
+    "plan": "premium",
+    "startDate": "2023-06-15T12:00:00Z",
+    "endDate": "2023-07-15T12:00:00Z",
+    "isActive": true,
+    "autoRenew": true
+  }
+}
+
+
+2.3 Cancel Subscription
+Purpose: Cancel a user's current subscription.
+Endpoint: POST /api/subscription/cancel
+Request Data:
+{
+  "userId": "user123"
+}
+
+Response:
+{
+  "message": "Subscription cancelled successfully"
+}
+
+
+2.4 Get Message Usage
+Purpose: Get a user's current message usage and limits.
+Endpoint: GET /api/subscription/usage?userId=user123
+Response:
+{
+  "usage": {
+    "messageCount": 1,
+    "imageAnalysisCount": 0,
+    "remainingMessages": 4,
+    "remainingImageAnalyses": 2
+  },
+  "limits": {
+    "dailyMessages": 5,
+    "dailyImageAnalysis": 2
+  },
+  "plan": "free"
+}
+
+
+2.5 Sync with Main Service
+Purpose: Synchronize subscription data with the main service.
+Endpoint: POST /api/subscription/sync
+Request Data:
+{
+  "userId": "user123"
+}
+
+Response: 
+{
+  "message": "Subscription synced successfully",
+  "subscription": {
+    "plan": "basic",
+    "startDate": "2023-06-10T00:00:00Z",
+    "endDate": "2023-07-10T00:00:00Z",
+    "isActive": true
+  }
+}
+
+
+
+3. Webhook APIs
+3.1 Subscription Update Webhook
+Purpose: Receive subscription updates from the main service.
+Endpoint: POST /api/webhooks/subscription
+Request Headers:
+x-webhook-signature: 1234567890abcdef1234567890abcdef
+
+Request Data:
+{
+  "userId": "user123",
+  "plan": "premium",
+  "action": "update"
+}
+Response:
+{
+  "message": "Webhook processed successfully",
+  "result": {
+    "userId": "user123",
+    "plan": "premium",
+    "action": "update"
+  }
+}
+
+
+
+4. Socket.IO Events
+4.1 AI Message Events
+Send Message
+Event: ai:message:send
+Data:
+{
+  "chatId": "chat456",
+  "message": "How do I treat tomato leaf blight?",
+  "preferredLanguage": "en",
+  "location": {
+    "lat": 28.6139,
+    "lon": 77.2090
+  },
+  "weather": {
+    "temperature": 32,
+    "humidity": 65
+  }
+}
+
+Message Received
+Event: ai:message:received
+Data:
+{
+  "chatId": "chat456",
+  "messages": [
+    {
+      "role": "user",
+      "content": "How do I treat tomato leaf blight?",
+      "timestamp": "2023-06-15T10:30:00Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Tomato leaf blight is a fungal disease that...",
+      "timestamp": "2023-06-15T10:30:05Z"
+    }
+  ],
+  "context": {
+    "currentTopic": "plant disease",
+    "lastContext": "tomato leaf blight",
+    "identifiedIssues": ["fungal infection", "leaf spots"],
+    "suggestedSolutions": ["fungicide", "proper spacing"]
+  },
+  "timestamp": "2023-06-15T10:30:05Z",
+  "subscription": {
+    "plan": "free",
+    "remaining": 4,
+    "total": 5
+  }
+}
+
+Message Limit Reached
+Event: ai:message:limit
+Data:
+{
+  "error": "Daily message limit reached",
+  "message": "You have reached your daily message limit. Please upgrade your subscription to continue.",
+  "subscription": {
+    "plan": "free",
+    "remaining": 0
+  }
+}
+
+4.2 AI Image Analysis Events
+Analyze Image
+Event: ai:image:analyze
+Data:
+{
+  "chatId": "chat456",
+  "imageBuffer": "[base64 encoded image]",
+  "preferredLanguage": "en",
+  "location": {
+    "lat": 28.6139,
+    "lon": 77.2090
+  },
+  "weather": {
+    "temperature": 32,
+    "humidity": 65
+  }
+}
+
+
+Image Analyzed
+Event: ai:image:analyzed
+Data:
+{
+  "chatId": "chat456",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Uploaded crop image for analysis",
+      "imageUrl": "image_processed",
+      "timestamp": "2023-06-15T11:30:00Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The image shows signs of powdery mildew on your cucumber plants...",
+      "timestamp": "2023-06-15T11:30:15Z"
+    }
+  ],
+  "context": {
+    "currentTopic": "plant health",
+    "lastContext": "powdery mildew",
+    "identifiedIssues": ["fungal infection", "white powder on leaves"],
+    "suggestedSolutions": ["neem oil", "improved air circulation"]
+  },
+  "timestamp": "2023-06-15T11:30:15Z",
+  "subscription": {
+    "plan": "free",
+    "remaining": 1,
+    "total": 2
+  }
+}
+
+
+Image Analysis Limit Reached
+Event: ai:image:limit
+Data:
+{
+  "error": "Daily image analysis limit reached",
+  "message": "You have reached your daily image analysis limit. Please upgrade your subscription to continue.",
+  "subscription": {
+    "plan": "free",
+    "remaining": 0
+  }
+}
+
+
+
+4.3 Typing and Status Events
+Typing Indicator
+Event: ai:typing
+Data:
+{
+  "chatId": "chat456",
+  "isTyping": true
+}
+
+Analyzing Indicator
+Event: ai:analyzing
+Data:
+{
+  "chatId": "chat456",
+  "isAnalyzing": true
+}
+
+4.4 Subscription Events
+Get Subscription Info
+Event: ai:subscription:info
+Response Event: ai:subscription:info
+Response Data:
+{
+  "subscription": {
+    "plan": "free",
+    "startDate": "2023-06-01T00:00:00Z",
+    "endDate": null,
+    "isActive": true
+  },
+  "usage": {
+    "messageCount": 1,
+    "imageAnalysisCount": 0,
+    "remainingMessages": 4,
+    "remainingImageAnalyses": 2
+  },
+  "limits": {
+    "dailyMessages": 5,
+    "dailyImageAnalysis": 2
+  }
+}
+
+
+
+5. Error Responses
+All APIs may return the following error responses:
+5.1 Rate Limit Exceeded
+{
+  "error": "Rate limit exceeded",
+  "retryAfter": 60,
+  "message": "Please wait before sending another message",
+  "rateLimit": {
+    "remaining": 0,
+    "reset": 1623761400
+  }
+}
+
+
+5.2 Daily Message Limit Reached
+
+{
+  "error": "Daily message limit reached",
+  "message": "You have reached your daily message limit. Please upgrade your subscription to continue.",
+  "subscription": {
+    "plan": "free",
+    "remaining": 0
+  }
+}
+
+
+5.3 Authentication Error
+{
+  "error": "Authentication failed",
+  "message": "Invalid or expired token"
+}
+
+
+5.4 Resource Not Found
+
+{
+  "error": "Chat not found"
+}
+
+5.5 Invalid Request
+{
+  "error": "Invalid request",
+  "message": "Missing required fields"
+}
+
+
+
+6. Subscription Plans and Limits
+| Plan | Daily Messages | Daily Image Analysis | Description |
+|---------|---------------|---------------------|----------------------------|
+| Free | 5 | 2 | Basic access with limits |
+| Basic | 50 | 10 | Increased limits |
+| Premium | Unlimited | Unlimited | Unlimited access |
+
+
+
