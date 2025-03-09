@@ -69,9 +69,7 @@ class SocketService {
     socket?.on(eventName, (data) {
       if (data is Map) {
         controller.add(Map<String, dynamic>.from(data));
-      } else {
-        print('Invalid data format received for $eventName: $data');
-      }
+      } else {}
     });
 
     return controller.stream;
@@ -114,8 +112,6 @@ class SocketService {
         throw Exception('Failed to establish socket connection');
       }
     } catch (e, stackTrace) {
-      print('Socket initialization error: $e');
-      print('Stack trace: $stackTrace');
       _errorController.add('Initialization error: $e');
       rethrow;
     }
@@ -154,7 +150,6 @@ class SocketService {
       }
       return socket!.connected;
     } catch (e) {
-      print('Connection wait error: $e');
       return false;
     }
   }
@@ -163,31 +158,30 @@ class SocketService {
     socket?.onConnect((_) async {
       try {
         final user = await _userService.getUser();
-        print('Socket connected successfully'); // Debug log
-        print('Connected with user ID: ${user?.id}');
+        // Debug log
         isConnected = true;
         isReconnecting = false;
         reconnectionAttempts = 0;
         _connectionStateController.add(true);
       } catch (e) {
-        print('Connection callback error: $e'); // Debug log
+        // Debug log
         _errorController.add('Connection error: $e');
       }
     });
 
     socket?.onDisconnect((_) {
-      print('Socket disconnected. Was connected: $isConnected'); // Debug log
+      // Debug log
       isConnected = false;
       _connectionStateController.add(false);
     });
 
     socket?.onError((error) {
-      print('Socket error details: $error'); // Debug log
+      // Debug log
       _errorController.add('Socket error: $error');
     });
 
     socket?.onConnectError((error) {
-      print('Connection error details: $error'); // Debug log
+      // Debug log
       _errorController.add('Connection error: $error');
       handleReconnection();
     });
@@ -205,17 +199,13 @@ class SocketService {
       _readReceiptController.add(Map<String, dynamic>.from(data));
     });
 
-    socket?.on('chat:create:response', (data) {
-      print('New chat created: $data');
-    });
+    socket?.on('chat:create:response', (data) {});
 
-    socket?.on('chat:new', (data) {
-      print('Added to new chat: $data');
-    });
+    socket?.on('chat:new', (data) {});
 
     // Typing events
     socket?.on('typing:update', (data) {
-      print('Received typing:update event: $data'); // Debug print
+      // Debug print
       _typingController.add(Map<String, dynamic>.from(data));
     });
 
@@ -239,33 +229,27 @@ class SocketService {
 
     // AI Chat related events
     socket?.on('ai:message:received', (data) {
-      print('AI message received: $data');
       _aiMessageController.add(Map<String, dynamic>.from(data));
     });
 
     socket?.on('ai:typing', (data) {
-      print('AI typing status: $data');
       _aiTypingController.add(Map<String, dynamic>.from(data));
     });
 
     socket?.on('ai:analyzing', (data) {
-      print('AI analyzing status: $data');
       _aiAnalyzingController.add(Map<String, dynamic>.from(data));
     });
 
     socket?.on('ai:image:analyzed', (data) {
-      print('AI image analysis complete: $data');
       _aiMessageController.add(Map<String, dynamic>.from(data));
     });
 
     // Add this to your setupSocketListeners method
     socket?.on('ai:limit:info', (data) {
-      print('Message limit info received: $data');
       _messageLimitController.add(Map<String, dynamic>.from(data));
     });
 
     socket?.on('ai:limit:reached', (data) {
-      print('Message limit reached: $data');
       _messageLimitController.add(Map<String, dynamic>.from(data));
     });
   }
@@ -291,23 +275,17 @@ class SocketService {
 
   Future<bool> forceConnect() async {
     try {
-      print('Forcing socket connection...');
-
       // Check if we need to initialize
       if (socket == null) {
-        print('Socket is null, initializing...');
         try {
           await initialize();
         } catch (initError) {
-          print('Socket initialization failed: $initError');
           _errorController.add('Failed to initialize socket: $initError');
           return false;
         }
       }
       // Try reconnecting if disconnected
       else if (!socket!.connected) {
-        print('Socket exists but not connected. Attempting to connect...');
-
         // Since we can't use 'connecting' property, we'll just try to disconnect first
         // to ensure a clean connection attempt
         socket!.disconnect();
@@ -316,7 +294,6 @@ class SocketService {
         // Now try connecting
         socket!.connect();
       } else {
-        print('Socket is already connected');
         return true;
       }
 
@@ -325,14 +302,12 @@ class SocketService {
 
       // Add temporary connection listener
       void onConnect(_) {
-        print('Socket connection established in forceConnect');
         if (!connectionCompleter.isCompleted) {
           connectionCompleter.complete(true);
         }
       }
 
       void onConnectError(error) {
-        print('Socket connection error in forceConnect: $error');
         if (!connectionCompleter.isCompleted) {
           connectionCompleter.complete(false);
         }
@@ -343,7 +318,6 @@ class SocketService {
 
       // Setup timeout
       Timer timeout = Timer(Duration(seconds: 8), () {
-        print('Socket connection timeout after 8 seconds');
         if (!connectionCompleter.isCompleted) {
           connectionCompleter.complete(false);
           _errorController.add('Socket connection timeout');
@@ -358,7 +332,6 @@ class SocketService {
       socket?.off('connect_error', onConnectError);
 
       isConnected = result;
-      print('Force connect result - Connected: $result');
 
       if (result) {
         _connectionStateController.add(true);
@@ -366,7 +339,6 @@ class SocketService {
 
       return result;
     } catch (e) {
-      print('Force connect error: $e');
       _errorController.add('Connection error: $e');
       return false;
     }
@@ -382,7 +354,6 @@ class SocketService {
       String chatId, Map<String, dynamic> messageData) async {
     // Check and ensure socket connection
     if (!isConnected) {
-      print('Socket not connected. Attempting to reconnect...');
       bool reconnected = await forceConnect();
       if (!reconnected) {
         _errorController.add('Cannot send message: Socket connection failed');
@@ -397,13 +368,10 @@ class SocketService {
         return false;
       }
 
-      print('Sending message to chat $chatId: ${messageData['content']}');
-
       final completer = Completer<bool>();
 
       Timer timer = Timer(Duration(seconds: 10), () {
         if (!completer.isCompleted) {
-          print('Message send timeout after 10 seconds');
           completer.complete(false);
           _errorController.add(
               'Server did not respond. Check your connection and try again.');
@@ -422,7 +390,6 @@ class SocketService {
           timer.cancel();
 
           if (data == null) {
-            print('Received null acknowledgment from server');
             if (!completer.isCompleted) {
               completer.complete(false);
               _errorController.add('Server returned an invalid response');
@@ -431,7 +398,6 @@ class SocketService {
           }
 
           if (data is Map && data.containsKey('error')) {
-            print('Server returned error: ${data['error']}');
             if (!completer.isCompleted) {
               completer.complete(false);
               _errorController.add('Server error: ${data['error']}');
@@ -445,7 +411,6 @@ class SocketService {
         });
       } catch (emitError) {
         timer.cancel();
-        print('Socket emit error: $emitError');
         if (!completer.isCompleted) {
           completer.complete(false);
           _errorController.add('Failed to send message: $emitError');
@@ -454,7 +419,6 @@ class SocketService {
 
       return await completer.future;
     } catch (e) {
-      print('Send message error: $e');
       _errorController.add('Failed to send message: $e');
       return false;
     }
@@ -499,25 +463,25 @@ class SocketService {
   // Typing methods
   void sendTypingStart(String chatId) {
     if (isConnected) {
-      print('Emitting typing:start event for chat: $chatId'); // Debug print
+      // Debug print
       socket?.emit('typing:start', {
         'chatId': chatId,
         'timestamp': DateTime.now().toIso8601String(),
       });
     } else {
-      print('Socket not connected - cannot send typing:start'); // Debug print
+      // Debug print
     }
   }
 
   void sendTypingStop(String chatId) {
     if (isConnected) {
-      print('Emitting typing:stop event for chat: $chatId'); // Debug print
+      // Debug print
       socket?.emit('typing:stop', {
         'chatId': chatId,
         'timestamp': DateTime.now().toIso8601String(),
       });
     } else {
-      print('Socket not connected - cannot send typing:stop'); // Debug print
+      // Debug print
     }
   }
 
@@ -615,7 +579,6 @@ class SocketService {
   Future<bool> sendAIMessage(
       String chatId, Map<String, dynamic> messageData) async {
     if (!isConnected) {
-      print('Socket not connected for AI message. Attempting to reconnect...');
       bool reconnected = await forceConnect();
       if (!reconnected) {
         _errorController
@@ -631,13 +594,10 @@ class SocketService {
         return false;
       }
 
-      print('Sending AI message to chat $chatId: ${messageData['content']}');
-
       final completer = Completer<bool>();
 
       Timer timer = Timer(Duration(seconds: 15), () {
         if (!completer.isCompleted) {
-          print('AI message send timeout after 15 seconds');
           completer.complete(false);
           _errorController.add(
               'AI server did not respond. The service may be temporarily unavailable.');
@@ -659,7 +619,6 @@ class SocketService {
           timer.cancel();
 
           if (data == null) {
-            print('Received null AI acknowledgment from server');
             if (!completer.isCompleted) {
               completer.complete(false);
               _errorController.add('AI server returned an invalid response');
@@ -668,7 +627,6 @@ class SocketService {
           }
 
           if (data is Map && data.containsKey('error')) {
-            print('AI server returned error: ${data['error']}');
             if (!completer.isCompleted) {
               completer.complete(false);
               _errorController.add('AI server error: ${data['error']}');
@@ -682,7 +640,6 @@ class SocketService {
         });
       } catch (emitError) {
         timer.cancel();
-        print('AI socket emit error: $emitError');
         if (!completer.isCompleted) {
           completer.complete(false);
           _errorController.add('Failed to send AI message: $emitError');
@@ -691,7 +648,6 @@ class SocketService {
 
       return await completer.future;
     } catch (e) {
-      print('Send AI message error: $e');
       _errorController.add('Failed to send AI message: $e');
       return false;
     }

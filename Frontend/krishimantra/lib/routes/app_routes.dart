@@ -11,6 +11,10 @@ import 'package:krishimantra/presentation/screens/home/home_screen.dart';
 import 'package:krishimantra/presentation/screens/main_screen.dart';
 import 'package:krishimantra/presentation/screens/splash/splash_screen.dart';
 import 'package:krishimantra/presentation/screens/video_tutorial/video_list_screen.dart';
+import 'package:krishimantra/presentation/screens/language/LanguageSelectionPage.dart';
+import 'package:krishimantra/presentation/screens/auth/phone_number_screen.dart';
+import 'package:krishimantra/presentation/screens/auth/otp_verification_screen.dart';
+import 'package:krishimantra/presentation/screens/auth/signup_screen.dart';
 
 import '../presentation/screens/products/product_list_screen.dart';
 import '../presentation/screens/schemes/gov_schemes_screen.dart';
@@ -31,6 +35,12 @@ class AppRoutes {
   static const String NEWS = '/news';
   static const String SCHEMES = '/schemes';
 
+  // New authentication routes
+  static const String LANGUAGE_SELECTION = '/language';
+  static const String PHONE_NUMBER = '/phone';
+  static const String OTP_VERIFICATION = '/otp';
+  static const String SIGNUP = '/signup';
+
   static final routes = [
     GetPage(name: SPLASH, page: () => SplashScreen()),
     GetPage(name: LOGIN, page: () => LoginScreen()),
@@ -46,5 +56,12 @@ class AppRoutes {
     GetPage(name: KRISHI_VIDEOS, page: () => VideoListScreen()),
     // GetPage(name: NEWS, page: () => NewsScreen()),
     GetPage(name: SCHEMES, page: () => GovSchemesScreen()),
+
+    // New authentication routes
+    GetPage(
+        name: LANGUAGE_SELECTION, page: () => const LanguageSelectionScreen()),
+    GetPage(name: PHONE_NUMBER, page: () => const PhoneNumberScreen()),
+    // Note: OTP and Signup screens need parameters, so they'll be navigated to using Get.to() directly
+    // rather than using named routes
   ];
 }

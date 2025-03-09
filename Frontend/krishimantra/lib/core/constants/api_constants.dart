@@ -2,18 +2,25 @@
 
 class ApiConstants {
   // Base URLs
-  static const String BASE_URL =
-      'http://localhost:3001'; // Change this to your actual server address when deploying
+  static const String BASE_URL = 'http://localhost:3001';
   static const String IMAGE_BASE_URL = 'https://cdn.yourapp.com';
 
   // Authentication endpoints
   // static const String AUTH_BASE_URL = 'http://localhost:3002';
 
   static const String LOGIN = '/api/main/auth/login';
-  static const String REGISTER = '/api/main/auth/register';
+  static const String REGISTER = '/api/main/auth/signup';
   static const String FORGOT_PASSWORD = '/api/main/auth/forgot-password';
   static const String RESET_PASSWORD = '/api/main/auth/reset-password';
   static const String REFRESH_TOKEN = '/api/main/auth/refresh-token';
+
+  // New phone auth endpoints
+  static const String INITIATE_AUTH = '/api/main/auth/initiate-auth';
+  static const String VERIFY_OTP = '/api/main/auth/verify-otp';
+  static const String SIGNUP_WITH_PHONE = '/api/main/auth/signup-with-phone';
+
+  // Upload endpoints
+  static const String UPLOAD_IMAGE = '/upload/image';
 
   // User endpoints
   static const String USER_PROFILE = '/api/main/user/profile';

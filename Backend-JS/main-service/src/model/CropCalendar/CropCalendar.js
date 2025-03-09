@@ -41,7 +41,7 @@ const cropCalendarSchema = new mongoose.Schema(
         instructions: String,
         importance: {
           type: String,
-          enum: ["Critical", "Important", "Optional"],
+          enum: ["Critical", "Important", "Optional", "High"],
         },
       },
     ],

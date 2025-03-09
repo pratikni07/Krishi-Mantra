@@ -29,12 +29,12 @@ import 'data/services/LocationService.dart';
 import 'presentation/controllers/company_controller.dart';
 import 'presentation/controllers/product_controller.dart';
 import 'presentation/controllers/scheme_controller.dart';
+import 'presentation/screens/feed/widgets/feed_card.dart';
 
 void initDependencies() {
   // Initialize Dio and ApiService first
   final dio = Dio();
-  Get.put(ApiService(dio),
-      permanent: true); // Add ApiService as a permanent dependency
+  Get.put(ApiService(dio), permanent: true);
 
   // Initialize core services
   Get.put(UserService(), permanent: true);
@@ -52,16 +52,14 @@ void initDependencies() {
   Get.put(CompanyRepository(Get.find<ApiService>()), permanent: true);
   Get.lazyPut(() => ProductRepository(Get.find<ApiService>()));
   Get.lazyPut(() => AIChatRepository(Get.find<ApiService>()));
-  // Add VideoTutorialRepository
-  Get.put(VideoTutorialRepository(Get.find<ApiService>()), permanent: true);
 
-  // Initialize controllers
+  // Initialize controllers (move before VideoTutorialRepository)
   Get.lazyPut(() => AuthController(Get.find<AuthRepository>()));
   Get.lazyPut(() => FeedController(
         Get.find<FeedRepository>(),
         Get.find<UserService>(),
       ));
-  Get.lazyPut(() => AdsController(Get.find<AdsRepository>()));
+  Get.put(AdsController(Get.find<AdsRepository>()), permanent: true);
   Get.lazyPut(() => MessageController(
         Get.find<MessageRepository>(),
         Get.find<UserService>(),
@@ -75,6 +73,10 @@ void initDependencies() {
         Get.find<AIChatRepository>(),
         Get.find<UserService>(),
       ));
+
+  // Add VideoTutorialRepository (after controllers have been initialized)
+  Get.put(VideoTutorialRepository(Get.find<ApiService>()), permanent: true);
+
   // Add VideoTutorialController
   Get.put(
       VideoTutorialController(
@@ -85,4 +87,7 @@ void initDependencies() {
 
   // Location service
   Get.put(LocationService());
+
+  // Add VideoController
+  Get.put(VideoController(), permanent: true);
 }

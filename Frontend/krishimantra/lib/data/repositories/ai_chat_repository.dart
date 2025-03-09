@@ -223,6 +223,7 @@ class AIChatRepository {
 
       return title;
     } catch (e) {
+      // ignore: avoid_print
       print('Error generating chat title: $e');
       return "New Conversation";
     }

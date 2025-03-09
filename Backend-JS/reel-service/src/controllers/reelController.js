@@ -76,30 +76,30 @@ class ReelController {
     // const { userId, userName, profilePhoto } = req.user;
 
     try {
-        const like = await ReelService.likeReel(id, {
-            userId,
-            userName,
-            profilePhoto,
-        });
+      const like = await ReelService.likeReel(id, {
+        userId,
+        userName,
+        profilePhoto,
+      });
 
-        res.status(201).json({
-            status: "success",
-            data: like,
-        });
+      res.status(201).json({
+        status: "success",
+        data: like,
+      });
     } catch (error) {
-        if (error.message === "Reel already liked") {
-            return res.status(400).json({
-                status: "error",
-                message: error.message
-            });
-        }
-        if (error.message === "Reel not found") {
-            return res.status(404).json({
-                status: "error",
-                message: error.message
-            });
-        }
-        throw error;
+      if (error.message === "Reel already liked") {
+        return res.status(400).json({
+          status: "error",
+          message: error.message,
+        });
+      }
+      if (error.message === "Reel not found") {
+        return res.status(404).json({
+          status: "error",
+          message: error.message,
+        });
+      }
+      throw error;
     }
   });
 
@@ -109,33 +109,32 @@ class ReelController {
     // const { userId } = req.user;
 
     try {
-        const result = await ReelService.unlikeReel(id, userId);
+      const result = await ReelService.unlikeReel(id, userId);
 
-        res.json({
-            status: "success",
-            message: "Reel unliked successfully"
-        });
+      res.json({
+        status: "success",
+        message: "Reel unliked successfully",
+      });
     } catch (error) {
-        if (error.message === "Like not found") {
-            return res.status(404).json({
-                status: "error",
-                message: error.message
-            });
-        }
-        if (error.message === "Reel not found") {
-            return res.status(404).json({
-                status: "error",
-                message: error.message
-            });
-        }
-        throw error;
+      if (error.message === "Like not found") {
+        return res.status(404).json({
+          status: "error",
+          message: error.message,
+        });
+      }
+      if (error.message === "Reel not found") {
+        return res.status(404).json({
+          status: "error",
+          message: error.message,
+        });
+      }
+      throw error;
     }
   });
 
   static addComment = catchAsync(async (req, res) => {
     const { id } = req.params;
     const { userId, userName, profilePhoto, content, parentComment } = req.body;
-    // const { userId, userName, profilePhoto } = req.user;
 
     const comment = await ReelService.addComment(id, {
       userId,

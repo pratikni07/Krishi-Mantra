@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 const otpGenerator = require("otp-generator");
 const mailSender = require("../utils/mailSender");
 const { passwordUpdated } = require("../mail/templates/passwordUpdate");
+const WhatsAppOTP = require("../model/WhatsappOTP");
 
 const UserDetail = require("../model/UserDetail");
 require("dotenv").config();
@@ -13,18 +14,19 @@ require("dotenv").config();
 // Signup Controller for Registering Users
 exports.signup = async (req, res) => {
   try {
-    const { name, phoneNo, otp } = req.body;
+    const { name, firstName, lastName, email, password, phoneNo, image, otp } =
+      req.body;
 
     // Check if required fields are present
-    if (!name || !phoneNo || !otp) {
-      return res.status(403).send({
+    if (!name || !phoneNo || !otp || !email || !password) {
+      return res.status(400).json({
         success: false,
-        message: "Name, Phone Number, and OTP are required",
+        message: "Name, Phone Number, OTP, Email, and Password are required",
       });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ phoneNo });
+    // Check if user already exists by phone number
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -32,42 +34,59 @@ exports.signup = async (req, res) => {
       });
     }
 
-    // Find the most recent OTP for the phone number
-    const response = await OTP.find({ phoneNo })
-      .sort({ createdAt: -1 })
-      .limit(1);
-    if (response.length === 0 || otp !== response[0].otp) {
+    // Check if email is already registered
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
       return res.status(400).json({
         success: false,
-        message: "The OTP is not valid",
+        message: "Email is already registered. Please log in.",
       });
     }
 
-    // Create temporary additional details for the user
+    // Find the most recent OTP for the phone number
+    const recentOtp = await OTP.findOne({ email }).sort({ createdAt: -1 });
+
+    if (!recentOtp || recentOtp.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP. Please try again.",
+      });
+    }
+
+    // Hash password before saving
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create additional user details
     const profileDetails = await UserDetail.create({});
 
-    // Create a new user with temporary details
+    // Create user
     const user = await User.create({
       name,
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
       phoneNo,
       additionalDetails: profileDetails._id,
-      image: `https://api.dicebear.com/6.x/initials/svg?seed=${name}&backgroundColor=00897b,00acc1,039be5&backgroundType=solid`,
+      image:
+        image ||
+        `https://api.dicebear.com/6.x/initials/svg?seed=${name}&backgroundColor=00897b,00acc1,039be5&backgroundType=solid`,
     });
 
-    // Update the userId in additional details
+    // Update profile details with userId
     profileDetails.userId = user._id;
     await profileDetails.save();
 
-    return res.status(200).json({
+    return res.status(201).json({
       success: true,
       user,
       message: "User registered successfully. Please complete your profile.",
     });
   } catch (error) {
-    console.error(error);
+    console.error("Signup Error:", error);
     return res.status(500).json({
       success: false,
-      message: "User cannot be registered. Please try again.",
+      message: "User registration failed. Please try again later.",
     });
   }
 };
@@ -75,22 +94,14 @@ exports.signup = async (req, res) => {
 // Login controller for authenticating users
 exports.login = async (req, res) => {
   try {
-    // Get email and password from request body
     const { email, password } = req.body;
-
-    // Check if email or password is missing
     if (!email || !password) {
-      // Return 400 Bad Request status code with error message
       return res.status(400).json({
         success: false,
         message: `Please Fill up All the Required Fields`,
       });
     }
-
-    // Find user with provided email
     const user = await User.findOne({ email }).populate("additionalDetails");
-
-    // If user not found with provided email
     if (!user) {
       // Return 401 Unauthorized status code with error message
       return res.status(401).json({
@@ -331,5 +342,264 @@ exports.findUserIp = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send("Error fetching IP location");
+  }
+};
+
+// New controller for initiating mobile verification (first step)
+exports.initiateAuth = async (req, res) => {
+  try {
+    const { phoneNo } = req.body;
+
+    if (!phoneNo) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number is required",
+      });
+    }
+
+    const existingUser = await User.findOne({ phoneNo });
+    const isRegistered = existingUser ? true : false;
+
+    const otp = otpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+    });
+
+    const whatsappText = encodeURIComponent(`Your OTP is ${otp}`);
+    const whatsappUrl = `https://wa.me/91${phoneNo}?text=${whatsappText}`;
+
+    // Save OTP details
+    const purpose = isRegistered ? "login" : "signup";
+    await WhatsAppOTP.create({
+      phoneNo,
+      otp,
+      whatsappUrl,
+      purpose,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Authentication initiated",
+      isRegistered,
+      phoneNo,
+    });
+  } catch (error) {
+    console.error("Authentication Initiation Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to initiate authentication. Please try again.",
+    });
+  }
+};
+
+// Admin endpoint to get pending OTP requests
+exports.getPendingOTPs = async (req, res) => {
+  try {
+    const pendingOTPs = await WhatsAppOTP.find({ isSent: false })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    return res.status(200).json({
+      success: true,
+      data: pendingOTPs,
+    });
+  } catch (error) {
+    console.error("Error fetching pending OTPs:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch pending OTPs",
+    });
+  }
+};
+
+// Admin endpoint to mark OTP as sent
+exports.markOTPSent = async (req, res) => {
+  try {
+    const { otpId } = req.params;
+
+    const otpRecord = await WhatsAppOTP.findByIdAndUpdate(
+      otpId,
+      { isSent: true },
+      { new: true }
+    );
+
+    if (!otpRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "OTP record not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP marked as sent",
+      data: otpRecord,
+    });
+  } catch (error) {
+    console.error("Error marking OTP as sent:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update OTP status",
+    });
+  }
+};
+
+// Verify OTP and proceed with login/signup
+exports.verifyOTP = async (req, res) => {
+  try {
+    const { phoneNo, otp } = req.body;
+
+    if (!phoneNo || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number and OTP are required",
+      });
+    }
+
+    // Find the most recent OTP for the phone number
+    const recentOtp = await WhatsAppOTP.findOne({ phoneNo, isSent: true }).sort(
+      { createdAt: -1 }
+    );
+
+    if (!recentOtp || recentOtp.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP. Please try again.",
+      });
+    }
+
+    // Mark OTP as verified
+    recentOtp.isVerified = true;
+    await recentOtp.save();
+
+    // Check if user exists
+    const user = await User.findOne({ phoneNo }).populate("additionalDetails");
+
+    if (user) {
+      // User exists - handle login
+      const token = jwt.sign(
+        { phoneNo: user.phoneNo, id: user._id, accountType: user.accountType },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: "24h",
+        }
+      );
+
+      user.token = token;
+      user.password = undefined;
+
+      const options = {
+        expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        httpOnly: true,
+      };
+
+      return res.cookie("token", token, options).status(200).json({
+        success: true,
+        token,
+        user,
+        message: "Login successful",
+      });
+    } else {
+      // User doesn't exist - return success but indicate signup needed
+      return res.status(200).json({
+        success: true,
+        isRegistered: false,
+        message: "Phone number verified. Please complete registration.",
+        phoneNo,
+      });
+    }
+  } catch (error) {
+    console.error("OTP Verification Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "OTP verification failed. Please try again.",
+    });
+  }
+};
+
+// Modified signup controller to return login-like response
+exports.signupWithPhone = async (req, res) => {
+  try {
+    const { name, firstName, lastName, phoneNo, image } = req.body;
+
+    // Check if required fields are present
+    if (!name || !phoneNo) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, Phone Number, are required",
+      });
+    }
+
+    // Verify the phone has been OTP-verified recently
+    const verifiedOtp = await WhatsAppOTP.findOne({
+      phoneNo,
+      isVerified: true,
+      purpose: "signup",
+      createdAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) },
+    }).sort({ createdAt: -1 });
+
+    if (!verifiedOtp) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone verification required before signup.",
+      });
+    }
+
+    // Create additional user details
+    const profileDetails = await UserDetail.create({});
+
+    // Create user
+    const user = await User.create({
+      name,
+      firstName,
+      lastName,
+      phoneNo,
+      additionalDetails: profileDetails._id,
+      image:
+        image ||
+        `https://api.dicebear.com/6.x/initials/svg?seed=${name}&backgroundColor=00897b,00acc1,039be5&backgroundType=solid`,
+    });
+
+    // Update profile details with userId
+    profileDetails.userId = user._id;
+    await profileDetails.save();
+
+    // Generate JWT token like in login API
+    const token = jwt.sign(
+      {
+        name: user.name,
+        firstName: name.firstName,
+        lastName: name.lastName,
+        phoneNo: user.phoneNo,
+        id: user._id,
+        accountType: user.accountType,
+        image: user.image,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "24h",
+      }
+    );
+
+    // Set cookie options
+    const options = {
+      expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      httpOnly: true,
+    };
+
+    // Return response with token and cookie, just like login API
+    return res.cookie("token", token, options).status(201).json({
+      success: true,
+      token,
+      user,
+      message: "User registered successfully.",
+    });
+  } catch (error) {
+    console.error("Signup Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "User registration failed. Please try again later.",
+    });
   }
 };

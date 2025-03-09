@@ -11,6 +11,7 @@ import 'package:get_storage/get_storage.dart';
 import '../../../data/services/LocationService.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter/foundation.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
@@ -61,9 +62,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             chatsList.map((chat) => Chat.fromJson(chat)).toList();
         _messageController.chats.value = chats;
       }
-    } catch (e) {
-      print('Error loading cached chats: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadInitialChats() async {
@@ -81,18 +80,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
           page: 1,
           limit: _itemsPerPage,
         );
-        
+
         // Cache the new chats
         if (_messageController.chats.isNotEmpty) {
-          final chatJsonList = _messageController.chats.map((chat) => chat.toJson()).toList();
+          final chatJsonList =
+              _messageController.chats.map((chat) => chat.toJson()).toList();
           await _box.write(CACHED_CHATS_KEY, chatJsonList);
         }
-      } catch (e) {
-        print('Error loading initial chats: $e');
-      }
-    } else {
-      print('User ID not available after retries');
-    }
+      } catch (e) {}
+    } else {}
   }
 
   Future<void> _loadMoreChats() async {
@@ -444,8 +440,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   void _showConsultantsList() async {
-    final locationService = Get.find<LocationService>(); // Make sure to create and register this service
-    
+    final locationService = Get.find<
+        LocationService>(); // Make sure to create and register this service
+
     try {
       final position = await locationService.getCurrentPosition();
       if (position == null) {
@@ -469,7 +466,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Location Permission Required'),
-        content: const Text('Please enable location services to connect with consultants near you.'),
+        content: const Text(
+            'Please enable location services to connect with consultants near you.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -563,6 +561,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildConsultantCard(Consultant consultant) {
+    if (kDebugMode) {
+      print(
+          'Building card for consultant: ${consultant.id} - ${consultant.userName}');
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 2,
@@ -626,14 +629,37 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: Image.network(
-                            consultant.company.logo,
+                        if (consultant.company.logo.isNotEmpty &&
+                            Uri.tryParse(consultant.company.logo)?.hasScheme ==
+                                true)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: Image.network(
+                              consultant.company.logo,
+                              height: 20,
+                              width: 20,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  height: 20,
+                                  width: 20,
+                                  color: Colors.grey[200],
+                                  child: Icon(Icons.business,
+                                      size: 12, color: Colors.grey[400]),
+                                );
+                              },
+                            ),
+                          )
+                        else
+                          Container(
                             height: 20,
                             width: 20,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Icon(Icons.business,
+                                size: 12, color: Colors.grey[400]),
                           ),
-                        ),
                         const SizedBox(width: 8),
                         Text(
                           consultant.company.name,
@@ -656,6 +682,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   Future<void> _createDirectChat(Consultant consultant) async {
     try {
+      // Log the consultant for debugging
+      if (kDebugMode) {
+        print(
+            'Creating chat with consultant: ${consultant.id} - ${consultant.userName}');
+      }
+
       // Show loading indicator
       Get.dialog(
         const Center(
@@ -664,17 +696,40 @@ class _ChatListScreenState extends State<ChatListScreen> {
         barrierDismissible: false,
       );
 
-      final chat = await _messageController.createDirectChat(
-        participantId: consultant.id,
-        participantName: consultant.userName,
-        participantProfilePhoto: consultant.profilePhotoId,
-      );
+      // First check if chat already exists with this specific consultant
+      Chat? existingChat;
+      if (_messageController.chats.isNotEmpty) {
+        existingChat = _messageController.chats.firstWhereOrNull((chat) =>
+            chat.type == 'direct' &&
+            chat.otherParticipants.isNotEmpty &&
+            chat.otherParticipants.first.userId == consultant.id);
 
-      Get.back();
+        if (kDebugMode && existingChat != null) {
+          print(
+              'Found existing chat: ${existingChat.id} with ${existingChat.otherParticipants.first.userName}');
+        }
+      }
+
+      // If chat exists, use it; otherwise create a new one
+      Chat? chat = existingChat;
+      if (chat == null) {
+        if (kDebugMode) {
+          print(
+              'No existing chat found. Creating new chat with: ${consultant.userName}');
+        }
+
+        chat = await _messageController.createDirectChat(
+          participantId: consultant.id,
+          participantName: consultant.userName,
+          participantProfilePhoto: consultant.profilePhotoId,
+        );
+      }
+
+      Get.back(); // Close loading dialog
 
       if (chat != null && chat.id.isNotEmpty) {
-        if (mounted) {  
-          Navigator.pop(context); 
+        if (mounted) {
+          Navigator.pop(context); // Close consultant list
           await Future.delayed(const Duration(milliseconds: 100));
           Get.to(() => ChatDetailScreen(chat: chat));
         }
@@ -685,11 +740,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
       if (Get.isDialogOpen ?? false) {
         Get.back();
       }
-      
-      print('Error creating direct chat: $e');
+
       Get.snackbar(
         'Error',
-        'Failed to create chat. Please try again.',
+        'Failed to create chat: ${e.toString()}',
         backgroundColor: Colors.red,
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,

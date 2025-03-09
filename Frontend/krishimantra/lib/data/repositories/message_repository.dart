@@ -17,7 +17,8 @@ class MessageRepository {
     String? mediaUrl,
   }) async {
     try {
-      final response = await _apiService.post('/api/messages/api/message/send', data: {
+      final response =
+          await _apiService.post('/api/messages/api/message/send', data: {
         'userId': userId,
         'chatId': chatId,
         'content': content,
@@ -55,9 +56,9 @@ class MessageRepository {
     required String profilePhoto,
     required String participantProfilePhoto,
   }) async {
-
     try {
-      final response = await _apiService.post('/api/messages/api/chat/direct', data: {
+      final response =
+          await _apiService.post('/api/messages/api/chat/direct', data: {
         'userId': userId,
         'userName': userName,
         'participantId': participantId,
@@ -98,8 +99,6 @@ class MessageRepository {
           .map((message) => Message.fromJson(message))
           .toList();
     } catch (e, stackTrace) {
-      print('Error fetching messages: $e');
-      print('Stack trace: $stackTrace');
       throw Exception('Failed to get messages: $e');
     }
   }
@@ -136,7 +135,8 @@ class MessageRepository {
     bool onlyAdminCanMessage = false,
   }) async {
     try {
-      final response = await _apiService.post('/api/messages/api/group/create', data: {
+      final response =
+          await _apiService.post('/api/messages/api/group/create', data: {
         'userId': userId,
         'userName': userName,
         'name': name,
@@ -151,7 +151,6 @@ class MessageRepository {
 
       return GroupChat.fromJson(response.data);
     } catch (e) {
-      print('Error in createGroup repository: $e');
       throw Exception('Failed to create group: $e');
     }
   }
@@ -219,7 +218,6 @@ class MessageRepository {
           .map((consultant) => Consultant.fromJson(consultant))
           .toList();
     } catch (e) {
-      print('Error fetching consultants: $e');
       throw Exception('Failed to get consultants: $e');
     }
   }

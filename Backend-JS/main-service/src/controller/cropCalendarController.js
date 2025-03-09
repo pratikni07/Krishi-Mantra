@@ -136,6 +136,7 @@ class CropCalendarController {
   // ACTIVITY OPERATIONS
   static async createActivity(req, res) {
     try {
+      console.log(req.body);
       const activity = new Activity(req.body);
       await activity.save();
       await redis.del("all_activities");

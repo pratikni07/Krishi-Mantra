@@ -64,9 +64,6 @@ class _ReelsPageState extends State<ReelsPage> {
           // Reels Section (now full screen)
           Obx(
             () {
-              print('Reels count: ${_reelController.reels.length}');
-              print('Loading state: ${_reelController.isLoading.value}');
-
               return _reelController.isLoading.value &&
                       _reelController.reels.isEmpty
                   ? const Center(child: CircularProgressIndicator())
@@ -75,7 +72,6 @@ class _ReelsPageState extends State<ReelsPage> {
                       scrollDirection: Axis.vertical,
                       itemCount: _reelController.reels.length,
                       onPageChanged: (index) async {
-                        print('Page changed to index: $index');
                         if (index == _reelController.reels.length - 2) {
                           await _reelController.fetchReels();
                         }
@@ -258,9 +254,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
 
         await _preloadSingleVideo(nextIndex);
       }
-    } catch (e) {
-      print('Error preloading videos: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _preloadSingleVideo(int index) async {
@@ -289,13 +283,14 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
 
       await controller.initialize();
       _videoCache[reel.mediaUrl] = controller;
-    } catch (e) {
-      print('Error preloading video at index $index: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _initializeVideoPlayer() async {
     try {
+      // Check if widget is still mounted before initializing
+      if (!mounted) return;
+
       // Check cache first
       if (_videoCache.containsKey(widget.reel.mediaUrl)) {
         _videoPlayerController = _videoCache[widget.reel.mediaUrl]!;
@@ -318,33 +313,30 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
         await _videoPlayerController.initialize();
       }
 
-      if (_videoPlayerController.value.isInitialized) {
-        if (mounted) {
-          setState(() {
-            _isVideoInitialized = true;
-            _isPlaying = true;
-          });
+      if (_videoPlayerController.value.isInitialized && mounted) {
+        setState(() {
+          _isVideoInitialized = true;
+          _isPlaying = true;
+        });
 
-          await _videoPlayerController.setPlaybackSpeed(1.0);
-          await _videoPlayerController.setLooping(true);
-          await _videoPlayerController.play();
+        await _videoPlayerController.setPlaybackSpeed(1.0);
+        await _videoPlayerController.setLooping(true);
+        await _videoPlayerController.play();
 
-          // Start preloading videos in both directions
-          _preloadVideos();
-        }
-      } else {
-        throw Exception('Video failed to initialize');
+        // Start preloading videos in both directions
+        _preloadVideos();
       }
-    } catch (e) {
-      print('Error initializing video ${widget.index}: $e');
-    }
+    } catch (e) {}
   }
 
   @override
   void dispose() {
-    if (!_videoCache.containsValue(_videoPlayerController)) {
-      _videoPlayerController.dispose();
-    }
+    try {
+      if (!_videoCache.containsValue(_videoPlayerController)) {
+        _videoPlayerController.pause();
+        _videoPlayerController.dispose();
+      }
+    } catch (e) {}
     super.dispose();
   }
 
@@ -611,11 +603,19 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
       key: Key(widget.reel.id),
       onVisibilityChanged: (visibilityInfo) {
         var visiblePercentage = visibilityInfo.visibleFraction * 100;
-        if (visiblePercentage > 90) {
-          _videoPlayerController.play();
-        } else if (visiblePercentage < 10) {
-          _videoPlayerController.pause();
-        }
+        if (!mounted) return; // Add this check
+
+        try {
+          if (visiblePercentage > 90) {
+            if (_videoPlayerController.value.isInitialized) {
+              _videoPlayerController.play();
+            }
+          } else if (visiblePercentage < 10) {
+            if (_videoPlayerController.value.isInitialized) {
+              _videoPlayerController.pause();
+            }
+          }
+        } catch (e) {}
       },
       child: Container(
         color: Colors.black,
@@ -671,10 +671,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                                   backgroundImage:
                                       NetworkImage(widget.reel.profilePhoto),
                                   onBackgroundImageError:
-                                      (exception, stackTrace) {
-                                    print(
-                                        'Error loading profile image: $exception');
-                                  },
+                                      (exception, stackTrace) {},
                                   backgroundColor: AppColors.textGrey,
                                   child: widget.reel.profilePhoto.isEmpty
                                       ? Text(
@@ -1190,9 +1187,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
       children: [
         CircleAvatar(
           backgroundImage: NetworkImage(comment['profilePhoto']),
-          onBackgroundImageError: (exception, stackTrace) {
-            print('Error loading profile image: $exception');
-          },
+          onBackgroundImageError: (exception, stackTrace) {},
           backgroundColor: AppColors.textGrey,
           child: widget.reel.profilePhoto.isEmpty
               ? Text(

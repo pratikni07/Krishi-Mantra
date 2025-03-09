@@ -31,6 +31,11 @@ class FeedController extends GetxController {
   final RxList<FeedModel> topFeeds = <FeedModel>[].obs;
   final RxBool isLoadingTopFeeds = false.obs;
 
+  final RxList<Map<String, dynamic>> trendingHashtags =
+      <Map<String, dynamic>>[].obs;
+  final RxBool isLoadingHashtags = false.obs;
+  final RxString selectedTag = ''.obs;
+
   FeedController(this._feedRepository, this._userService);
 
   @override
@@ -271,9 +276,9 @@ class FeedController extends GetxController {
     try {
       isLoadingTopFeeds.value = true;
       final userData = await _userService.getUser();
-      
+
       final feeds = await _feedRepository.getTopFeeds();
-      
+
       // Check if posts are liked by current user
       if (userData != null) {
         for (var feed in feeds) {
@@ -281,7 +286,7 @@ class FeedController extends GetxController {
           feed.isLiked = likesList.contains(userData.id);
         }
       }
-      
+
       topFeeds.value = feeds;
     } catch (e) {
       Get.snackbar(
@@ -292,5 +297,71 @@ class FeedController extends GetxController {
     } finally {
       isLoadingTopFeeds.value = false;
     }
+  }
+
+  Future<void> fetchTrendingHashtags() async {
+    try {
+      isLoadingHashtags.value = true;
+      final hashtags = await _feedRepository.getTrendingHashtags();
+      trendingHashtags.value = hashtags;
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to fetch trending hashtags: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isLoadingHashtags.value = false;
+    }
+  }
+
+  Future<void> fetchFeedsByTag(String tagName, {bool refresh = false}) async {
+    try {
+      if (refresh) {
+        recommendedCurrentPage.value = 1;
+        hasMoreRecommendedFeeds.value = true;
+        recommendedFeeds.clear();
+      }
+
+      if (!hasMoreRecommendedFeeds.value) return;
+      isRecommendedLoading.value = true;
+      selectedTag.value = tagName;
+
+      final result = await _feedRepository.getFeedsByTag(
+        tagName,
+        page: recommendedCurrentPage.value,
+        limit: limit,
+      );
+
+      final newFeeds = (result['feeds'] as List<FeedModel>);
+
+      // Get current user ID to check if posts are liked
+      final userData = await _userService.getUser();
+      if (userData != null) {
+        for (var feed in newFeeds) {
+          final likesList = feed.like['users'] as List? ?? [];
+          feed.isLiked = likesList.contains(userData.id);
+        }
+      }
+
+      recommendedFeeds.addAll(newFeeds);
+
+      final pagination = result['pagination'];
+      hasMoreRecommendedFeeds.value = pagination['hasMore'] ?? false;
+      if (hasMoreRecommendedFeeds.value) recommendedCurrentPage.value++;
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to fetch feeds by tag: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isRecommendedLoading.value = false;
+    }
+  }
+
+  void clearSelectedTag() {
+    selectedTag.value = '';
+    fetchRecommendedFeeds(refresh: true);
   }
 }

@@ -2,7 +2,7 @@
 
 import 'dart:convert';
 
-import 'package:dio/dio.dart';
+import 'package:dio/dio.dart' as dio;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
@@ -15,6 +15,7 @@ class AuthRepository {
 
   AuthRepository(this._apiService);
 
+  // Traditional email/password login
   Future<UserModel> login(String email, String password) async {
     try {
       print('🔍 Starting login in repository');
@@ -64,7 +65,7 @@ class AuthRepository {
     } catch (e, stackTrace) {
       print('⚠️ Login error in repository: $e');
       print('📚 Stack trace: $stackTrace');
-      if (e is DioException) {
+      if (e is dio.DioException) {
         final response = e.response?.data;
         print('🌐 Dio error response: $response');
         if (response != null && response['message'] != null) {
@@ -72,6 +73,77 @@ class AuthRepository {
         }
       }
       throw Exception('Login failed. Please try again.');
+    }
+  }
+
+  // Phone authentication methods
+  Future<Map<String, dynamic>> initiateAuth(String phoneNo) async {
+    try {
+      final response = await _apiService.post(
+        ApiConstants.INITIATE_AUTH,
+        data: {
+          'phoneNo': phoneNo,
+        },
+      );
+
+      return response.data;
+    } catch (e) {
+      if (e is dio.DioException && e.response != null) {
+        return e.response!.data;
+      }
+      throw Exception('Failed to initiate authentication: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyOTP(String phoneNo, String otp) async {
+    try {
+      final response = await _apiService.post(
+        ApiConstants.VERIFY_OTP,
+        data: {
+          'phoneNo': phoneNo,
+          'otp': otp,
+        },
+      );
+
+      return response.data;
+    } catch (e) {
+      if (e is dio.DioException && e.response != null) {
+        return e.response!.data;
+      }
+      throw Exception('OTP verification failed: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> signupWithPhone(
+      Map<String, dynamic> data) async {
+    try {
+      final response = await _apiService.post(
+        ApiConstants.SIGNUP_WITH_PHONE,
+        data: data,
+      );
+
+      return response.data;
+    } catch (e) {
+      if (e is dio.DioException && e.response != null) {
+        return e.response!.data;
+      }
+      throw Exception('Registration failed: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> uploadProfileImage(dio.FormData formData) async {
+    try {
+      final response = await _apiService.post(
+        ApiConstants.UPLOAD_IMAGE,
+        data: formData,
+      );
+
+      return response.data;
+    } catch (e) {
+      if (e is dio.DioException && e.response != null) {
+        return e.response!.data;
+      }
+      throw Exception('Image upload failed: $e');
     }
   }
 

@@ -1,15 +1,19 @@
-// lib/presentation/controllers/auth_controller.dart
-
 import 'dart:convert';
+import 'dart:io';
+import 'package:dio/dio.dart' as dio;
 import 'package:get/get.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/constants/api_constants.dart';
 import '../../data/models/user_model.dart';
+import '../../data/models/otp_response_model.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/services/UserService.dart';
 import '../../routes/app_routes.dart';
 
 class AuthController extends GetxController {
   final _storage = const FlutterSecureStorage();
   final AuthRepository _authRepository;
+  final UserService _userService = Get.find<UserService>();
   final isPasswordVisible = false.obs;
   final Rx<UserModel?> user = Rx<UserModel?>(null);
   final RxBool isLoading = false.obs;
@@ -42,11 +46,9 @@ class AuthController extends GetxController {
       final result = await _authRepository.login(email, password);
 
       if (result != null) {
-        print('✅ Login successful, storing user data');
         user.value = result;
 
         final userJson = result.toJson();
-        print('💾 User JSON to store: $userJson');
 
         await _storage.write(
           key: 'user_data',
@@ -58,8 +60,6 @@ class AuthController extends GetxController {
         throw Exception('Login failed: User data is null');
       }
     } catch (e, stackTrace) {
-      print('⚠️ Error during login: $e');
-      print('stack: $stackTrace');
       Get.snackbar(
         'Error',
         e.toString(),
@@ -71,11 +71,163 @@ class AuthController extends GetxController {
     }
   }
 
+  // Phone authentication methods
+  Future<bool> initiateAuth(String phoneNo) async {
+    try {
+      isLoading.value = true;
+
+      final response = await _authRepository.initiateAuth(phoneNo);
+      if (response['success'] == true) {
+        return true;
+      } else {
+        throw Exception(
+            response['message'] ?? 'Failed to initiate authentication');
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        e.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<OTPVerificationResult?> verifyOTP(String phoneNo, String otp) async {
+    try {
+      isLoading.value = true;
+
+      final response = await _authRepository.verifyOTP(phoneNo, otp);
+
+      if (response['success'] != true) {
+        throw Exception(response['message'] ?? 'OTP verification failed');
+      }
+
+      // Create result object
+      final result = OTPVerificationResult(
+        isRegistered: response['isRegistered'] ?? false,
+        message: response['message'],
+        phoneNo: phoneNo,
+      );
+
+      // If user is registered (login successful), store the user data
+      if (response['token'] != null && response['user'] != null) {
+        final token = response['token'] as String;
+        final userData = response['user'] as Map<String, dynamic>;
+
+        // Add token to user data
+        userData['token'] = token;
+
+        // Save user data
+        final userModel = UserModel.fromJson(userData);
+        user.value = userModel;
+        await _userService.saveUser(userModel);
+
+        // Save token
+        await _storage.write(key: 'auth_token', value: token);
+      }
+
+      return result;
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        e.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return null;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> signupWithPhone({
+    required String name,
+    required String firstName,
+    required String lastName,
+    required String phoneNo,
+    File? imageFile,
+  }) async {
+    try {
+      isLoading.value = true;
+
+      final Map<String, dynamic> data = {
+        'name': name,
+        'firstName': firstName,
+        'lastName': lastName,
+        'phoneNo': phoneNo,
+      };
+
+      // Only upload image if provided
+      if (imageFile != null) {
+        final imageUrl = await _uploadImage(imageFile);
+        if (imageUrl != null) {
+          data['image'] = imageUrl;
+        }
+      }
+
+      final response = await _authRepository.signupWithPhone(data);
+
+      if (response['success'] != true) {
+        throw Exception(response['message'] ?? 'Registration failed');
+      }
+
+      // Extract token and user data
+      final token = response['token'] as String;
+      final userData = response['user'] as Map<String, dynamic>;
+
+      // Add token to user data
+      userData['token'] = token;
+
+      // Save user data
+      final userModel = UserModel.fromJson(userData);
+      user.value = userModel;
+      await _userService.saveUser(userModel);
+
+      // Save token
+      await _storage.write(key: 'auth_token', value: token);
+
+      return true;
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        e.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Helper method to upload profile image
+  Future<String?> _uploadImage(File imageFile) async {
+    try {
+      final formData = dio.FormData.fromMap({
+        'file': await dio.MultipartFile.fromFile(
+          imageFile.path,
+          filename: 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        ),
+      });
+
+      final response = await _authRepository.uploadProfileImage(formData);
+      if (response['success'] == true && response['fileUrl'] != null) {
+        return response['fileUrl'];
+      }
+      return null;
+    } catch (e) {
+      print('Error uploading image: $e');
+      return null;
+    }
+  }
+
   Future<void> logout() async {
     try {
       isLoading.value = true;
       await _authRepository.logout();
       await _storage.deleteAll();
+      await _userService.clearAllData();
       user.value = null;
       Get.offAllNamed(AppRoutes.LOGIN);
     } catch (e) {

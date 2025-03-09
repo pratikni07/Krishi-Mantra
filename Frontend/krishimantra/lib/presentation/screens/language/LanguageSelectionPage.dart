@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:get/get.dart';
 
 import '../../../data/services/language_service.dart';
-
-
+import '../../../routes/app_routes.dart';
 
 // LanguageData class remains the same
 class LanguageData {
@@ -90,7 +90,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
 
   Future<void> _updateTranslations() async {
     if (selectedLanguage == null) return;
-    
+
     final translations = await Future.wait([
       _languageService.translate('Choose Your Language'),
       _languageService.translate('Select the language you prefer'),
@@ -293,7 +293,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
                   await languageService.saveLanguage(selectedLanguage!);
                   await _updateTranslations();
                   if (mounted) {
-                    Navigator.pushReplacementNamed(context, '/main');
+                    Get.offAllNamed(AppRoutes.PHONE_NUMBER);
                   }
                 }
               : null,
@@ -307,7 +307,9 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
             elevation: selectedLanguage != null ? 4 : 0,
           ),
           child: Text(
-            selectedLanguage != null ? _continueButtonText : _selectLanguageText,
+            selectedLanguage != null
+                ? _continueButtonText
+                : _selectLanguageText,
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
