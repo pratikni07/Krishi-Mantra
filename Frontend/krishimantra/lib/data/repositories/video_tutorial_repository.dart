@@ -17,7 +17,7 @@ class VideoTutorialRepository {
   }) async {
     try {
       final response = await _apiService.get(
-        '/reels/videos',
+        '/api/reels/videos',
         queryParameters: {
           'page': page,
           'limit': limit,
@@ -33,27 +33,30 @@ class VideoTutorialRepository {
 
   Future<VideoTutorial> getVideoById(String id) async {
     try {
-      final response = await _apiService
-          .get(ApiConstants.VIDEO_TUTORIAL_DETAIL.replaceAll(':id', id));
+      final response = await _apiService.get('/api/reels/videos/$id');
 
-      print('Video detail response: ${response.statusCode}');
-      print('Video detail data structure: ${response.data.runtimeType}');
-      print(
-          'Video detail keys: ${response.data is Map ? (response.data as Map).keys.toList() : "Not a map"}');
+      if (response.data is Map &&
+          response.data['status'] == 'success' &&
+          response.data['data'] != null) {
+        final videoData = response.data['data'];
+        // Convert the data to Map<String, dynamic> to ensure type safety
+        final Map<String, dynamic> videoMap = {
+          ...Map<String, dynamic>.from(videoData),
+          // Ensure nested objects are properly structured
+          'likes': videoData['likes'] ?? {'count': 0, 'users': []},
+          'views': videoData['views'] ?? {'count': 0, 'unique': []},
+          'comments': videoData['comments'] ?? {'count': 0},
+          // Convert tags to List<String> if it's a single string
+          'tags': videoData['tags'] is String
+              ? videoData['tags'].split(',').map((tag) => tag.trim()).toList()
+              : List<String>.from(videoData['tags'] ?? []),
+        };
 
-      if (response.data is Map && response.data.containsKey('data')) {
-        final dynamic data = response.data['data'];
-        if (data is Map) {
-          print('Found video data with id: ${data['_id']}');
-          // Cast the Map to Map<String, dynamic>
-          return VideoTutorial.fromJson(Map<String, dynamic>.from(data));
-        }
+        return VideoTutorial.fromJson(videoMap);
       }
 
       throw Exception('Invalid video data structure');
-    } catch (e, stackTrace) {
-      print('Error fetching video detail: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e) {
       throw Exception('Failed to fetch video: $e');
     }
   }
@@ -84,7 +87,8 @@ class VideoTutorialRepository {
 
   Future<Map<String, dynamic>> getComments(String videoId) async {
     try {
-      final response = await _apiService.get('/reels/videos/$videoId/comments');
+      final response =
+          await _apiService.get('/api/reels/videos/$videoId/comments');
       return response.data;
     } catch (e) {
       throw Exception('Failed to fetch comments: $e');

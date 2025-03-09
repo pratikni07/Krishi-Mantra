@@ -95,8 +95,6 @@ class FeedRepository {
           'limit': limit,
         },
       );
-      print(feedId);
-      print(response);
 
       final data = ApiHelper.handleResponse(response);
       final List<CommentModel> comments = (data['docs'] as List)
@@ -186,12 +184,47 @@ class FeedRepository {
     try {
       final response = await _apiService.get('/api/feed/feeds/getoptwo');
       final data = ApiHelper.handleResponse(response);
-      
+
       final List<FeedModel> feeds = (data['data'] as List)
           .map((feed) => FeedModel.fromJson(feed))
           .toList();
 
       return feeds;
+    } catch (e) {
+      throw ApiHelper.handleError(e);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTrendingHashtags() async {
+    try {
+      final response =
+          await _apiService.get('/api/feed/feeds/trending/hashtags');
+      final data = ApiHelper.handleResponse(response);
+      return (data['data']['trendingTags'] as List)
+          .cast<Map<String, dynamic>>();
+    } catch (e) {
+      throw ApiHelper.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getFeedsByTag(String tagName,
+      {int page = 1, int limit = 10}) async {
+    try {
+      final response = await _apiService.get(
+        '/api/feed/feeds/tag/$tagName/feeds',
+        queryParameters: {'page': page, 'limit': limit},
+      );
+
+      final data = ApiHelper.handleResponse(response);
+      final List<FeedModel> feeds = (data['data']['feeds'] as List)
+          .map((feed) => FeedModel.fromJson(feed))
+          .toList();
+
+      return {
+        'feeds': feeds,
+        'pagination': data['data']['pagination'],
+        'tag': data['data']['tag'],
+      };
     } catch (e) {
       throw ApiHelper.handleError(e);
     }

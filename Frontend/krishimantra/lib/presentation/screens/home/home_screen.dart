@@ -207,7 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       */
     } catch (e) {
-      print('Error fetching weather data: $e');
       setState(() {
         _isLoadingWeather = false;
         // Set default values in case of error
@@ -225,7 +224,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchAds() async {
     try {
-      print('Fetching ads...');
       await _fetchAdsWithRetry();
 
       // Sort home screen ads by priority
@@ -235,17 +233,10 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // Debug prints
-      print('Splash ads response: $_splashAds');
-      print('Number of splash ads: ${_splashAds.length}');
-      if (_splashAds.isNotEmpty) {
-        print('First splash ad: ${_splashAds.first}');
-      }
+      if (_splashAds.isNotEmpty) {}
 
       setState(() {});
-    } catch (e, stackTrace) {
-      print('Error fetching ads: $e');
-      print('Stack trace: $stackTrace');
-    }
+    } catch (e, stackTrace) {}
   }
 
   Future<void> _fetchAdsWithRetry() async {
@@ -262,12 +253,10 @@ class _HomeScreenState extends State<HomeScreen> {
       } catch (e) {
         retryCount++;
         if (retryCount >= maxRetries) {
-          print('Max retries reached for fetching ads');
           rethrow; // We've reached max retries, rethrow the exception
         }
 
         // Log retry attempt
-        print('Retry $retryCount for fetching ads after error: $e');
 
         // Wait with exponential backoff before next retry
         await Future.delayed(delay);
@@ -278,37 +267,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _checkAndShowSplashAd() async {
     try {
-      print('Checking splash ad conditions...');
       final prefs = await SharedPreferences.getInstance();
       final lastShownTime = prefs.getInt(LAST_SPLASH_SHOWN_KEY) ?? 0;
       final currentTime = DateTime.now().millisecondsSinceEpoch;
 
-      print('Time since last shown: ${currentTime - lastShownTime}ms');
-      print('Has splash ads: ${_splashAds.isNotEmpty}');
-
       if (_splashAds.isNotEmpty) {
         if (currentTime - lastShownTime >= 7200000) {
-          print('Showing splash ad...');
           if (!mounted) return;
 
           await Future.delayed(const Duration(milliseconds: 500));
           _showSplashAd(_splashAds.first);
 
           await prefs.setInt(LAST_SPLASH_SHOWN_KEY, currentTime);
-        } else {
-          print('Not showing splash ad - too soon since last shown');
-        }
+        } else {}
       }
-    } catch (e) {
-      print('Error in _checkAndShowSplashAd: $e');
-    }
+    } catch (e) {}
   }
 
   void _showSplashAd(dynamic splashAd) {
     if (!mounted) return;
 
     // Debug print to check the splash ad data
-    print('Splash Ad Data: $splashAd');
 
     // Handle different possible data structures safely
     String imageUrl = '';
@@ -318,15 +297,10 @@ class _HomeScreenState extends State<HomeScreen> {
       } else if (splashAd is Map) {
         imageUrl = splashAd['dirURL'] ?? '';
       }
-    } catch (e) {
-      print('Error parsing splash ad data: $e');
-    }
-
-    print('Image URL: $imageUrl');
+    } catch (e) {}
 
     // Don't show dialog if no valid image URL
     if (imageUrl.isEmpty) {
-      print('No valid image URL found in splash ad data');
       return;
     }
 
@@ -376,8 +350,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           },
                           errorBuilder: (context, error, stackTrace) {
-                            print('Error loading image: $error');
-                            print('Stack trace: $stackTrace');
                             return Container(
                               height: 200,
                               color: Colors.grey[200],
@@ -437,9 +409,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_homeScreenSlider.isNotEmpty) {
         _startAutoScroll();
       }
-    } catch (e) {
-      print('Error initializing slider: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _fetchSliderWithRetry() async {
@@ -454,12 +424,10 @@ class _HomeScreenState extends State<HomeScreen> {
       } catch (e) {
         retryCount++;
         if (retryCount >= maxRetries) {
-          print('Max retries reached for fetching slider');
           rethrow; // We've reached max retries, rethrow the exception
         }
 
         // Log retry attempt
-        print('Retry $retryCount for fetching slider after error: $e');
 
         // Wait with exponential backoff before next retry
         await Future.delayed(delay);

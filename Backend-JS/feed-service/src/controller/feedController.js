@@ -45,6 +45,7 @@ class FeedController {
       this.getCommonAggregationPipeline.bind(this);
     this.getRecommendedFeeds = this.getRecommendedFeeds.bind(this);
     this.getTopFeeds = this.getTopFeeds.bind(this);
+    this.getTrendingHashtags = this.getTrendingHashtags.bind(this);
   }
   getCommonAggregationPipeline() {
     return [
@@ -709,8 +710,8 @@ class FeedController {
   async getFeedsByTag(req, res) {
     try {
       const { tagName } = req.params;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
       const skip = (page - 1) * limit;
 
       const cacheKey = `${TAG_CACHE_KEY}${tagName}:${page}:${limit}`;
@@ -720,26 +721,47 @@ class FeedController {
         return res.json(JSON.parse(cachedResult));
       }
 
-      const tag = await Tag.findOne({ name: tagName }).populate({
-        path: "feedId",
-        options: {
-          skip,
-          limit,
-          sort: { date: -1 },
-        },
-      });
+      // First find the tag
+      const tag = await Tag.findOne({ name: tagName.toLowerCase() });
 
       if (!tag) {
-        return res.status(404).json({ error: "Tag not found" });
+        return res.status(404).json({
+          success: false,
+          message: "Tag not found",
+          error: "The requested hashtag does not exist",
+        });
       }
+
+      // Get feeds with aggregation pipeline for better data
+      const feeds = await Feed.aggregate([
+        { $match: { _id: { $in: tag.feedId } } },
+        { $sort: { date: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        ...this.getCommonAggregationPipeline(),
+      ]);
 
       const totalFeeds = tag.feedId.length;
       const result = {
-        feeds: tag.feedId,
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(totalFeeds / limit),
-          totalFeeds,
+        success: true,
+        message: "Feeds retrieved successfully",
+        data: {
+          feeds,
+          tag: {
+            name: tag.name,
+            totalPosts: totalFeeds,
+          },
+          pagination: {
+            currentPage: page,
+            totalPages: Math.ceil(totalFeeds / limit),
+            totalFeeds,
+            hasMore: page * limit < totalFeeds,
+            limit,
+          },
+          metadata: {
+            timestamp: new Date(),
+            source: "tag-based",
+          },
         },
       };
 
@@ -749,7 +771,147 @@ class FeedController {
       res.json(result);
     } catch (error) {
       console.error("Error fetching feeds by tag:", error);
-      res.status(500).json({ error: "Internal server error" });
+      res.status(500).json({
+        success: false,
+        message: "Error fetching feeds by tag",
+        error: error.message,
+      });
+    }
+  }
+
+  async getTrendingHashtags(req, res) {
+    try {
+      const cacheKey = "trending-hashtags";
+      const cachedTags = await redis.get(cacheKey);
+
+      if (cachedTags) {
+        return res.json(JSON.parse(cachedTags));
+      }
+
+      // Get trending hashtags based on recent feed activity
+      const trendingTags = await Tag.aggregate([
+        {
+          $lookup: {
+            from: "feeds",
+            localField: "feedId",
+            foreignField: "_id",
+            as: "feeds",
+          },
+        },
+        {
+          $project: {
+            name: 1,
+            feedCount: { $size: "$feedId" },
+            // Calculate engagement score based on likes and comments
+            totalEngagement: {
+              $reduce: {
+                input: "$feeds",
+                initialValue: 0,
+                in: {
+                  $add: [
+                    "$$value",
+                    { $add: ["$$this.like.count", "$$this.comment.count"] },
+                  ],
+                },
+              },
+            },
+            // Get the timestamp of the most recent feed
+            lastActivity: { $max: "$feeds.date" },
+            // Get recent posts count (last 24 hours)
+            recentPostsCount: {
+              $size: {
+                $filter: {
+                  input: "$feeds",
+                  as: "feed",
+                  cond: {
+                    $gte: [
+                      "$$feed.date",
+                      { $subtract: [new Date(), 1000 * 60 * 60 * 24] },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            // Calculate trending score based on engagement, recency and recent posts
+            trendingScore: {
+              $multiply: [
+                {
+                  $add: [
+                    "$totalEngagement",
+                    { $multiply: ["$recentPostsCount", 10] },
+                  ],
+                },
+                {
+                  $divide: [
+                    1,
+                    {
+                      $add: [
+                        1,
+                        {
+                          $divide: [
+                            { $subtract: [new Date(), "$lastActivity"] },
+                            1000 * 60 * 60, // Convert to hours
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        { $sort: { trendingScore: -1 } },
+        { $limit: 10 },
+        {
+          $project: {
+            name: 1,
+            feedCount: 1,
+            totalEngagement: 1,
+            recentPostsCount: 1,
+            trendingScore: 1,
+            lastActivity: 1,
+          },
+        },
+      ]);
+
+      const result = {
+        success: true,
+        message: "Trending hashtags retrieved successfully",
+        data: {
+          trendingTags: trendingTags.map((tag) => ({
+            ...tag,
+            trendingScore: Math.round(tag.trendingScore * 100) / 100,
+            lastActivity: tag.lastActivity,
+            metrics: {
+              totalPosts: tag.feedCount,
+              totalEngagement: tag.totalEngagement,
+              recentPosts: tag.recentPostsCount,
+            },
+          })),
+          metadata: {
+            timestamp: new Date(),
+            refreshInterval: "1 hour",
+            algorithm: "engagement-recency-weighted",
+          },
+        },
+      };
+
+      // Cache the results for 1 hour
+      await redis.setex(cacheKey, 3600, JSON.stringify(result));
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching trending hashtags:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching trending hashtags",
+        error: error.message,
+      });
     }
   }
 

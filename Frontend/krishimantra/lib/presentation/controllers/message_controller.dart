@@ -24,11 +24,9 @@ class MessageController extends GetxController {
   final Rx<String?> userProfilePhoto = Rx<String?>(null);
   final Rx<String?> accountType = Rx<String?>(null);
 
-
- final consultants = <Consultant>[].obs;
+  final consultants = <Consultant>[].obs;
   final isLoadingConsultants = false.obs;
   final consultantError = Rx<String?>(null);
-
 
   MessageController(this._messageRepository, this._userService);
 
@@ -82,7 +80,6 @@ class MessageController extends GetxController {
 
       currentPage.value = page;
     } catch (e) {
-      print('Error in loadMessages: $e');
       error.value = 'Failed to load messages';
       hasMoreMessages.value = false;
     } finally {
@@ -133,7 +130,6 @@ class MessageController extends GetxController {
 
       return true;
     } catch (e) {
-      print('Error sending message: $e');
       return false;
     }
   }
@@ -216,7 +212,6 @@ class MessageController extends GetxController {
       }
     } catch (e) {
       error.value = 'Failed to load chats';
-      print('Error loading user chats: $e');
     } finally {
       isLoading.value = false;
     }
@@ -264,7 +259,6 @@ class MessageController extends GetxController {
       }
     } catch (e) {
       error.value = 'Failed to create group';
-      print('Error creating group: $e');
       rethrow;
     } finally {
       isLoading.value = false;
@@ -321,11 +315,9 @@ class MessageController extends GetxController {
       // Remove the group from local chats list
       chats.removeWhere((chat) => chat.id == groupId);
     } catch (e) {
-      print('Error leaving group: $e');
       rethrow;
     }
   }
-
 
   Future<void> getConsultants({
     required double latitude,
@@ -334,16 +326,15 @@ class MessageController extends GetxController {
     try {
       isLoadingConsultants.value = true;
       consultantError.value = null;
-      
+
       final fetchedConsultants = await _messageRepository.getConsultants(
         latitude: 18.6161,
         longitude: 73.7286,
       );
-      
+
       consultants.value = fetchedConsultants;
     } catch (e) {
       consultantError.value = 'Failed to load consultants';
-      print('Error fetching consultants: $e');
     } finally {
       isLoadingConsultants.value = false;
     }
@@ -352,22 +343,41 @@ class MessageController extends GetxController {
   Future<Chat?> createDirectChat({
     required String participantId,
     required String participantName,
-    required String participantProfilePhoto,
+    String? participantProfilePhoto,
+    String? userId,
+    String? userName,
+    String? profilePhoto,
   }) async {
     try {
+      // First check if a chat already exists
+      if (chats.isNotEmpty) {
+        final existingChat = chats.firstWhereOrNull((chat) =>
+            chat.type == 'direct' &&
+            chat.otherParticipants.isNotEmpty &&
+            chat.otherParticipants.first.userId == participantId);
+
+        if (existingChat != null) {
+          return existingChat;
+        }
+      }
+
+      // If userId and userName are not provided, get them from UserService
       final user = await _userService.getUser();
       if (user == null) throw Exception('User not authenticated');
 
-      final userProfilePhoto = await _userService.getImage() ?? '';
-      final userName = '${await _userService.getFirstName()} ${await _userService.getLastName()}';
-      
+      final actualUserId = userId ?? user.id;
+      final actualUserName = userName ??
+          '${await _userService.getFirstName()} ${await _userService.getLastName()}';
+      final actualProfilePhoto =
+          profilePhoto ?? await _userService.getImage() ?? '';
+
       final chat = await _messageRepository.createDirectChat(
-        userId: user.id,
-        userName: userName,
+        userId: actualUserId,
+        userName: actualUserName,
         participantId: participantId,
         participantName: participantName,
-        profilePhoto: userProfilePhoto,
-        participantProfilePhoto: participantProfilePhoto,
+        profilePhoto: actualProfilePhoto,
+        participantProfilePhoto: participantProfilePhoto ?? '',
       );
 
       // Validate chat object
@@ -378,12 +388,10 @@ class MessageController extends GetxController {
         }
         return chat;
       } else {
-        print('Invalid chat object received from repository');
         return null;
       }
     } catch (e) {
-      print('Error in createDirectChat: $e');
-      error.value = 'Failed to create chat';
+      error.value = 'Failed to create chat: ${e.toString()}';
       return null;
     }
   }

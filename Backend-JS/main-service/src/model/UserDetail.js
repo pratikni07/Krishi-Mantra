@@ -8,28 +8,28 @@ const UserDetailSchema = new mongoose.Schema(
     },
     address: {
       type: String,
-      trim: true,
+      // trim: true,
     },
     location: {
       type: {
         type: String, // Must be 'Point'
         enum: ["Point"],
-        required: true,
+        // required: true,
       },
       coordinates: {
         type: [Number], // [longitude, latitude]
-        required: true,
+        // required: true,
       },
     },
     interests: [
       {
         type: String,
-        trim: true,
+        // trim: true,
       },
     ],
     profilePic: {
       type: String,
-      trim: true,
+      // trim: true,
     },
     followers: [
       {

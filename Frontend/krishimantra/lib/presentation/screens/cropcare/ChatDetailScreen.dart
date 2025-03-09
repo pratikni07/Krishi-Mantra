@@ -64,9 +64,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         await _socketService.forceConnect();
       }
       _setupSocketListeners();
-    } catch (e) {
-      print('Chat screen socket initialization error: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _initializeUser() async {
@@ -220,20 +218,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           (deliveredToData as List).map((d) => DeliveredTo.fromJson(d)),
         );
       } catch (e) {
-        print('Error parsing deliveredTo data: $e');
         return;
       }
 
-      final index = _messageController.messages.indexWhere((m) => m.id == messageId);
+      final index =
+          _messageController.messages.indexWhere((m) => m.id == messageId);
       if (index != -1) {
         final message = _messageController.messages[index];
         _messageController.messages[index] = message.copyWith(
           deliveredTo: deliveredTo,
         );
       }
-    } catch (e) {
-      print('Error in _updateMessageDeliveryStatus: $e');
-    }
+    } catch (e) {}
   }
 
   void _updateMessageReadStatus(Map<String, dynamic> data) {
@@ -251,20 +247,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           (readByData as List).map((r) => ReadByUser.fromJson(r)),
         );
       } catch (e) {
-        print('Error parsing readBy data: $e');
         return;
       }
 
-      final index = _messageController.messages.indexWhere((m) => m.id == messageId);
+      final index =
+          _messageController.messages.indexWhere((m) => m.id == messageId);
       if (index != -1) {
         final message = _messageController.messages[index];
         _messageController.messages[index] = message.copyWith(
           readBy: readBy,
         );
       }
-    } catch (e) {
-      print('Error in _updateMessageReadStatus: $e');
-    }
+    } catch (e) {}
   }
 
   bool _isAtBottom() {
@@ -926,7 +920,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           child: participant.profilePhoto.isEmpty
                               ? Text(
                                   participant.userName[0].toUpperCase(),
-                                  style: const TextStyle(color: AppColors.green),
+                                  style:
+                                      const TextStyle(color: AppColors.green),
                                 )
                               : null,
                         ),

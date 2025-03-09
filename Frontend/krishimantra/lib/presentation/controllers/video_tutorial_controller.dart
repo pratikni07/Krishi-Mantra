@@ -60,6 +60,9 @@ class VideoTutorialController extends GetxController {
         isLoadingMore.value = true;
       }
 
+      hasError.value = false;
+      errorMessage.value = '';
+
       final newVideos = await _repository.getVideos(
         page: currentPage.value,
         limit: itemsPerPage.value,
@@ -71,9 +74,6 @@ class VideoTutorialController extends GetxController {
         videos.addAll(newVideos);
         currentPage.value++;
       }
-
-      hasError.value = false;
-      errorMessage.value = '';
     } catch (e) {
       hasError.value = true;
       errorMessage.value = e.toString();

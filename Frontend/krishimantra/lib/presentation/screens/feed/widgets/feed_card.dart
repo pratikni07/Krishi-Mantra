@@ -1,9 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:share_plus/share_plus.dart';
+import 'package:get/get.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../data/models/feed_model.dart';
+import '../../../widgets/video_player_widget.dart';
 import '../FeedDetailsScreen.dart';
+import 'package:chewie/chewie.dart';
+import 'package:video_player/video_player.dart';
+
+// Create a global controller to manage active videos
+class VideoController extends GetxController {
+  static VideoController get instance => Get.find<VideoController>();
+  Rx<String?> currentlyPlayingVideoUrl = Rx<String?>(null);
+
+  void setCurrentlyPlaying(String? url) {
+    currentlyPlayingVideoUrl.value = url;
+  }
+}
 
 class FeedCard extends StatefulWidget {
   final FeedModel feed;
@@ -23,6 +37,16 @@ class FeedCard extends StatefulWidget {
 
 class _FeedCardState extends State<FeedCard> {
   bool _isExpanded = false;
+  bool _isVideoPlaying = false;
+  VideoPlayerController? _videoPlayerController;
+  ChewieController? _chewieController;
+
+  @override
+  void dispose() {
+    _videoPlayerController?.dispose();
+    _chewieController?.dispose();
+    super.dispose();
+  }
 
   Widget _buildHashtagText(String content) {
     final words = content.split(' ');
@@ -201,7 +225,11 @@ class _FeedCardState extends State<FeedCard> {
                   ),
                   child: CircleAvatar(
                     radius: 24,
-                    backgroundImage: NetworkImage(widget.feed.profilePhoto),
+                    backgroundImage: widget.feed.profilePhoto.isNotEmpty &&
+                            Uri.parse(widget.feed.profilePhoto).isAbsolute
+                        ? NetworkImage(widget.feed.profilePhoto)
+                        : const AssetImage('assets/images/default_profile.png')
+                            as ImageProvider,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -251,14 +279,7 @@ class _FeedCardState extends State<FeedCard> {
 
           // Media Content
           if (widget.feed.mediaUrl != null)
-            ClipRRect(
-              borderRadius: const BorderRadius.all(Radius.circular(4)),
-              child: Image.network(
-                widget.feed.mediaUrl!,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            ),
+            _buildMediaContent(widget.feed.mediaUrl!),
 
           // Text Content
           Padding(
@@ -311,6 +332,158 @@ class _FeedCardState extends State<FeedCard> {
         ],
       ),
     );
+  }
+
+  Widget _buildMediaContent(String url) {
+    // Add URL validation to prevent errors with empty or invalid URLs
+    if (url.isEmpty || url == "file:///" || !Uri.parse(url).isAbsolute) {
+      return Container(
+        width: double.infinity,
+        height: 200,
+        color: Colors.grey.withOpacity(0.2),
+        child: const Center(
+          child: Icon(
+            Icons.broken_image,
+            color: Colors.grey,
+            size: 48,
+          ),
+        ),
+      );
+    }
+
+    // Check if the URL is a video based on common video extensions or domains
+    bool isVideo = url.toLowerCase().endsWith('.mp4') ||
+        url.toLowerCase().endsWith('.mov') ||
+        url.toLowerCase().endsWith('.avi') ||
+        url.contains('commondatastorage.googleapis.com/gtv-videos-bucket');
+
+    if (isVideo) {
+      if (!_isVideoPlaying) {
+        // Show thumbnail with play button when video is not playing
+        return GestureDetector(
+          onTap: () {
+            _initializeAndPlayVideo(url);
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: double.infinity,
+                height: 200,
+                color: Colors.black.withOpacity(0.1),
+                child: const Center(
+                  child: Text(
+                    'Video Content',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: 48,
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Show video player when video is playing
+        if (_chewieController != null) {
+          return AspectRatio(
+            aspectRatio: _chewieController!.aspectRatio ?? 16 / 9,
+            child: Chewie(controller: _chewieController!),
+          );
+        } else {
+          // Show loading indicator while video initializes
+          return Container(
+            height: 200,
+            color: Colors.black.withOpacity(0.1),
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+      }
+    } else {
+      // For images, use the existing image display with error handling
+      return Image.network(
+        url,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: double.infinity,
+            height: 200,
+            color: Colors.grey.withOpacity(0.2),
+            child: const Center(
+              child: Icon(
+                Icons.broken_image,
+                color: Colors.grey,
+                size: 48,
+              ),
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  void _initializeAndPlayVideo(String videoUrl) async {
+    setState(() {
+      _isVideoPlaying = true;
+    });
+
+    try {
+      // Initialize the video player
+      _videoPlayerController = VideoPlayerController.networkUrl(
+        Uri.parse(videoUrl),
+      );
+
+      await _videoPlayerController!.initialize();
+
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController!,
+        aspectRatio: _videoPlayerController!.value.aspectRatio,
+        autoPlay: true,
+        looping: false,
+        showControls: true,
+        materialProgressColors: ChewieProgressColors(
+          playedColor: Colors.green,
+          handleColor: Colors.greenAccent,
+          backgroundColor: Colors.grey,
+          bufferedColor: Colors.lightGreen,
+        ),
+        placeholder: Container(
+          color: Colors.black.withOpacity(0.1),
+        ),
+        errorBuilder: (context, errorMessage) {
+          setState(() {
+            _isVideoPlaying = false;
+          });
+          return Center(
+            child: Text(
+              'Error loading video: $errorMessage',
+              style: const TextStyle(color: Colors.white),
+            ),
+          );
+        },
+      );
+
+      // This will trigger a rebuild to show the video player
+      setState(() {});
+    } catch (e) {
+      print('Error initializing video player: $e');
+      setState(() {
+        _isVideoPlaying = false;
+      });
+    }
   }
 
   Widget _buildActionButton({

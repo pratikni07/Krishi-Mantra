@@ -134,8 +134,6 @@ class Message {
             : DateTime.now(),
       );
     } catch (e) {
-      print('Error parsing message: $e');
-      print('Problematic JSON: $json');
       rethrow;
     }
   }
@@ -245,50 +243,58 @@ class Chat {
         id: json['_id'] ?? '',
         type: json['type'] ?? '',
         participants: (json['participants'] as List?)
-            ?.map((x) => Participant.fromJson(x))
-            .toList() ?? [],
+                ?.map((x) => Participant.fromJson(x))
+                .toList() ??
+            [],
         unreadCount: Map<String, int>.from(json['unreadCount'] ?? {}),
-        createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-        updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
+        createdAt: DateTime.parse(
+            json['createdAt'] ?? DateTime.now().toIso8601String()),
+        updatedAt: DateTime.parse(
+            json['updatedAt'] ?? DateTime.now().toIso8601String()),
         lastMessage: json['lastMessage'],
         lastMessageDetails: (json['lastMessageDetails'] as List?)
             ?.map((x) => Message.fromJson(x))
             .toList(),
-        groupDetails: json['groupDetails'] != null 
-            ? (json['groupDetails'] is List && (json['groupDetails'] as List).isNotEmpty)
+        groupDetails: json['groupDetails'] != null
+            ? (json['groupDetails'] is List &&
+                    (json['groupDetails'] as List).isNotEmpty)
                 ? GroupDetails.fromJson(json['groupDetails'][0])
                 : json['groupDetails'] is Map
                     ? GroupDetails.fromJson(json['groupDetails'])
                     : null
             : null,
         otherParticipants: (json['otherParticipants'] as List?)
-            ?.map((x) => Participant.fromJson(x))
-            .toList() ?? [],
+                ?.map((x) => Participant.fromJson(x))
+                .toList() ??
+            [],
       );
 
   Map<String, dynamic> toJson() => {
-    '_id': id,
-    'type': type,
-    'participants': participants.map((x) => x.toJson()).toList(),
-    'unreadCount': unreadCount,
-    'createdAt': createdAt.toIso8601String(),
-    'updatedAt': updatedAt.toIso8601String(),
-    'lastMessage': lastMessage,
-    'lastMessageDetails': lastMessageDetails?.map((x) => x.toJson()).toList(),
-    'groupDetails': groupDetails != null ? {
-      '_id': groupDetails!.id,
-      'chatId': groupDetails!.chatId,
-      'name': groupDetails!.name,
-      'description': groupDetails!.description,
-      'admin': groupDetails!.admin,
-      'onlyAdminCanMessage': groupDetails!.onlyAdminCanMessage,
-      'inviteUrl': groupDetails!.inviteUrl,
-      'memberCount': groupDetails!.memberCount,
-      'createdAt': groupDetails!.createdAt.toIso8601String(),
-      'updatedAt': groupDetails!.updatedAt.toIso8601String(),
-    } : null,
-    'otherParticipants': otherParticipants.map((x) => x.toJson()).toList(),
-  };
+        '_id': id,
+        'type': type,
+        'participants': participants.map((x) => x.toJson()).toList(),
+        'unreadCount': unreadCount,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+        'lastMessage': lastMessage,
+        'lastMessageDetails':
+            lastMessageDetails?.map((x) => x.toJson()).toList(),
+        'groupDetails': groupDetails != null
+            ? {
+                '_id': groupDetails!.id,
+                'chatId': groupDetails!.chatId,
+                'name': groupDetails!.name,
+                'description': groupDetails!.description,
+                'admin': groupDetails!.admin,
+                'onlyAdminCanMessage': groupDetails!.onlyAdminCanMessage,
+                'inviteUrl': groupDetails!.inviteUrl,
+                'memberCount': groupDetails!.memberCount,
+                'createdAt': groupDetails!.createdAt.toIso8601String(),
+                'updatedAt': groupDetails!.updatedAt.toIso8601String(),
+              }
+            : null,
+        'otherParticipants': otherParticipants.map((x) => x.toJson()).toList(),
+      };
 }
 
 // group_model.dart
@@ -326,8 +332,10 @@ class GroupDetails {
         onlyAdminCanMessage: json['onlyAdminCanMessage'] ?? false,
         inviteUrl: json['inviteUrl'] ?? '',
         memberCount: json['memberCount'] ?? 0,
-        createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-        updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
+        createdAt: DateTime.parse(
+            json['createdAt'] ?? DateTime.now().toIso8601String()),
+        updatedAt: DateTime.parse(
+            json['updatedAt'] ?? DateTime.now().toIso8601String()),
       );
 }
 
@@ -344,7 +352,7 @@ class GroupChat {
     try {
       return GroupChat(
         chat: json['chat'] != null ? Chat.fromJson(json['chat']) : null,
-        group: json['group'] != null 
+        group: json['group'] != null
             ? (json['group'] is List && (json['group'] as List).isNotEmpty)
                 ? GroupDetails.fromJson(json['group'][0])
                 : json['group'] is Map
@@ -353,9 +361,6 @@ class GroupChat {
             : null,
       );
     } catch (e, stackTrace) {
-      print('Error parsing GroupChat: $e');
-      print('Stack trace: $stackTrace');
-      print('Problematic JSON: $json');
       rethrow;
     }
   }

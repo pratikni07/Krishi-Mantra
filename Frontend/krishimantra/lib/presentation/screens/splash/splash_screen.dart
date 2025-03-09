@@ -1,68 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../controllers/auth_controller.dart';
+import 'package:krishimantra/core/constants/colors.dart';
+import 'package:krishimantra/data/services/UserService.dart';
+import 'package:krishimantra/routes/app_routes.dart';
 
 class SplashScreen extends StatefulWidget {
+  const SplashScreen({Key? key}) : super(key: key);
+
   @override
   _SplashScreenState createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final AuthController _authController = Get.find<AuthController>();
+  final UserService _userService = Get.find<UserService>();
 
   @override
   void initState() {
     super.initState();
-    _checkAuth();
+    _checkInitialConfig();
   }
 
-  Future<void> _checkAuth() async {
-    await Future.delayed(Duration(seconds: 2)); // Splash screen duration
-    await _authController.checkAuthStatus();
+  Future<void> _checkInitialConfig() async {
+    // Wait for animations/initial loading (2 seconds)
+    await Future.delayed(const Duration(seconds: 2));
+
+    // Check user authentication status
+    final userData = await _userService.getUser();
+
+    if (userData != null) {
+      // User is already logged in, go to main screen
+      Get.offAllNamed(AppRoutes.MAIN);
+    } else {
+      // User needs to login, first select language
+      Get.offAllNamed(AppRoutes.LANGUAGE_SELECTION);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Get screen size
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
-    // Calculate responsive image width (40% of screen width)
-    final imageWidth = screenWidth * 0.4;
-
     return Scaffold(
-      backgroundColor: const Color(0xFF379570), // Converting hex to Color
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(height: screenHeight * 0.1),
-
+            // App logo
             Image.asset(
               'assets/Images/Logo.png',
-              width: imageWidth,
-              height: imageWidth,
-              fit: BoxFit.contain,
+              height: 200,
+              width: 200,
             ),
-
-            SizedBox(height: 20),
-
-            // Kissan Kart text
+            const SizedBox(height: 30),
+            // App name
             Text(
-              'Krishi Mantra',
+              'KrishiMantra',
               style: TextStyle(
-                fontSize: screenWidth * 0.06, // Responsive font size
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.white, // Adding white color for better contrast
+                color: AppColors.green,
               ),
             ),
-
-            SizedBox(height: 30),
-
-            // Progress indicator
+            const SizedBox(height: 50),
+            // Loading indicator
             CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
             ),
           ],
         ),

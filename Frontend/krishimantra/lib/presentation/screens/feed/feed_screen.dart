@@ -16,7 +16,7 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   final FeedController _feedController = Get.find<FeedController>();
   final UserService _userService = UserService();
   late LanguageService _languageService;
@@ -24,24 +24,22 @@ class _FeedScreenState extends State<FeedScreen> {
   bool _showTrendingHashtags = true;
   bool _showCreatePost = false;
 
+  // Add this property to track if the screen was inactive
+  bool _wasInactive = false;
+
   // Translatable text
   String trendingHashtagsText = 'Trending Hashtags';
-  List<String> trendingHashtags = [
-    '#trending',
-    '#viral',
-    '#latest',
-    '#popular',
-    '#hot',
-    '#new',
-  ];
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _feedController.fetchTrendingHashtags();
     _feedController.fetchRecommendedFeeds();
     _checkUserRole();
     _initializeLanguage();
+    // Register for lifecycle events
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: AppColors.green,
@@ -58,24 +56,10 @@ class _FeedScreenState extends State<FeedScreen> {
   Future<void> _updateTranslations() async {
     final translations = await Future.wait([
       _languageService.translate('Trending Hashtags'),
-      _languageService.translate('trending'),
-      _languageService.translate('viral'),
-      _languageService.translate('latest'),
-      _languageService.translate('popular'),
-      _languageService.translate('hot'),
-      _languageService.translate('new'),
     ]);
 
     setState(() {
       trendingHashtagsText = translations[0];
-      trendingHashtags = [
-        '#${translations[1]}',
-        '#${translations[2]}',
-        '#${translations[3]}',
-        '#${translations[4]}',
-        '#${translations[5]}',
-        '#${translations[6]}',
-      ];
     });
 
     // Translate existing feed content
@@ -114,7 +98,29 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    // Remove lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  // Add lifecycle method to detect when screen becomes visible again
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive) {
+      _wasInactive = true;
+    } else if (state == AppLifecycleState.resumed && _wasInactive) {
+      // Reset to recommended feeds when coming back to the app
+      _resetToRecommendedFeeds();
+      _wasInactive = false;
+    }
+    super.didChangeAppLifecycleState(state);
+  }
+
+  // Add a method to handle resetting to recommended feeds
+  void _resetToRecommendedFeeds() {
+    if (_feedController.selectedTag.value.isNotEmpty) {
+      _feedController.clearSelectedTag();
+    }
   }
 
   Widget _buildTrendingHashtags() {
@@ -122,55 +128,80 @@ class _FeedScreenState extends State<FeedScreen> {
       duration: const Duration(milliseconds: 200),
       height: _showTrendingHashtags ? 80 : 0,
       color: AppColors.green,
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
-              child: Text(
-                trendingHashtagsText,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+      child: Obx(() {
+        if (_feedController.isLoadingHashtags.value) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 2,
+            ),
+          );
+        }
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                child: Text(
+                  trendingHashtagsText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-            SizedBox(
-              height: 40,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(left: 16),
-                itemCount: trendingHashtags.length,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        trendingHashtags[index],
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+              SizedBox(
+                height: 40,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(left: 16),
+                  itemCount: _feedController.trendingHashtags.length,
+                  itemBuilder: (context, index) {
+                    final hashtag = _feedController.trendingHashtags[index];
+                    final tagName = hashtag['name'] as String;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () {
+                          _feedController.fetchFeedsByTag(tagName,
+                              refresh: true);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _feedController.selectedTag.value == tagName
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '#$tagName',
+                            style: TextStyle(
+                              color:
+                                  _feedController.selectedTag.value == tagName
+                                      ? AppColors.green
+                                      : Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      }),
     );
   }
 
@@ -178,69 +209,79 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
-      body: Container(
-        color: AppColors.green,
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header Section with green background
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: AppHeader(),
-              ),
-              _buildTrendingHashtags(),
-              SizedBox(
-                height: 20,
-              ),
-              // Content Section
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
+      body: Focus(
+        onFocusChange: (hasFocus) {
+          if (hasFocus) {
+            // When screen gets focus again, reset to recommended feeds
+            _resetToRecommendedFeeds();
+          }
+        },
+        child: Container(
+          color: AppColors.green,
+          child: SafeArea(
+            child: Column(
+              children: [
+                // Header Section with green background
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: AppHeader(),
+                ),
+                _buildTrendingHashtags(),
+                SizedBox(
+                  height: 20,
+                ),
+                // Content Section
+                Expanded(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
                     ),
-                  ),
-                  child: RefreshIndicator(
-                    onRefresh: () async {
-                      await _feedController.fetchRecommendedFeeds(
-                          refresh: true);
-                    },
-                    child: Obx(
-                      () => ListView.builder(
-                        controller: _scrollController,
-                        itemCount: _feedController.recommendedFeeds.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index ==
-                              _feedController.recommendedFeeds.length) {
-                            return Obx(() {
-                              if (_feedController.isRecommendedLoading.value) {
-                                return const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(16.0),
-                                    child: CircularProgressIndicator(
-                                      color: AppColors.green,
+                    child: RefreshIndicator(
+                      onRefresh: () async {
+                        await _feedController.fetchRecommendedFeeds(
+                            refresh: true);
+                      },
+                      child: Obx(
+                        () => ListView.builder(
+                          controller: _scrollController,
+                          itemCount:
+                              _feedController.recommendedFeeds.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index ==
+                                _feedController.recommendedFeeds.length) {
+                              return Obx(() {
+                                if (_feedController
+                                    .isRecommendedLoading.value) {
+                                  return const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(16.0),
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.green,
+                                      ),
                                     ),
-                                  ),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            });
-                          }
-                          return FeedCard(
-                            feed: _feedController.recommendedFeeds[index],
-                            onLike: () => _feedController.likeFeed(
-                              _feedController.recommendedFeeds[index].id,
-                            ),
-                          );
-                        },
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              });
+                            }
+                            return FeedCard(
+                              feed: _feedController.recommendedFeeds[index],
+                              onLike: () => _feedController.likeFeed(
+                                _feedController.recommendedFeeds[index].id,
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -10,6 +10,7 @@ import 'widgets/comments_section.dart';
 import 'widgets/comment_input.dart';
 import '../../../data/models/comment_modal.dart';
 import '../../controllers/feed_controller.dart';
+import '../../widgets/video_player_widget.dart';
 
 class FeedDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> feed;
@@ -234,5 +235,67 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
     _commentController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+}
+
+class MediaContent extends StatelessWidget {
+  final String? mediaUrl;
+
+  const MediaContent({Key? key, this.mediaUrl}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    if (mediaUrl == null ||
+        mediaUrl!.isEmpty ||
+        mediaUrl == "file:///" ||
+        !Uri.parse(mediaUrl!).isAbsolute) {
+      return Container(
+        width: double.infinity,
+        height: 200,
+        color: Colors.grey.withOpacity(0.2),
+        child: const Center(
+          child: Icon(
+            Icons.broken_image,
+            color: Colors.grey,
+            size: 48,
+          ),
+        ),
+      );
+    }
+
+    // Check if the URL is a video
+    bool isVideo = mediaUrl!.toLowerCase().endsWith('.mp4') ||
+        mediaUrl!.toLowerCase().endsWith('.mov') ||
+        mediaUrl!.toLowerCase().endsWith('.avi') ||
+        mediaUrl!
+            .contains('commondatastorage.googleapis.com/gtv-videos-bucket');
+
+    if (isVideo) {
+      return VideoPlayerWidget(
+        videoUrl: mediaUrl!,
+        autoPlay: false,
+      );
+    } else {
+      // For images
+      return Image.network(
+        mediaUrl!,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: double.infinity,
+            height: 200,
+            color: Colors.grey.withOpacity(0.2),
+            child: const Center(
+              child: Icon(
+                Icons.broken_image,
+                color: Colors.grey,
+                size: 48,
+              ),
+            ),
+          );
+        },
+      );
+    }
   }
 }

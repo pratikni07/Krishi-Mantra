@@ -1,6 +1,6 @@
 // Import the required modules
-const express = require("express")
-const router = express.Router()
+const express = require("express");
+const router = express.Router();
 
 // Import the required controllers and middleware functions
 const {
@@ -8,15 +8,20 @@ const {
   signup,
   sendotp,
   changePassword,
-  findUserIp
-} = require("../controller/Auth")
+  findUserIp,
+  initiateAuth,
+  verifyOTP,
+  getPendingOTPs,
+  markOTPSent,
+  signupWithPhone,
+} = require("../controller/Auth");
 
 // const {
 //   resetPasswordToken,
 //   resetPassword,
 // } = require("../controllers/ResetPassword")
 
-const { auth } = require("../middlewares/auth")
+const { auth } = require("../middlewares/auth");
 
 // Routes for Login, Signup, and Authentication
 
@@ -24,19 +29,23 @@ const { auth } = require("../middlewares/auth")
 //                                      Authentication routes
 // ********************************************************************************************************
 
-// Route for user login
-router.post("/login", login)
+// New mobile authentication routes
+router.post("/initiate-auth", initiateAuth);
+router.post("/verify-otp", verifyOTP);
+router.post("/signup-with-phone", signupWithPhone);
 
-// Route for user signup
-router.post("/signup", signup)
+// Admin routes for OTP management
+router.get("/admin/pending-otps", getPendingOTPs);
+router.put("/admin/mark-otp-sent/:otpId", markOTPSent);
 
-// Route for sending OTP to the user's email
-router.post("/sendotp", sendotp)
-
-router.get("/location", findUserIp)
+// Legacy routes
+router.post("/login", login);
+router.post("/signup", signup);
+router.post("/sendotp", sendotp);
+router.get("/location", findUserIp);
 
 // Route for Changing the password
-router.post("/changepassword", auth, changePassword)
+router.post("/changepassword", auth, changePassword);
 
 // ********************************************************************************************************
 //                                      Reset Password

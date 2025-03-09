@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishimantra/data/models/video_tutorial.dart';
@@ -28,7 +30,11 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
   @override
   void initState() {
     super.initState();
-    controller.fetchComments(widget.videoId);
+    // Load data after the widget is built using a post-frame callback
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.loadVideoDetails(widget.videoId);
+      controller.fetchComments(widget.videoId);
+    });
   }
 
   @override
@@ -51,15 +57,77 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
             // Video player section
             AspectRatio(
               aspectRatio: 16 / 9,
-              child: Container(
-                color: Colors.black,
-                child: const Center(
-                  child: Text(
-                    'Video Player Placeholder',
-                    style: TextStyle(color: Colors.white),
+              child: Obx(() {
+                if (controller.isLoading.value) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (controller.currentVideo.value == null) {
+                  return Container(
+                    color: Colors.black,
+                    child: const Center(
+                      child: Text(
+                        'Video not available',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  );
+                }
+
+                final video = controller.currentVideo.value!;
+
+                // Handle YouTube videos
+                if (video.videoType == 'youtube') {
+                  // Extract YouTube video ID
+                  String? videoId;
+                  final url = video.videoUrl;
+
+                  if (url.contains('youtu.be/')) {
+                    videoId = url.split('youtu.be/')[1].split('?')[0];
+                  } else if (url.contains('youtube.com/watch')) {
+                    final uri = Uri.tryParse(url);
+                    videoId = uri?.queryParameters['v'];
+                  } else if (url.contains('youtube.com/embed/')) {
+                    videoId = url.split('youtube.com/embed/')[1].split('?')[0];
+                  } else {
+                    // For URLs like "https://youtu.be/SO7sm12Rlto?si=YHZRO-ddQl7CZ54i"
+                    final segments = url.split('?');
+                    if (segments.isNotEmpty &&
+                        segments[0].contains('youtu.be/')) {
+                      videoId = segments[0].split('youtu.be/').last;
+                    }
+                  }
+
+                  if (videoId != null && videoId.isNotEmpty) {
+                    try {
+                      return YoutubePlayer(
+                        controller: YoutubePlayerController(
+                          initialVideoId: videoId,
+                          flags: const YoutubePlayerFlags(
+                            autoPlay: false,
+                            mute: false,
+                          ),
+                        ),
+                        showVideoProgressIndicator: true,
+                      );
+                    } catch (e) {
+                      print('YouTube player error: $e');
+                      // Fallback to error display
+                    }
+                  }
+                }
+
+                // Fallback for other video types or if YouTube ID extraction fails
+                return Container(
+                  color: Colors.black,
+                  child: const Center(
+                    child: Text(
+                      'Video format not supported',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
             ),
 
             // Video info section
@@ -443,11 +511,25 @@ class _CommentTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundImage:
-                CachedNetworkImageProvider(comment['profilePhoto']),
             backgroundColor: Colors.grey[200],
-            onBackgroundImageError: (e, s) =>
-                print('Error loading profile image: $e'),
+            backgroundImage: comment['profilePhoto'] != null &&
+                    !comment['profilePhoto'].toString().endsWith('.mp4')
+                ? CachedNetworkImageProvider(comment['profilePhoto'])
+                : null,
+            child: comment['profilePhoto'] == null ||
+                    comment['profilePhoto'].toString().endsWith('.mp4')
+                ? Text(
+                    comment['userName']?.substring(0, 1).toUpperCase() ?? '?',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : null,
+            onBackgroundImageError: (e, s) {
+              print('Error loading profile image: $e');
+              // Don't call setState here, just log the error
+            },
           ),
           const SizedBox(width: 12),
           Expanded(

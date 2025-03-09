@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'dependency_injection.dart';
+import 'presentation/screens/splash/splash_screen.dart';
 import 'routes/app_routes.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   initDependencies();
-
   runApp(const MyApp());
 }
 
@@ -16,14 +16,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'Krishi Mantra',
+      title: 'KrishiMantra',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.green,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
+        scaffoldBackgroundColor: Colors.white,
+        fontFamily: 'Poppins',
       ),
-      initialRoute: '/splash',
+      home: const SplashScreen(),
       getPages: AppRoutes.routes,
-      defaultTransition: Transition.cupertino,
     );
   }
 }

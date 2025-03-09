@@ -77,9 +77,7 @@ class AIChatController extends GetxController {
             }
           }
         }
-      } catch (e) {
-        print('Error processing socket message: $e');
-      }
+      } catch (e) {}
     });
 
     _aiTypingSubscription = _socketService.aiTypingStream.listen((data) {
@@ -133,7 +131,6 @@ class AIChatController extends GetxController {
     } catch (e) {
       hasError.value = true;
       errorMessage.value = 'Failed to load chats';
-      print('Error loading chats: $e');
     } finally {
       isLoading.value = false;
       isLoadingMore.value = false;
@@ -335,9 +332,7 @@ class AIChatController extends GetxController {
 
       // Join the socket room for this chat
       await _socketService.forceConnect();
-    } catch (e) {
-      print('Error loading chat: $e');
-    }
+    } catch (e) {}
   }
 
   Future<String> _getPreferredLanguage() async {
@@ -345,7 +340,6 @@ class AIChatController extends GetxController {
       final languageService = await LanguageService.getInstance();
       return languageService.getLanguageCode();
     } catch (e) {
-      print('Error getting preferred language: $e');
       return 'en';
     }
   }
@@ -424,7 +418,6 @@ class AIChatController extends GetxController {
         }
       }
     } catch (e) {
-      print('Error analyzing image: $e');
       Get.snackbar(
         'Error',
         'Failed to analyze image: ${e.toString()}',
@@ -513,9 +506,7 @@ class AIChatController extends GetxController {
       // Set limit reset time to midnight tonight
       final tomorrow = DateTime(today.year, today.month, today.day + 1);
       limitResetTime.value = tomorrow;
-    } catch (e) {
-      print('Error getting message limit info: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> createNewChat() async {
@@ -556,7 +547,6 @@ class AIChatController extends GetxController {
       // Add new chat to the list
       chats.insert(0, currentChat.value!);
     } catch (e) {
-      print('Error creating new chat: $e');
       Get.snackbar(
         'Error',
         'Failed to create new chat',

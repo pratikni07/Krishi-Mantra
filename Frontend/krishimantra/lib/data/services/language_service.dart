@@ -56,7 +56,6 @@ class LanguageService {
       );
       return translation.text;
     } catch (e) {
-      print('Translation error: $e');
       return text; // Return original text if translation fails
     }
   }

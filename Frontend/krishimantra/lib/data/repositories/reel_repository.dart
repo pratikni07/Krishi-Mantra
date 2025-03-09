@@ -32,14 +32,16 @@ class ReelRepository {
 
   Future<List<Map<String, dynamic>>> getComments(String reelId) async {
     try {
-      final response = await _apiService.get('/api/reels/reels/$reelId/comments');
-      
-      if (response.data['status'] == 'success' && response.data['data'] is List) {
+      final response =
+          await _apiService.get('/api/reels/reels/$reelId/comments');
+
+      if (response.data['status'] == 'success' &&
+          response.data['data'] is List) {
         return List<Map<String, dynamic>>.from(response.data['data']);
       }
       return [];
     } catch (e) {
-      print('Error in getComments repository: $e'); // Debug log
+      // Debug log
       rethrow;
     }
   }
@@ -49,11 +51,8 @@ class ReelRepository {
     return response.data;
   }
 
-  Future<Map<String, dynamic>> addComment(
-    String reelId,
-    String content,
-    {String? parentCommentId}
-  ) async {
+  Future<Map<String, dynamic>> addComment(String reelId, String content,
+      {String? parentCommentId}) async {
     try {
       final userId = await _userService.getUserId();
       final firstName = await _userService.getFirstName();
@@ -69,7 +68,6 @@ class ReelRepository {
         'depth': parentCommentId != null ? 1 : 0,
       };
 
-
       final response = await _apiService.post(
         '/api/reels/reels/$reelId/comments',
         data: data,
@@ -77,7 +75,6 @@ class ReelRepository {
 
       return response.data;
     } catch (e) {
-      print('Error in addComment repository: $e');
       rethrow;
     }
   }
@@ -95,12 +92,10 @@ class ReelRepository {
         'profilePhoto': profilePhoto ?? '',
       };
 
-
       final response = await _apiService.post(
         '/api/reels/reels/$reelId/like',
         data: data,
       );
-
 
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw Exception('Failed to like reel: ${response.statusMessage}');
@@ -108,7 +103,6 @@ class ReelRepository {
 
       return response.data;
     } catch (e) {
-      print('Error in likeReel repository: $e');
       rethrow;
     }
   }
@@ -125,8 +119,7 @@ class ReelRepository {
 
       return response.data;
     } catch (e) {
-      print('Error in unlikeReel repository: $e');
       rethrow;
     }
   }
-} 
+}
