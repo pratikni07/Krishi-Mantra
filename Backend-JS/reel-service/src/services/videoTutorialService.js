@@ -253,19 +253,11 @@ class VideoTutorialService {
   }
 
   static async getComments(videoId, { page, limit, parentComment }) {
-    const cacheKey = `video:${videoId}:comments:${page}:${limit}:${parentComment}`;
-    const cachedData = await redis.get(cacheKey);
-
-    if (cachedData) {
-      return JSON.parse(cachedData);
-    }
-
     const query = {
       videoId,
       isDeleted: false,
       parentComment: parentComment || null
     };
-
     const [comments, total] = await Promise.all([
       VideoComment.find(query)
         .sort({ createdAt: -1 })
@@ -292,7 +284,7 @@ class VideoTutorialService {
       total
     );
 
-    await redis.setex(cacheKey, 1800, JSON.stringify(result)); // 30 minutes cache
+    // await redis.setex(cacheKey, 1800, JSON.stringify(result)); // 30 minutes cache
     return result;
   }
 

@@ -4,10 +4,12 @@ import 'package:krishimantra/data/services/api_service.dart';
 import 'package:krishimantra/data/models/video_tutorial.dart';
 import 'package:krishimantra/core/constants/api_constants.dart';
 import '../../presentation/controllers/auth_controller.dart';
+import '../services/UserService.dart';
 
 class VideoTutorialRepository {
   final ApiService _apiService;
   final AuthController _authController = Get.find<AuthController>();
+  final UserService _userService = Get.find<UserService>();
 
   VideoTutorialRepository(this._apiService);
 
@@ -85,10 +87,16 @@ class VideoTutorialRepository {
     }
   }
 
-  Future<Map<String, dynamic>> getComments(String videoId) async {
+  Future<Map<String, dynamic>> getComments(String videoId,
+      [int page = 1, int limit = 10]) async {
     try {
-      final response =
-          await _apiService.get('/api/reels/videos/$videoId/comments');
+      final response = await _apiService.get(
+        '/api/reels/videos/$videoId/comments',
+        queryParameters: {
+          'page': page,
+          'limit': limit,
+        },
+      );
       return response.data;
     } catch (e) {
       throw Exception('Failed to fetch comments: $e');
@@ -96,20 +104,13 @@ class VideoTutorialRepository {
   }
 
   Future<Map<String, dynamic>> addComment(
-    String videoId, {
-    required String content,
-    String? parentComment,
-  }) async {
+    String videoId,
+    Map<String, dynamic> commentData,
+  ) async {
     try {
       final response = await _apiService.post(
-        '/reels/videos/$videoId/comments',
-        data: {
-          'userId': _authController.user.value?.id,
-          'userName': _authController.user.value?.name,
-          'profilePhoto': _authController.user.value?.image,
-          'content': content,
-          if (parentComment != null) 'parentComment': parentComment,
-        },
+        '/api/reels/videos/$videoId/comments',
+        data: commentData,
       );
       return response.data;
     } catch (e) {

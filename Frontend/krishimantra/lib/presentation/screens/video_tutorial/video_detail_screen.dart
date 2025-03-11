@@ -9,6 +9,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/colors.dart';
+import '../../widgets/ShareBottomSheet.dart';
 
 class VideoDetailScreen extends StatefulWidget {
   final String videoId;
@@ -26,6 +27,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
   final VideoTutorialController controller =
       Get.find<VideoTutorialController>();
   final TextEditingController _commentController = TextEditingController();
+  final GlobalKey _commentSectionKey = GlobalKey();
 
   @override
   void initState() {
@@ -50,506 +52,413 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
         title: const Text('Video Details'),
         backgroundColor: AppColors.green,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Video player section
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Obx(() {
-                if (controller.isLoading.value) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (controller.currentVideo.value == null) {
-                  return Container(
-                    color: Colors.black,
-                    child: const Center(
-                      child: Text(
-                        'Video not available',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  );
-                }
-
-                final video = controller.currentVideo.value!;
-
-                // Handle YouTube videos
-                if (video.videoType == 'youtube') {
-                  // Extract YouTube video ID
-                  String? videoId;
-                  final url = video.videoUrl;
-
-                  if (url.contains('youtu.be/')) {
-                    videoId = url.split('youtu.be/')[1].split('?')[0];
-                  } else if (url.contains('youtube.com/watch')) {
-                    final uri = Uri.tryParse(url);
-                    videoId = uri?.queryParameters['v'];
-                  } else if (url.contains('youtube.com/embed/')) {
-                    videoId = url.split('youtube.com/embed/')[1].split('?')[0];
-                  } else {
-                    // For URLs like "https://youtu.be/SO7sm12Rlto?si=YHZRO-ddQl7CZ54i"
-                    final segments = url.split('?');
-                    if (segments.isNotEmpty &&
-                        segments[0].contains('youtu.be/')) {
-                      videoId = segments[0].split('youtu.be/').last;
+      body: Stack(
+        children: [
+          // Main content with scrolling
+          SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Video player section
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Obx(() {
+                    if (controller.isLoading.value) {
+                      return const Center(child: CircularProgressIndicator());
                     }
-                  }
 
-                  if (videoId != null && videoId.isNotEmpty) {
-                    try {
-                      return YoutubePlayer(
-                        controller: YoutubePlayerController(
-                          initialVideoId: videoId,
-                          flags: const YoutubePlayerFlags(
-                            autoPlay: false,
-                            mute: false,
+                    if (controller.currentVideo.value == null) {
+                      return Container(
+                        color: Colors.black,
+                        child: const Center(
+                          child: Text(
+                            'Video not available',
+                            style: TextStyle(color: Colors.white),
                           ),
                         ),
-                        showVideoProgressIndicator: true,
                       );
-                    } catch (e) {
-                      print('YouTube player error: $e');
-                      // Fallback to error display
                     }
-                  }
-                }
 
-                // Fallback for other video types or if YouTube ID extraction fails
-                return Container(
-                  color: Colors.black,
-                  child: const Center(
-                    child: Text(
-                      'Video format not supported',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                );
-              }),
-            ),
+                    final video = controller.currentVideo.value!;
 
-            // Video info section
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title with proper null check and style
-                  Text(
-                    controller.currentVideo.value?.title ?? 'Untitled',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                    // Handle YouTube videos
+                    if (video.videoType == 'youtube') {
+                      // Extract YouTube video ID
+                      String? videoId;
+                      final url = video.videoUrl;
 
-                  // Views, likes and date with proper formatting
-                  Row(
-                    children: [
-                      Text(
-                        '${_formatViews(controller.currentVideo.value?.views.count ?? 0)} views',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        ' • ',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        '${_formatCount(controller.currentVideo.value?.likes.count ?? 0)} likes',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        ' • ',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        timeago.format(
-                          controller.currentVideo.value?.createdAt ??
-                              DateTime.now(),
-                          locale: 'en_short',
-                        ),
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                      if (url.contains('youtu.be/')) {
+                        videoId = url.split('youtu.be/')[1].split('?')[0];
+                      } else if (url.contains('youtube.com/watch')) {
+                        final uri = Uri.tryParse(url);
+                        videoId = uri?.queryParameters['v'];
+                      } else if (url.contains('youtube.com/embed/')) {
+                        videoId =
+                            url.split('youtube.com/embed/')[1].split('?')[0];
+                      } else {
+                        // For URLs like "https://youtu.be/SO7sm12Rlto?si=YHZRO-ddQl7CZ54i"
+                        final segments = url.split('?');
+                        if (segments.isNotEmpty &&
+                            segments[0].contains('youtu.be/')) {
+                          videoId = segments[0].split('youtu.be/').last;
+                        }
+                      }
 
-                  // Channel info with proper null checks
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage:
-                            controller.currentVideo.value?.profilePhoto != null
-                                ? CachedNetworkImageProvider(
-                                    controller
-                                        .currentVideo.value!.profilePhoto!,
-                                  )
-                                : null,
-                        child:
-                            controller.currentVideo.value?.profilePhoto == null
-                                ? Text(
-                                    controller.currentVideo.value?.userName
-                                            .substring(0, 1)
-                                            .toUpperCase() ??
-                                        '?',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )
-                                : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              controller.currentVideo.value?.userName ??
-                                  'Unknown User',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                      if (videoId != null && videoId.isNotEmpty) {
+                        try {
+                          return YoutubePlayer(
+                            controller: YoutubePlayerController(
+                              initialVideoId: videoId,
+                              flags: const YoutubePlayerFlags(
+                                autoPlay: false,
+                                mute: false,
                               ),
                             ),
-                            if (controller.currentVideo.value?.description !=
-                                null)
-                              Text(
-                                controller.currentVideo.value!.description!,
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                            showVideoProgressIndicator: true,
+                          );
+                        } catch (e) {
+                          print('YouTube player error: $e');
+                          // Fallback to error display
+                        }
+                      }
+                    }
+
+                    // Fallback for other video types or if YouTube ID extraction fails
+                    return Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: Text(
+                          'Video format not supported',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+
+                // Video info section
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Obx(() {
+                    if (controller.currentVideo.value == null) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final video = controller.currentVideo.value!;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title with proper null check and style
+                        Text(
+                          video.title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Action buttons (like, comment, share)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            // Like button
+                            _buildActionButton(
+                              icon: controller.currentVideo.value?.likes.users
+                                          .contains(controller.currentUserId) ??
+                                      false
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              label: '${_formatCount(video.likes.count)}',
+                              color: controller.currentVideo.value?.likes.users
+                                          .contains(controller.currentUserId) ??
+                                      false
+                                  ? Colors.red
+                                  : Colors.grey,
+                              onTap: () {
+                                controller.toggleVideoLike(video.id);
+                              },
+                            ),
+
+                            // Comment button
+                            _buildActionButton(
+                              icon: Icons.comment,
+                              label: '${_formatCount(video.comments.count)}',
+                              color: Colors.grey,
+                              onTap: () {
+                                // Scroll to comments section
+                                Scrollable.ensureVisible(
+                                  _commentSectionKey.currentContext!,
+                                  duration: const Duration(milliseconds: 300),
+                                );
+                              },
+                            ),
+
+                            // Share button
+                            _buildActionButton(
+                              icon: Icons.share,
+                              label: 'Share',
+                              color: Colors.grey,
+                              onTap: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (context) => ShareBottomSheet(
+                                    postUrl: video.videoUrl,
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
-                      ),
-                      IconButton(
-                        onPressed: () {
-                          if (controller.currentVideo.value != null) {
-                            controller.toggleVideoLike(
-                                controller.currentVideo.value!.id);
-                          }
-                        },
-                        icon: Icon(
-                          controller.currentVideo.value!.likes.users
-                                  .contains(controller.currentUserId)
-                              ? Icons.favorite
-                              : Icons.favorite_border,
-                          color: controller.currentVideo.value!.likes.users
-                                  .contains(controller.currentUserId)
-                              ? Colors.red
-                              : null,
+
+                        const Divider(height: 24),
+
+                        // Views and date
+                        Row(
+                          children: [
+                            Text(
+                              '${_formatViews(video.views.count)} views',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '•',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              timeago.format(video.createdAt),
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+
+                        const SizedBox(height: 16),
+
+                        // Description with show more/less and tags
+                        if (video.description != null)
+                          ExpandableText(
+                            text: video.description!,
+                            maxLines: 3,
+                            tags: video.tags,
+                          ),
+
+                        const SizedBox(height: 16),
+
+                        // Channel/User info
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundImage: video.profilePhoto != null
+                                  ? CachedNetworkImageProvider(
+                                      video.profilePhoto!)
+                                  : null,
+                              child: video.profilePhoto == null
+                                  ? Text(
+                                      video.userName
+                                          .substring(0, 1)
+                                          .toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                video.userName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const Divider(height: 24),
+
+                        // Comments section (with key for scrolling)
+                        Container(key: _commentSectionKey),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'Comments',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+
+                        // Comments list
+                        Obx(() {
+                          if (controller.isLoadingComments.value) {
+                            return const Center(
+                                child: CircularProgressIndicator());
+                          }
+
+                          if (controller.comments.isEmpty) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text(
+                                    'No comments yet. Be the first to comment!'),
+                              ),
+                            );
+                          }
+
+                          return ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: controller.comments.length,
+                            itemBuilder: (context, index) {
+                              final comment = controller.comments[index];
+                              return _buildCommentTile(comment);
+                            },
+                          );
+                        }),
+
+                        // Add space for the fixed comment box
+                        const SizedBox(height: 70),
+                      ],
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+
+          // Fixed comment input box at the bottom
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
                   ),
-
-                  // Tags section
-                  if (controller.currentVideo.value?.tags.isNotEmpty ??
-                      false) ...[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: controller.currentVideo.value!.tags
-                          .map((tag) => Chip(
-                                label: Text(tag),
-                                backgroundColor: Colors.grey[200],
-                              ))
-                          .toList(),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: TextField(
+                        controller: _commentController,
+                        decoration: InputDecoration(
+                          hintText: 'Add a comment...',
+                          hintStyle: TextStyle(color: Colors.grey[600]),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        maxLines: 1,
+                      ),
                     ),
-                  ],
-
-                  // Comments section
-                  const Divider(height: 32),
-                  _CommentSection(
-                    controller: controller,
-                    videoId: widget.videoId,
-                    commentController: _commentController,
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: AppColors.green,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.send, size: 20),
+                      color: Colors.white,
+                      onPressed: () async {
+                        if (_commentController.text.trim().isNotEmpty) {
+                          try {
+                            await controller.addComment(
+                              widget.videoId,
+                              _commentController.text.trim(),
+                            );
+                            _commentController.clear();
+                            await controller.fetchComments(widget.videoId);
+                          } catch (e) {
+                            Get.snackbar(
+                              'Error',
+                              'Failed to add comment',
+                              backgroundColor: Colors.red,
+                              colorText: Colors.white,
+                            );
+                          }
+                        }
+                      },
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  String _formatViews(int views) {
-    if (views >= 1000000) {
-      return '${(views / 1000000).toStringAsFixed(1)}M';
-    } else if (views >= 1000) {
-      return '${(views / 1000).toStringAsFixed(1)}K';
-    }
-    return views.toString();
-  }
-
-  String _formatCount(int count) {
-    if (count >= 1000000) {
-      return '${(count / 1000000).toStringAsFixed(1)}M';
-    } else if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}K';
-    }
-    return count.toString();
-  }
-}
-
-class _CommentSection extends StatelessWidget {
-  final VideoTutorialController controller;
-  final String videoId;
-  final TextEditingController commentController;
-  final RxString replyingTo = ''.obs;
-  final RxString replyingToId = ''.obs;
-
-  _CommentSection({
-    Key? key,
-    required this.controller,
-    required this.videoId,
-    required this.commentController,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Text(
-            'Comments',
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(height: 4),
+          Text(
+            label,
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+              color: color,
+              fontSize: 12,
             ),
           ),
-        ),
-        Obx(() {
-          if (controller.isLoadingComments.value) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (controller.comments.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('No comments yet. Be the first to comment!'),
-              ),
-            );
-          }
-
-          return ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: controller.comments.length,
-            itemBuilder: (context, index) {
-              final comment = controller.comments[index];
-              if (comment['parentComment'] != null)
-                return const SizedBox.shrink();
-
-              return _buildCommentThread(context, comment);
-            },
-          );
-        }),
-
-        // Comment input section
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Show replying to indicator
-              Obx(() {
-                if (replyingTo.value.isNotEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Text(
-                          'Replying to @${replyingTo.value}',
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 16),
-                          onPressed: () {
-                            replyingTo.value = '';
-                            replyingToId.value = '';
-                            commentController.clear();
-                          },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              }),
-
-              // Comment input field
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: commentController,
-                      decoration: const InputDecoration(
-                        hintText: 'Add a comment...',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    onPressed: () async {
-                      if (commentController.text.trim().isNotEmpty) {
-                        try {
-                          await controller.addComment(
-                            videoId,
-                            commentController.text.trim(),
-                            parentCommentId: replyingToId.value.isNotEmpty
-                                ? replyingToId.value
-                                : null,
-                          );
-                          commentController.clear();
-                          replyingTo.value = '';
-                          replyingToId.value = '';
-                          await controller.fetchComments(videoId);
-                        } catch (e) {
-                          Get.snackbar(
-                            'Error',
-                            'Failed to add comment',
-                            backgroundColor: Colors.red,
-                            colorText: Colors.white,
-                          );
-                        }
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildCommentThread(
-      BuildContext context, Map<String, dynamic> comment) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _CommentTile(
-          comment: comment,
-          onReply: () {
-            replyingTo.value = comment['userName'];
-            replyingToId.value = comment['_id'];
-            commentController.text = '@${comment['userName']} ';
-            commentController.selection = TextSelection.fromPosition(
-              TextPosition(offset: commentController.text.length),
-            );
-            // Scroll to comment input
-            Scrollable.ensureVisible(
-              context,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          },
-          onLike: () => controller.toggleCommentLike(comment['_id']),
-          onDelete: controller.currentUserId == comment['userId']
-              ? () => controller.deleteComment(comment['_id'])
-              : null,
-        ),
-
-        // Show replies with indentation
-        if (comment['replies'] != null && comment['replies'].isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(left: 32.0),
-            child: Column(
-              children: [
-                for (var reply in comment['replies'])
-                  _CommentTile(
-                    comment: reply,
-                    onReply: () {
-                      replyingTo.value = reply['userName'];
-                      replyingToId.value =
-                          comment['_id']; // Use parent comment ID
-                      commentController.text = '@${reply['userName']} ';
-                      commentController.selection = TextSelection.fromPosition(
-                        TextPosition(offset: commentController.text.length),
-                      );
-                    },
-                    onLike: () => controller.toggleCommentLike(reply['_id']),
-                    onDelete: controller.currentUserId == reply['userId']
-                        ? () => controller.deleteComment(reply['_id'])
-                        : null,
-                  ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _CommentTile extends StatelessWidget {
-  final Map<String, dynamic> comment;
-  final VoidCallback onReply;
-  final VoidCallback onLike;
-  final VoidCallback? onDelete;
-
-  const _CommentTile({
-    Key? key,
-    required this.comment,
-    required this.onReply,
-    required this.onLike,
-    this.onDelete,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildCommentTile(Map<String, dynamic> comment) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
             radius: 16,
             backgroundColor: Colors.grey[200],
-            backgroundImage: comment['profilePhoto'] != null &&
-                    !comment['profilePhoto'].toString().endsWith('.mp4')
+            backgroundImage: comment['profilePhoto'] != null
                 ? CachedNetworkImageProvider(comment['profilePhoto'])
                 : null,
-            child: comment['profilePhoto'] == null ||
-                    comment['profilePhoto'].toString().endsWith('.mp4')
+            child: comment['profilePhoto'] == null
                 ? Text(
                     comment['userName']?.substring(0, 1).toUpperCase() ?? '?',
                     style: TextStyle(
@@ -558,10 +467,6 @@ class _CommentTile extends StatelessWidget {
                     ),
                   )
                 : null,
-            onBackgroundImageError: (e, s) {
-              print('Error loading profile image: $e');
-              // Don't call setState here, just log the error
-            },
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -571,9 +476,10 @@ class _CommentTile extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      comment['userName'],
+                      comment['userName'] ?? 'Unknown',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -587,66 +493,7 @@ class _CommentTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(comment['content']),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: onLike,
-                      child: Row(
-                        children: [
-                          Icon(
-                            comment['likes']['users'].contains(
-                                    Get.find<VideoTutorialController>()
-                                        .currentUserId)
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                            size: 16,
-                            color: comment['likes']['users'].contains(
-                                    Get.find<VideoTutorialController>()
-                                        .currentUserId)
-                                ? Colors.red
-                                : Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            comment['likes']['count'].toString(),
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    GestureDetector(
-                      onTap: onReply,
-                      child: Text(
-                        'Reply',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    if (onDelete != null) ...[
-                      const SizedBox(width: 16),
-                      GestureDetector(
-                        onTap: onDelete,
-                        child: Text(
-                          'Delete',
-                          style: TextStyle(
-                            color: Colors.red[400],
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                Text(comment['content'] ?? ''),
               ],
             ),
           ),
@@ -654,4 +501,115 @@ class _CommentTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class ExpandableText extends StatefulWidget {
+  final String text;
+  final int maxLines;
+  final List<String> tags;
+
+  const ExpandableText({
+    Key? key,
+    required this.text,
+    this.maxLines = 3,
+    this.tags = const [],
+  }) : super(key: key);
+
+  @override
+  State<ExpandableText> createState() => _ExpandableTextState();
+}
+
+class _ExpandableTextState extends State<ExpandableText> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.text,
+          maxLines: _expanded ? null : widget.maxLines,
+          overflow: _expanded ? null : TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.grey[800],
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+        
+        // Show tags only when expanded
+        if (_expanded && widget.tags.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: widget.tags.map((tag) {
+              // Split by comma if needed
+              final tags = tag.contains(',') 
+                  ? tag.split(',') 
+                  : [tag];
+              
+              return Wrap(
+                spacing: 8,
+                children: tags.map((t) => 
+                  Container(
+                    margin: const EdgeInsets.only(right: 4, bottom: 4),
+                    child: Text(
+                      '#${t.trim()}',
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )
+                ).toList(),
+              );
+            }).toList(),
+          ),
+        ],
+        
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _expanded = !_expanded;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              _expanded ? 'Show less' : 'Show more',
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _formatViews(int views) {
+  if (views >= 1000000) {
+    return '${(views / 1000000).toStringAsFixed(1)}M';
+  } else if (views >= 1000) {
+    return '${(views / 1000).toStringAsFixed(1)}K';
+  }
+  return views.toString();
+}
+
+String _formatCount(int count) {
+  if (count >= 1000000) {
+    return '${(count / 1000000).toStringAsFixed(1)}M';
+  } else if (count >= 1000) {
+    return '${(count / 1000).toStringAsFixed(1)}K';
+  }
+  return count.toString();
 }
