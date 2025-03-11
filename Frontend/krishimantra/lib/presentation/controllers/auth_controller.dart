@@ -9,6 +9,7 @@ import '../../data/models/otp_response_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/services/UserService.dart';
 import '../../routes/app_routes.dart';
+import 'presigned_url_controller.dart';
 
 class AuthController extends GetxController {
   final _storage = const FlutterSecureStorage();
@@ -105,9 +106,13 @@ class AuthController extends GetxController {
         throw Exception(response['message'] ?? 'OTP verification failed');
       }
 
+      // Handle both response formats
+      final bool isRegistered = response['isRegistered'] ??
+          (response['message'] == 'Login successful');
+
       // Create result object
       final result = OTPVerificationResult(
-        isRegistered: response['isRegistered'] ?? false,
+        isRegistered: isRegistered,
         message: response['message'],
         phoneNo: phoneNo,
       );
@@ -158,8 +163,6 @@ class AuthController extends GetxController {
         'lastName': lastName,
         'phoneNo': phoneNo,
       };
-
-      // Only upload image if provided
       if (imageFile != null) {
         final imageUrl = await _uploadImage(imageFile);
         if (imageUrl != null) {
@@ -172,22 +175,13 @@ class AuthController extends GetxController {
       if (response['success'] != true) {
         throw Exception(response['message'] ?? 'Registration failed');
       }
-
-      // Extract token and user data
       final token = response['token'] as String;
       final userData = response['user'] as Map<String, dynamic>;
-
-      // Add token to user data
       userData['token'] = token;
-
-      // Save user data
       final userModel = UserModel.fromJson(userData);
       user.value = userModel;
       await _userService.saveUser(userModel);
-
-      // Save token
       await _storage.write(key: 'auth_token', value: token);
-
       return true;
     } catch (e) {
       Get.snackbar(
@@ -201,26 +195,42 @@ class AuthController extends GetxController {
     }
   }
 
-  // Helper method to upload profile image
+  // Add this method to your AuthController class
   Future<String?> _uploadImage(File imageFile) async {
     try {
-      final formData = dio.FormData.fromMap({
-        'file': await dio.MultipartFile.fromFile(
-          imageFile.path,
-          filename: 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
-        ),
-      });
-
-      final response = await _authRepository.uploadProfileImage(formData);
-      if (response['success'] == true && response['fileUrl'] != null) {
-        return response['fileUrl'];
-      }
-      return null;
+      final presignedUrlController = Get.find<PresignedUrlController>();
+      // Use 'profile' as content type for user profile images
+      return await presignedUrlController.uploadImage(
+        imageFile: imageFile,
+        contentType: 'profile',
+        userId: user.value?.id, // Pass user ID if available
+      );
     } catch (e) {
       print('Error uploading image: $e');
       return null;
     }
   }
+
+  // Helper method to upload profile image
+  // Future<String?> _uploadImage(File imageFile) async {
+  //   try {
+  //     final formData = dio.FormData.fromMap({
+  //       'file': await dio.MultipartFile.fromFile(
+  //         imageFile.path,
+  //         filename: 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
+  //       ),
+  //     });
+
+  //     final response = await _authRepository.uploadProfileImage(formData);
+  //     if (response['success'] == true && response['fileUrl'] != null) {
+  //       return response['fileUrl'];
+  //     }
+  //     return null;
+  //   } catch (e) {
+  //     print('Error uploading image: $e');
+  //     return null;
+  //   }
+  // }
 
   Future<void> logout() async {
     try {
@@ -229,7 +239,7 @@ class AuthController extends GetxController {
       await _storage.deleteAll();
       await _userService.clearAllData();
       user.value = null;
-      Get.offAllNamed(AppRoutes.LOGIN);
+      Get.offAllNamed(AppRoutes.PHONE_NUMBER);
     } catch (e) {
       Get.snackbar(
         'Error',

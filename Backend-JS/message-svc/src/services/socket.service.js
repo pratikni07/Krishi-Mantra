@@ -137,17 +137,14 @@ class SocketService {
   setupMessageHandlers(socket) {
     socket.on("message:send", async (data) => {
       try {
-        const { chatId, content, mediaType, mediaUrl } = data;
-        console.log(data);
-
-        // Get chat to access sender info
+        const { chatId, content, mediaType, mediaUrl, mediaMetadata } = data;
+        
         const chat = await Chat.findById(chatId);
         if (!chat) {
           socket.emit("error", { message: "Chat not found" });
           return;
         }
 
-        // Get sender info from chat participants
         const senderInfo = chat.participants.find(
           (p) => p.userId === socket.userId
         );
@@ -155,6 +152,7 @@ class SocketService {
           socket.emit("error", { message: "Not a chat participant" });
           return;
         }
+
         const newMessage = await MessageService.createMessage({
           chatId,
           sender: socket.userId,
@@ -163,6 +161,7 @@ class SocketService {
           content,
           mediaType,
           mediaUrl,
+          mediaMetadata,
         });
 
         // Emit to all users in chat room

@@ -196,17 +196,19 @@ class MessageRepository {
     }
   }
 
-  Future<List<Consultant>> getConsultants({
-    required double latitude,
-    required double longitude,
-  }) async {
+  Future<List<Consultant>> getConsultants(
+      // {
+      // double latitude,
+      // double longitude,
+      // }
+      ) async {
     try {
-      final response = await _apiService.post(
+      final response = await _apiService.get(
         '/api/main/user/consultant',
-        data: {
-          'latitude': latitude,
-          'longitude': longitude,
-        },
+        // data: {
+        //   'latitude': latitude,
+        //   'longitude': longitude,
+        // },
       );
 
       if (response.data == null) {

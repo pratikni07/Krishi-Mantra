@@ -15,6 +15,7 @@ class MessageService {
    * @param {string} messageData.content - Message content
    * @param {string} messageData.mediaType - Media type (optional)
    * @param {string} messageData.mediaUrl - Media URL (optional)
+   * @param {Object} messageData.mediaMetadata - Media metadata (optional)
    * @returns {Promise<Object>} Created message
    */
   async createMessage(messageData) {
@@ -26,6 +27,7 @@ class MessageService {
       content,
       mediaType,
       mediaUrl,
+      mediaMetadata,
     } = messageData;
 
     // Check if chat exists
@@ -55,8 +57,9 @@ class MessageService {
       senderName: senderName || senderInfo.userName,
       senderPhoto: senderPhoto || senderInfo.profilePhoto,
       content,
-      mediaType,
+      mediaType: mediaType || "text",
       mediaUrl,
+      mediaMetadata,
       deliveredTo: [
         {
           userId: sender,

@@ -15,12 +15,17 @@ const s3Client = new S3Client({
 // Validate content type to ensure it's one of the allowed folders
 const validateContentType = (contentType) => {
   const allowedContentTypes = [
+    "profile",
     "feeds",
     "reels",
     "services",
     "ads",
     "users",
     "videostuts",
+    "chat_image", // Add chat content types
+    "chat_video",
+    "chat_document",
+    "chat_audio",
   ];
 
   if (!contentType || !allowedContentTypes.includes(contentType)) {
@@ -67,7 +72,8 @@ const generatePresignedUrl = async (options) => {
 
   // Create the file path based on content type and user ID if provided
   const userPath = userId ? `${userId}/` : "";
-  const filePath = `${folder}/${userPath}${timestamp}-${uniqueId}.${fileExtension}`;
+  // const filePath = `${folder}/${userPath}${timestamp}-${uniqueId}.${fileExtension}`;
+  const filePath = `${folder}/${timestamp}-${uniqueId}.${fileExtension}`;
 
   // Create the command for S3
   const command = new PutObjectCommand({
@@ -86,7 +92,7 @@ const generatePresignedUrl = async (options) => {
     return {
       presignedUrl,
       fileKey: filePath,
-      fileUrl: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${filePath}`,
+      fileUrl: `${process.env.AWS_CLOUDFRONT_DOMAIN}/${filePath}`,
       contentType: folder,
       expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
     };

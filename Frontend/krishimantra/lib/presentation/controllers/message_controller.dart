@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../../data/models/consultant_model.dart';
@@ -5,6 +7,7 @@ import '../../data/models/message_model.dart';
 import '../../data/repositories/message_repository.dart';
 import '../../data/services/SocketService.dart';
 import '../../data/services/UserService.dart';
+import '../../presentation/controllers/presigned_url_controller.dart';
 
 class MessageController extends GetxController {
   final MessageRepository _messageRepository;
@@ -105,32 +108,45 @@ class MessageController extends GetxController {
   }
 
   // In message_controller.dart
-  Future<bool> sendMessage(
-      {required String chatId,
-      required String content,
-      String mediaType = 'text',
-      String? mediaUrl}) async {
+  Future<bool> sendMessage({
+    required String chatId,
+    String? content,
+    String mediaType = 'text',
+    String? mediaUrl,
+    Map<String, dynamic>? mediaMetadata,
+  }) async {
     try {
-      final socketService = SocketService();
+      if (userId.value == null) return false;
 
-      // Ensure socket is connected
-      if (!socketService.isSocketConnected()) {
+      final socketService = Get.find<SocketService>();
+      if (!socketService.isConnected) {
         await socketService.forceConnect();
       }
-      // Send via socket
+
       final result = await socketService.sendMessage(chatId, {
-        'content': content,
+        if (content != null && content.isNotEmpty) 'content': content,
         'mediaType': mediaType,
-        'mediaUrl': mediaUrl,
+        if (mediaUrl != null) 'mediaUrl': mediaUrl,
+        if (mediaMetadata != null) 'mediaMetadata': mediaMetadata,
       });
 
-      if (!result) {
-        throw Exception('Failed to send message via socket');
-      }
-
-      return true;
+      return result;
     } catch (e) {
       return false;
+    }
+  }
+
+  Future<String?> uploadMedia(File file, String contentType) async {
+    try {
+      final presignedUrlController = Get.find<PresignedUrlController>();
+      return await presignedUrlController.uploadImage(
+        imageFile: file,
+        contentType: contentType,
+        userId: userId.value,
+      );
+    } catch (e) {
+      error.value = 'Failed to upload media: ${e.toString()}';
+      return null;
     }
   }
 
@@ -319,18 +335,17 @@ class MessageController extends GetxController {
     }
   }
 
-  Future<void> getConsultants({
-    required double latitude,
-    required double longitude,
-  }) async {
+  Future<void> getConsultants(
+      //   {
+      //   required double latitude,
+      //   required double longitude,
+      // }
+      ) async {
     try {
       isLoadingConsultants.value = true;
       consultantError.value = null;
 
-      final fetchedConsultants = await _messageRepository.getConsultants(
-        latitude: 18.6161,
-        longitude: 73.7286,
-      );
+      final fetchedConsultants = await _messageRepository.getConsultants();
 
       consultants.value = fetchedConsultants;
     } catch (e) {
