@@ -27,7 +27,10 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
   final VideoTutorialController controller =
       Get.find<VideoTutorialController>();
   final TextEditingController _commentController = TextEditingController();
-  final GlobalKey _commentSectionKey = GlobalKey();
+  final TextEditingController _replyController = TextEditingController();
+  final GlobalKey<State<StatefulWidget>> _commentSectionKey = GlobalKey();
+  String? _replyingToCommentId;
+  String? _replyingToUserName;
 
   @override
   void initState() {
@@ -35,13 +38,15 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
     // Load data after the widget is built using a post-frame callback
     WidgetsBinding.instance.addPostFrameCallback((_) {
       controller.loadVideoDetails(widget.videoId);
-      controller.fetchComments(widget.videoId);
+      controller.fetchComments(widget.videoId, refresh: true);
+      print('Fetching comments for video ID: ${widget.videoId}');
     });
   }
 
   @override
   void dispose() {
     _commentController.dispose();
+    _replyController.dispose();
     super.dispose();
   }
 
@@ -49,7 +54,10 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Video Details'),
+        title: const Text(
+          'Video Details',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: AppColors.green,
       ),
       body: Stack(
@@ -295,41 +303,107 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
 
                         // Comments section (with key for scrolling)
                         Container(key: _commentSectionKey),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            'Comments',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 16, horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Comments',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Obx(() => Text(
+                                    '${controller.comments.length} comments',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  )),
+                            ],
                           ),
                         ),
 
                         // Comments list
                         Obx(() {
-                          if (controller.isLoadingComments.value) {
-                            return const Center(
-                                child: CircularProgressIndicator());
-                          }
+                          // Debug print to see the comments data
+                          print(
+                              'Comments length: ${controller.comments.length}');
+                          print('Comments data: ${controller.comments}');
 
-                          if (controller.comments.isEmpty) {
+                          if (controller.isLoadingComments.value) {
                             return const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(16.0),
-                                child: Text(
-                                    'No comments yet. Be the first to comment!'),
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
+
+                          if (controller.comments.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.comment,
+                                        size: 40, color: Colors.grey[400]),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'No comments yet. Be the first to comment!',
+                                      style: TextStyle(color: Colors.grey[600]),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           }
 
                           return ListView.builder(
-                            shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            itemCount: controller.comments.length,
+                            shrinkWrap: true,
+                            itemCount: controller.comments.length +
+                                (controller.hasMoreComments.value ? 1 : 0),
                             itemBuilder: (context, index) {
-                              final comment = controller.comments[index];
-                              return _buildCommentTile(comment);
+                              // Load more indicator
+                              if (controller.hasMoreComments.value &&
+                                  index == controller.comments.length) {
+                                return Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: controller.isLoadingMore.value
+                                        ? const CircularProgressIndicator()
+                                        : ElevatedButton(
+                                            onPressed: () =>
+                                                controller.loadMoreComments(
+                                                    widget.videoId),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.green
+                                                  .withOpacity(0.9),
+                                            ),
+                                            child: const Text(
+                                              'Load more comments',
+                                              style: TextStyle(
+                                                  color: Colors.white),
+                                            ),
+                                          ),
+                                  ),
+                                );
+                              }
+
+                              // Make sure we have valid comment data
+                              try {
+                                final comment = controller.comments[index];
+                                return _buildCommentWithReplies(comment);
+                              } catch (e) {
+                                print(
+                                    'Error rendering comment at index $index: $e');
+                                return const SizedBox.shrink();
+                              }
                             },
                           );
                         }),
@@ -361,56 +435,113 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.grey[300]!),
+                  // Show who we're replying to
+                  if (_replyingToCommentId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Replying to ${_replyingToUserName}',
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const Spacer(),
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                _replyingToCommentId = null;
+                                _replyingToUserName = null;
+                              });
+                            },
+                            child: Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
                       ),
-                      child: TextField(
-                        controller: _commentController,
-                        decoration: InputDecoration(
-                          hintText: 'Add a comment...',
-                          hintStyle: TextStyle(color: Colors.grey[600]),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: TextField(
+                            controller: _commentController,
+                            decoration: InputDecoration(
+                              hintText: _replyingToCommentId != null
+                                  ? 'Write a reply...'
+                                  : 'Add a comment...',
+                              hintStyle: TextStyle(color: Colors.grey[600]),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                            ),
+                            maxLines: 1,
+                          ),
                         ),
-                        maxLines: 1,
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    decoration: const BoxDecoration(
-                      color: AppColors.green,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.send, size: 20),
-                      color: Colors.white,
-                      onPressed: () async {
-                        if (_commentController.text.trim().isNotEmpty) {
-                          try {
-                            await controller.addComment(
-                              widget.videoId,
-                              _commentController.text.trim(),
-                            );
-                            _commentController.clear();
-                            await controller.fetchComments(widget.videoId);
-                          } catch (e) {
-                            Get.snackbar(
-                              'Error',
-                              'Failed to add comment',
-                              backgroundColor: Colors.red,
-                              colorText: Colors.white,
-                            );
-                          }
-                        }
-                      },
-                    ),
+                      const SizedBox(width: 12),
+                      Container(
+                        decoration: const BoxDecoration(
+                          color: AppColors.green,
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.send, size: 20),
+                          color: Colors.white,
+                          onPressed: () async {
+                            final content = _commentController.text.trim();
+                            if (content.isNotEmpty) {
+                              try {
+                                if (_replyingToCommentId != null) {
+                                  // Add reply to existing comment
+                                  await controller.addReply(
+                                    widget.videoId,
+                                    _replyingToCommentId!,
+                                    content,
+                                  );
+                                  // Reset replying state
+                                  setState(() {
+                                    _replyingToCommentId = null;
+                                    _replyingToUserName = null;
+                                  });
+                                } else {
+                                  // Add new parent comment
+                                  await controller.addComment(
+                                    widget.videoId,
+                                    content,
+                                  );
+                                }
+                                _commentController.clear();
+                              } catch (e) {
+                                print('Error adding comment/reply: $e');
+                                Get.snackbar(
+                                  'Error',
+                                  'Failed to add comment: ${e.toString()}',
+                                  backgroundColor: Colors.red,
+                                  colorText: Colors.white,
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -446,14 +577,96 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
     );
   }
 
-  Widget _buildCommentTile(Map<String, dynamic> comment) {
+  Widget _buildCommentWithReplies(Map<String, dynamic> comment) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Main comment
+        _buildCommentTile(comment),
+
+        // Reply button
+        Padding(
+          padding: const EdgeInsets.only(left: 44),
+          child: TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _replyingToCommentId = comment['_id'];
+                _replyingToUserName = comment['userName'];
+                // Scroll to comment input
+                Future.delayed(const Duration(milliseconds: 100), () {
+                  Scrollable.ensureVisible(
+                    _commentSectionKey.currentContext!,
+                    duration: const Duration(milliseconds: 300),
+                    alignment: 1.0,
+                  );
+                });
+              });
+            },
+            icon: const Icon(Icons.reply, size: 16),
+            label: const Text('Reply'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[700],
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(50, 30),
+            ),
+          ),
+        ),
+
+        // Replies
+        if (comment['replies'] != null && comment['replies'].isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Replies count
+                if ((comment['replies'] as List).length > 2)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16, bottom: 8),
+                    child: InkWell(
+                      onTap: () {
+                        // Expand all replies
+                        // This is where you'd implement showing all replies
+                      },
+                      child: Text(
+                        'View all ${(comment['replies'] as List).length} replies',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Show first 2 replies
+                ...((comment['replies'] as List)
+                    .take(2)
+                    .map((reply) => _buildCommentTile(reply, isReply: true))
+                    .toList()),
+              ],
+            ),
+          ),
+
+        // Divider between comment threads
+        Divider(color: Colors.grey[300], height: 32),
+      ],
+    );
+  }
+
+  Widget _buildCommentTile(Map<String, dynamic> comment,
+      {bool isReply = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.only(
+        left: isReply ? 16 : 0,
+        right: 16,
+        top: 8,
+        bottom: isReply ? 4 : 8,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
-            radius: 16,
+            radius: isReply ? 14 : 16,
             backgroundColor: Colors.grey[200],
             backgroundImage: comment['profilePhoto'] != null
                 ? CachedNetworkImageProvider(comment['profilePhoto'])
@@ -464,6 +677,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                     style: TextStyle(
                       color: Colors.grey[600],
                       fontWeight: FontWeight.bold,
+                      fontSize: isReply ? 12 : 14,
                     ),
                   )
                 : null,
@@ -477,9 +691,9 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                   children: [
                     Text(
                       comment['userName'] ?? 'Unknown',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: isReply ? 13 : 14,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -487,13 +701,57 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                       timeago.format(DateTime.parse(comment['createdAt'])),
                       style: TextStyle(
                         color: Colors.grey[600],
-                        fontSize: 12,
+                        fontSize: isReply ? 11 : 12,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(comment['content'] ?? ''),
+                Text(
+                  comment['content'] ?? '',
+                  style: TextStyle(
+                    fontSize: isReply ? 13 : 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+
+                // Like button for comment
+                Row(
+                  children: [
+                    InkWell(
+                      onTap: () async {
+                        try {
+                          await controller.toggleCommentLike(comment['_id']);
+                        } catch (e) {
+                          Get.snackbar('Error', 'Failed to like comment');
+                        }
+                      },
+                      child: Row(
+                        children: [
+                          Icon(
+                            (comment['likes']['users'] as List)
+                                    .contains(controller.currentUserId)
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            size: 16,
+                            color: (comment['likes']['users'] as List)
+                                    .contains(controller.currentUserId)
+                                ? Colors.red
+                                : Colors.grey[600],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatCount(comment['likes']['count'] ?? 0),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -525,7 +783,7 @@ class _ExpandableTextState extends State<ExpandableText> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -539,7 +797,7 @@ class _ExpandableTextState extends State<ExpandableText> {
             height: 1.4,
           ),
         ),
-        
+
         // Show tags only when expanded
         if (_expanded && widget.tags.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -548,31 +806,29 @@ class _ExpandableTextState extends State<ExpandableText> {
             runSpacing: 8,
             children: widget.tags.map((tag) {
               // Split by comma if needed
-              final tags = tag.contains(',') 
-                  ? tag.split(',') 
-                  : [tag];
-              
+              final tags = tag.contains(',') ? tag.split(',') : [tag];
+
               return Wrap(
                 spacing: 8,
-                children: tags.map((t) => 
-                  Container(
-                    margin: const EdgeInsets.only(right: 4, bottom: 4),
-                    child: Text(
-                      '#${t.trim()}',
-                      style: const TextStyle(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  )
-                ).toList(),
+                children: tags
+                    .map((t) => Container(
+                          margin: const EdgeInsets.only(right: 4, bottom: 4),
+                          child: Text(
+                            '#${t.trim()}',
+                            style: const TextStyle(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ))
+                    .toList(),
               );
             }).toList(),
           ),
         ],
-        
+
         GestureDetector(
           onTap: () {
             setState(() {

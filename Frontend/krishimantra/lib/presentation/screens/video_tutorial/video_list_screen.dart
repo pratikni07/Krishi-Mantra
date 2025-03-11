@@ -26,17 +26,26 @@ class VideoListScreen extends GetView<VideoTutorialController> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Video Tutorials'),
+        title: const Text(
+          'Mantra Videos',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: AppColors.green,
         actions: [
+          // IconButton(
+          //   icon: const Icon(Icons.search),
+          //   onPressed: () {
+          //     // TODO: Implement search
+          //   },
+          // ),
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Implement search
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(
+              Icons.refresh,
+              color: Colors.white,
+            ),
             onPressed: () => controller.fetchVideos(refresh: true),
           ),
         ],
@@ -158,7 +167,8 @@ class VideoListScreen extends GetView<VideoTutorialController> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
             child: Row(
               children: [
                 const Text(

@@ -38,61 +38,98 @@ void initDependencies() {
   final dio = Dio();
   Get.put(ApiService(dio), permanent: true);
 
-  // Initialize core services
+  // Initialize core services with permanent: true
   Get.put(UserService(), permanent: true);
   Get.put(SocketService(), permanent: true);
+  Get.put(LocationService(), permanent: true);
 
-  // Initialize repositories
-  Get.lazyPut(() => AuthRepository(Get.find<ApiService>()));
-  Get.lazyPut(() => FeedRepository(Get.find<ApiService>()));
-  Get.lazyPut(() => AdsRepository(Get.find<ApiService>()));
-  Get.lazyPut(() => MessageRepository(Get.find<ApiService>()));
+  // Initialize repositories with fenix: true
+  Get.lazyPut(() => AuthRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => FeedRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => AdsRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => MessageRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => ReelRepository(Get.find<ApiService>(), Get.find<UserService>()), fenix: true);
+  Get.lazyPut(() => VideoTutorialRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => SchemeRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => CompanyRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => ProductRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => AIChatRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => PresignedUrlRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => CropRepository(Get.find<ApiService>()), fenix: true);
+
+  // Initialize controllers with fenix: true
   Get.lazyPut(
-      () => ReelRepository(Get.find<ApiService>(), Get.find<UserService>()));
-  Get.put(CropRepository(Get.find<ApiService>()), permanent: true);
-  Get.lazyPut(() => SchemeRepository(Get.find<ApiService>()));
-  Get.put(CompanyRepository(Get.find<ApiService>()), permanent: true);
-  Get.lazyPut(() => ProductRepository(Get.find<ApiService>()));
-  Get.lazyPut(() => AIChatRepository(Get.find<ApiService>()));
-  Get.lazyPut(() => PresignedUrlRepository(Get.find<ApiService>()));
+    () => AuthController(Get.find<AuthRepository>()),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => FeedController(
+      Get.find<FeedRepository>(),
+      Get.find<UserService>(),
+    ),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => AdsController(Get.find<AdsRepository>()),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => MessageController(
+      Get.find<MessageRepository>(),
+      Get.find<UserService>(),
+    ),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => ReelController(Get.find<ReelRepository>()),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => VideoTutorialController(
+      Get.find<VideoTutorialRepository>(),
+      Get.find<UserService>(),
+    ),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => SchemeController(Get.find<SchemeRepository>()),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => CompanyController(Get.find<CompanyRepository>()),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => ProductController(Get.find<ProductRepository>()),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => AIChatController(
+      Get.find<AIChatRepository>(),
+      Get.find<UserService>(),
+    ),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => PresignedUrlController(Get.find<PresignedUrlRepository>()),
+    fenix: true,
+  );
+  
+  Get.lazyPut(
+    () => CropController(Get.find<CropRepository>()),
+    fenix: true,
+  );
 
-  // Initialize controllers (move before VideoTutorialRepository)
-  Get.lazyPut(() => AuthController(Get.find<AuthRepository>()));
-  Get.lazyPut(() => FeedController(
-        Get.find<FeedRepository>(),
-        Get.find<UserService>(),
-      ));
-  Get.put(AdsController(Get.find<AdsRepository>()), permanent: true);
-  Get.lazyPut(() => MessageController(
-        Get.find<MessageRepository>(),
-        Get.find<UserService>(),
-      ));
-  Get.lazyPut(() => ReelController(Get.find<ReelRepository>()));
-  Get.put(CropController(Get.find<CropRepository>()), permanent: true);
-  Get.lazyPut(() => SchemeController(Get.find<SchemeRepository>()));
-  Get.put(CompanyController(Get.find<CompanyRepository>()), permanent: true);
-  Get.lazyPut(() => ProductController(Get.find<ProductRepository>()));
-  Get.lazyPut(() => AIChatController(
-        Get.find<AIChatRepository>(),
-        Get.find<UserService>(),
-      ));
-  Get.put(PresignedUrlController(Get.find<PresignedUrlRepository>()),
-      permanent: true);
-
-  // Add VideoTutorialRepository (after controllers have been initialized)
-  Get.put(VideoTutorialRepository(Get.find<ApiService>()), permanent: true);
-
-  // Add VideoTutorialController
-  Get.put(
-      VideoTutorialController(
-        Get.find<VideoTutorialRepository>(),
-        Get.find<UserService>(),
-      ),
-      permanent: true);
-
-  // Location service
-  Get.put(LocationService());
-
-  // Add VideoController
+  // Initialize VideoController
   Get.put(VideoController(), permanent: true);
 }
