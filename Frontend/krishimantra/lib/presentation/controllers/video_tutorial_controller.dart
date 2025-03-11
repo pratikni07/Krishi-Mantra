@@ -27,6 +27,10 @@ class VideoTutorialController extends GetxController {
   final hasMoreVideos = true.obs;
   final isLoadingMore = false.obs;
 
+//   final isLoadingMore = false.obs;
+// final currentPage = 1.obs;
+  final hasMoreComments = true.obs;
+
   // Video player state
   final isPlaying = false.obs;
   final currentPosition = Duration.zero.obs;
@@ -43,6 +47,30 @@ class VideoTutorialController extends GetxController {
     super.onInit();
     fetchVideos();
   }
+
+//   Future<void> loadMoreComments(String videoId) async {
+//   if (!hasMoreComments.value || isLoadingMore.value) return;
+
+//   try {
+//     isLoadingMore.value = true;
+//     final response = await _repository.getComments(
+//       videoId,
+//       page: currentPage.value + 1,
+//     );
+
+//     final newComments = List<Map<String, dynamic>>.from(response['data']['data']);
+//     if (newComments.isEmpty) {
+//       hasMoreComments.value = false;
+//     } else {
+//       comments.addAll(newComments);
+//       currentPage.value++;
+//     }
+//   } catch (e) {
+//     Get.snackbar('Error', 'Failed to load more comments');
+//   } finally {
+//     isLoadingMore.value = false;
+//   }
+// }
 
   Future<void> fetchVideos({bool refresh = false}) async {
     if (refresh) {
@@ -163,62 +191,62 @@ class VideoTutorialController extends GetxController {
 
   Future<void> addComment(String videoId, String content,
       {String? parentCommentId}) async {
-    try {
-      final response = await _repository.addComment(
-        videoId,
-        content: content,
-        parentComment: parentCommentId,
-      );
+    //   try {
+    //     final response = await _repository.addComment(
+    //       videoId,
+    //       content: content,
+    //       parentComment: parentCommentId,
+    //     );
 
-      // If it's a reply, update the parent comment's replies
-      if (parentCommentId != null) {
-        final parentIndex =
-            comments.indexWhere((c) => c['_id'] == parentCommentId);
-        if (parentIndex != -1) {
-          final parent = comments[parentIndex];
-          final replies = List.from(parent['replies'] ?? []);
-          replies.add(response['data']);
-          comments[parentIndex] = {
-            ...parent,
-            'replies': replies,
-          };
-        }
-      } else {
-        // Add new comment to the top
-        comments.insert(0, response['data']);
-      }
+    // //     // If it's a reply, update the parent comment's replies
+    //     if (parentCommentId != null) {
+    //       final parentIndex =
+    //           comments.indexWhere((c) => c['_id'] == parentCommentId);
+    //       if (parentIndex != -1) {
+    //         final parent = comments[parentIndex];
+    //         final replies = List.from(parent['replies'] ?? []);
+    //         replies.add(response['data']);
+    //         comments[parentIndex] = {
+    //           ...parent,
+    //           'replies': replies,
+    //         };
+    //       }
+    //     } else {
+    //       // Add new comment to the top
+    //       comments.insert(0, response['data']);
+    //     }
 
-      // Update comment count in current video
-      final video = currentVideo.value;
-      if (video != null) {
-        currentVideo.value = VideoTutorial(
-          id: video.id,
-          userId: video.userId,
-          userName: video.userName,
-          profilePhoto: video.profilePhoto,
-          title: video.title,
-          description: video.description,
-          thumbnail: video.thumbnail,
-          videoUrl: video.videoUrl,
-          videoType: video.videoType,
-          duration: video.duration,
-          tags: video.tags,
-          category: video.category,
-          visibility: video.visibility,
-          likes: video.likes,
-          views: video.views,
-          comments: VideoStats(
-            count: video.comments.count + 1,
-            users: video.comments.users,
-          ),
-          createdAt: video.createdAt,
-          updatedAt: video.updatedAt,
-        );
-      }
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to add comment');
-      rethrow;
-    }
+    //     // Update comment count in current video
+    //     final video = currentVideo.value;
+    //     if (video != null) {
+    //       currentVideo.value = VideoTutorial(
+    //         id: video.id,
+    //         userId: video.userId,
+    //         userName: video.userName,
+    //         profilePhoto: video.profilePhoto,
+    //         title: video.title,
+    //         description: video.description,
+    //         thumbnail: video.thumbnail,
+    //         videoUrl: video.videoUrl,
+    //         videoType: video.videoType,
+    //         duration: video.duration,
+    //         tags: video.tags,
+    //         category: video.category,
+    //         visibility: video.visibility,
+    //         likes: video.likes,
+    //         views: video.views,
+    //         comments: VideoStats(
+    //           count: video.comments.count + 1,
+    //           users: video.comments.users,
+    //         ),
+    //         createdAt: video.createdAt,
+    //         updatedAt: video.updatedAt,
+    //       );
+    //     }
+    //   } catch (e) {
+    //     Get.snackbar('Error', 'Failed to add comment');
+    //     rethrow;
+    //   }
   }
 
   Future<void> deleteComment(String commentId) async {
