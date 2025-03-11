@@ -133,14 +133,53 @@ class VideoTutorialController extends GetxController {
     }
   }
 
-  Future<void> fetchComments(String videoId) async {
+  Future<void> fetchComments(String videoId, {bool refresh = false}) async {
     try {
+      if (refresh) {
+        comments.clear();
+        currentPage.value = 1;
+        hasMoreComments.value = true;
+      }
+
+      if (!hasMoreComments.value) return;
+
       isLoadingComments.value = true;
-      final response = await _repository.getComments(videoId);
-      comments.value =
-          List<Map<String, dynamic>>.from(response['data']['data']);
+
+      final response = await _repository.getComments(
+        videoId,
+        page: currentPage.value,
+        limit: 10,
+      );
+
+      // Debug - print the response to see its structure
+      print('Comments response: ${response}');
+
+      // Check if the data structure matches what we expect
+      if (response['data'] != null) {
+        final commentData = response['data'] is List
+            ? response['data']
+            : (response['data']['data'] != null
+                ? response['data']['data']
+                : []);
+
+        if (commentData.isEmpty) {
+          hasMoreComments.value = false;
+        } else {
+          currentPage.value++;
+          List<Map<String, dynamic>> newComments = [];
+
+          for (var item in commentData) {
+            newComments.add(Map<String, dynamic>.from(item));
+          }
+
+          comments.addAll(newComments);
+        }
+      } else {
+        hasMoreComments.value = false;
+      }
     } catch (e) {
-      Get.snackbar('Error', 'Failed to load comments');
+      print('Error fetching comments: $e');
+      Get.snackbar('Error', 'Failed to load comments: $e');
     } finally {
       isLoadingComments.value = false;
     }
@@ -189,64 +228,33 @@ class VideoTutorialController extends GetxController {
     }
   }
 
-  Future<void> addComment(String videoId, String content,
-      {String? parentCommentId}) async {
-    //   try {
-    //     final response = await _repository.addComment(
-    //       videoId,
-    //       content: content,
-    //       parentComment: parentCommentId,
-    //     );
+  Future<void> addComment(String videoId, String content) async {
+    try {
+      final response = await _repository.addComment(
+        videoId,
+        {
+          'userId': currentUserId,
+          'userName': _userService.currentUser?.name ?? 'Anonymous',
+          'profilePhoto': _userService.currentUser?.image,
+          'content': content,
+          // Don't include parentComment field for parent comments
+        },
+      );
 
-    // //     // If it's a reply, update the parent comment's replies
-    //     if (parentCommentId != null) {
-    //       final parentIndex =
-    //           comments.indexWhere((c) => c['_id'] == parentCommentId);
-    //       if (parentIndex != -1) {
-    //         final parent = comments[parentIndex];
-    //         final replies = List.from(parent['replies'] ?? []);
-    //         replies.add(response['data']);
-    //         comments[parentIndex] = {
-    //           ...parent,
-    //           'replies': replies,
-    //         };
-    //       }
-    //     } else {
-    //       // Add new comment to the top
-    //       comments.insert(0, response['data']);
-    //     }
+      // Add the new comment to the local list
+      if (response['status'] == 'success' && response['data'] != null) {
+        final newComment = response['data'];
+        comments.insert(
+            0, Map<String, dynamic>.from(newComment)); // Add at the beginning
+      }
 
-    //     // Update comment count in current video
-    //     final video = currentVideo.value;
-    //     if (video != null) {
-    //       currentVideo.value = VideoTutorial(
-    //         id: video.id,
-    //         userId: video.userId,
-    //         userName: video.userName,
-    //         profilePhoto: video.profilePhoto,
-    //         title: video.title,
-    //         description: video.description,
-    //         thumbnail: video.thumbnail,
-    //         videoUrl: video.videoUrl,
-    //         videoType: video.videoType,
-    //         duration: video.duration,
-    //         tags: video.tags,
-    //         category: video.category,
-    //         visibility: video.visibility,
-    //         likes: video.likes,
-    //         views: video.views,
-    //         comments: VideoStats(
-    //           count: video.comments.count + 1,
-    //           users: video.comments.users,
-    //         ),
-    //         createdAt: video.createdAt,
-    //         updatedAt: video.updatedAt,
-    //       );
-    //     }
-    //   } catch (e) {
-    //     Get.snackbar('Error', 'Failed to add comment');
-    //     rethrow;
-    //   }
+      // Refresh comments to ensure everything is in sync
+      await fetchComments(videoId, refresh: true);
+    } catch (e) {
+      print('Error adding comment: $e');
+      Get.snackbar('Error', 'Failed to add comment');
+      rethrow;
+    }
   }
 
   Future<void> deleteComment(String commentId) async {
@@ -391,6 +399,54 @@ class VideoTutorialController extends GetxController {
     } catch (e) {
       Get.snackbar('Error', 'Failed to search videos');
       return [];
+    }
+  }
+
+  // For adding a reply to a comment
+  Future<void> addReply(
+      String videoId, String parentCommentId, String content) async {
+    try {
+      final response = await _repository.addComment(
+        videoId,
+        {
+          'userId': currentUserId,
+          'userName': _userService.currentUser?.name ?? 'Anonymous',
+          'profilePhoto': _userService.currentUser?.image,
+          'content': content,
+          'parentComment': parentCommentId, // Include parentComment for replies
+        },
+      );
+
+      // Update local comments
+      for (int i = 0; i < comments.length; i++) {
+        if (comments[i]['_id'] == parentCommentId) {
+          List<dynamic> replies = List.from(comments[i]['replies'] ?? []);
+          replies.add(response['data']);
+          comments[i] = {
+            ...comments[i],
+            'replies': replies,
+          };
+          break;
+        }
+      }
+    } catch (e) {
+      print('Error adding reply: $e');
+      Get.snackbar('Error', 'Failed to add reply');
+      rethrow;
+    }
+  }
+
+  // Method to load more comments
+  Future<void> loadMoreComments(String videoId) async {
+    if (isLoadingMore.value || !hasMoreComments.value) return;
+
+    isLoadingMore.value = true;
+    try {
+      await fetchComments(videoId);
+    } catch (e) {
+      print('Error loading more comments: $e');
+    } finally {
+      isLoadingMore.value = false;
     }
   }
 }

@@ -87,16 +87,27 @@ class VideoTutorialRepository {
     }
   }
 
-  Future<Map<String, dynamic>> getComments(String videoId,
-      [int page = 1, int limit = 10]) async {
+  Future<Map<String, dynamic>> getComments(
+    String videoId, {
+    int page = 1,
+    int limit = 10,
+    String? parentComment,
+  }) async {
     try {
+      final queryParams = {
+        'page': page,
+        'limit': limit,
+      };
+
+      if (parentComment != null) {
+        queryParams['parentComment'] = parentComment as int;
+      }
+
       final response = await _apiService.get(
         '/api/reels/videos/$videoId/comments',
-        queryParameters: {
-          'page': page,
-          'limit': limit,
-        },
+        queryParameters: queryParams,
       );
+
       return response.data;
     } catch (e) {
       throw Exception('Failed to fetch comments: $e');
