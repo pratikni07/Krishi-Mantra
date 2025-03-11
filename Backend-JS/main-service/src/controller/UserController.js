@@ -150,7 +150,6 @@ exports.getUserByPage = async (req, res) => {
         name: user.name,
         firstName: user.firstName,
         lastName: user.lastName,
-        email: user.email,
         phoneNo: user.phoneNo,
         accountType: user.accountType,
         image: user.image,
@@ -192,56 +191,152 @@ exports.getUserById = async (req, res) => {
 
 // get consultant according to latitude and langitude
 
+// exports.getConsultant = async (req, res) => {
+//   try {
+//     const { latitude, longitude } = req.body;
+//     console.log(latitude, longitude, "requested");
+
+//     // Find consultants near the user's location
+//     const consultants = await UserDetail.find({
+//       location: {
+//         $near: {
+//           $geometry: {
+//             type: "Point",
+//             coordinates: [longitude, latitude],
+//           },
+//           $maxDistance: 10000,
+//         },
+//       },
+//     })
+//       .populate({
+//         path: "userId",
+//         match: { accountType: "consultant" },
+//         select: "name image",
+//       })
+//       .populate({
+//         path: "company",
+//         select: "name logo",
+//       })
+//       .exec();
+
+//     const filteredConsultants = consultants
+//       .filter((consultant) => consultant.userId !== null)
+//       .map((consultant) => ({
+//         id: consultant._id,
+//         userName: consultant.userId.name,
+//         profilePhotoId: consultant.userId.image,
+//         experience: consultant.experience,
+//         rating: consultant.rating,
+//         company: consultant.company
+//           ? {
+//               name: consultant.company.name,
+//               logo: consultant.company.logo,
+//             }
+//           : null,
+//       }));
+
+//     res.status(200).json({
+//       consultants: filteredConsultants,
+//       message: "Consultants found",
+//     });
+//   } catch (error) {
+//     console.error("Error fetching consultants:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
+// exports.getConsultant = async (req, res) => {
+//   try {
+//     // const { latitude, longitude } = req.body;
+//     // console.log(latitude, longitude, "requested");
+
+//     // Find consultants near the user's location
+//     const consultants = await UserDetail.find()
+//       .populate({
+//         path: "userId",
+//         match: { accountType: "consultant" },
+//         select: "name image",
+//       })
+//       .populate({
+//         path: "company",
+//         select: "name logo",
+//       })
+//       .exec();
+
+//     const filteredConsultants = consultants
+//       .filter((consultant) => consultant.userId !== null)
+//       .map((consultant) => ({
+//         id: consultant._id,
+//         userName: consultant.userId.name,
+//         profilePhotoId: consultant.userId.image,
+//         experience: consultant.experience,
+//         rating: consultant.rating,
+//         company: consultant.company
+//           ? {
+//               name: consultant.company.name,
+//               logo: consultant.company.logo,
+//             }
+//           : null,
+//       }));
+
+//     res.status(200).json({
+//       consultants: filteredConsultants,
+//       message: "Consultants found",
+//     });
+//   } catch (error) {
+//     console.error("Error fetching consultants:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
 exports.getConsultant = async (req, res) => {
   try {
-    const { latitude, longitude } = req.body;
-    console.log(latitude, longitude, "requested");
+    const consultants = await User.find({ accountType: "consultant" })
+      .populate("additionalDetails")
+      .lean();
 
-    // Find consultants near the user's location
-    const consultants = await UserDetail.find({
-      location: {
-        $near: {
-          $geometry: {
-            type: "Point",
-            coordinates: [longitude, latitude],
-          },
-          $maxDistance: 10000,
-        },
-      },
-    })
-      .populate({
-        path: "userId",
-        match: { accountType: "consultant" },
-        select: "name image",
-      })
-      .populate({
-        path: "company",
-        select: "name logo",
-      })
-      .exec();
+    // Map consultants and check for undefined values before accessing properties
+    const formattedConsultants = consultants
+      .map((consultant) => {
+        if (!consultant) {
+          return null;
+        }
+        return {
+          _id: consultant._id,
+          userName: consultant.name || null,
+          firstName: consultant.firstName || null,
+          lastName: consultant.lastName || null,
+          profilePhotoId: consultant.image || null,
+          phoneNo: consultant.phoneNo || null,
+          // Only access additionalDetails if it exists
+          experience: consultant.additionalDetails
+            ? consultant.additionalDetails.experience
+            : null,
+          rating: consultant.additionalDetails
+            ? consultant.additionalDetails.rating
+            : null,
+          company: consultant.company
+            ? {
+                name: consultant.company.name,
+                logo: consultant.company.logo,
+              }
+            : null,
 
-    const filteredConsultants = consultants
-      .filter((consultant) => consultant.userId !== null)
-      .map((consultant) => ({
-        id: consultant._id,
-        userName: consultant.userId.name,
-        profilePhotoId: consultant.userId.image,
-        experience: consultant.experience,
-        rating: consultant.rating,
-        company: consultant.company
-          ? {
-              name: consultant.company.name,
-              logo: consultant.company.logo,
-            }
-          : null,
-      }));
+          // Add any other fields you need
+        };
+      })
+      .filter(Boolean); // Remove any null entries
 
     res.status(200).json({
-      consultants: filteredConsultants,
+      consultants: formattedConsultants,
       message: "Consultants found",
     });
   } catch (error) {
     console.error("Error fetching consultants:", error);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch consultants",
+      error: error.message,
+    });
   }
 };

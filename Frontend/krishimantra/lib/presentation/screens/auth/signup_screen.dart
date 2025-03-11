@@ -390,8 +390,31 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  // In _handleSignup() method of SignupScreen
   void _handleSignup() async {
     if (_formKey.currentState?.validate() ?? false) {
+      FocusScope.of(context).unfocus();
+
+      // Show a loading dialog if an image is being uploaded
+      if (_profileImage != null) {
+        Get.dialog(
+          Dialog(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: AppColors.green),
+                  SizedBox(height: 16),
+                  Text('Uploading profile image...'),
+                ],
+              ),
+            ),
+          ),
+          barrierDismissible: false,
+        );
+      }
+
       final success = await _authController.signupWithPhone(
         name: _nameController.text.trim(),
         firstName: _firstNameController.text.trim(),
@@ -399,6 +422,11 @@ class _SignupScreenState extends State<SignupScreen> {
         phoneNo: widget.phoneNumber,
         imageFile: _profileImage,
       );
+
+      // Close the loading dialog if it was shown
+      if (_profileImage != null && Get.isDialogOpen == true) {
+        Get.back();
+      }
 
       if (success) {
         // Registration successful, navigate to main screen

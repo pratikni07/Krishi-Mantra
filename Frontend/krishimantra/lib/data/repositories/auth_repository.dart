@@ -131,21 +131,21 @@ class AuthRepository {
     }
   }
 
-  Future<Map<String, dynamic>> uploadProfileImage(dio.FormData formData) async {
-    try {
-      final response = await _apiService.post(
-        ApiConstants.UPLOAD_IMAGE,
-        data: formData,
-      );
+  // Future<Map<String, dynamic>> uploadProfileImage(dio.FormData formData) async {
+  //   try {
+  //     final response = await _apiService.post(
+  //       ApiConstants.UPLOAD_IMAGE,
+  //       data: formData,
+  //     );
 
-      return response.data;
-    } catch (e) {
-      if (e is dio.DioException && e.response != null) {
-        return e.response!.data;
-      }
-      throw Exception('Image upload failed: $e');
-    }
-  }
+  //     return response.data;
+  //   } catch (e) {
+  //     if (e is dio.DioException && e.response != null) {
+  //       return e.response!.data;
+  //     }
+  //     throw Exception('Image upload failed: $e');
+  //   }
+  // }
 
   // Register
   Future<UserModel> register(String name, String email, String password) async {

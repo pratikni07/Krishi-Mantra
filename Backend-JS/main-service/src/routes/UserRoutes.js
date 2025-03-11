@@ -19,6 +19,6 @@ router.put("/profile", updateUserProfile);
 router.put("/details", updateUserDetails);
 router.put("/subscription", updateSubscription);
 
-router.post("/consultant", getConsultant);
+router.get("/consultant", getConsultant);
 
 module.exports = router;

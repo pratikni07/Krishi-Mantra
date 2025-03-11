@@ -5,159 +5,176 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../core/constants/colors.dart';
 
 class ChatMessageBubble extends StatelessWidget {
-  final String message;
+  final String? message;
   final bool isUser;
   final DateTime timestamp;
-  final String? imageUrl;
+  final String? mediaUrl;
+  final String mediaType;
+  final Map<String, dynamic>? mediaMetadata;
 
   const ChatMessageBubble({
     Key? key,
-    required this.message,
+    this.message,
     required this.isUser,
     required this.timestamp,
-    this.imageUrl,
+    this.mediaUrl,
+    this.mediaType = 'text',
+    this.mediaMetadata,
   }) : super(key: key);
+
+  Widget _buildMediaContent() {
+    if (mediaUrl == null) return const SizedBox.shrink();
+
+    switch (mediaType) {
+      case 'image':
+        return GestureDetector(
+          onTap: () {
+            // Add image preview functionality here if needed
+          },
+          child: Container(
+            constraints: const BoxConstraints(
+              maxHeight: 200,
+              maxWidth: 280, // Slightly reduced for better appearance
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                mediaUrl!,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: 200,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: AppColors.green,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  print('Error loading image: $error');
+                  return Container(
+                    width: 200,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 40, color: Colors.grey),
+                        SizedBox(height: 8),
+                        Text(
+                          'Failed to load image',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final time = DateFormat('HH:mm').format(timestamp);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Avatar
-          Container(
-            width: 30,
-            height: 30,
-            margin: const EdgeInsets.only(right: 12, top: 4),
-            decoration: BoxDecoration(
-              color: isUser ? Colors.green[100] : Colors.green[700],
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Center(
-              child: Icon(
-                isUser ? Icons.person : Icons.agriculture_outlined,
-                color: isUser ? AppColors.green : Colors.white,
-                size: 18,
-              ),
-            ),
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.8,
+        ),
+        child: Container(
+          margin: EdgeInsets.only(
+            left: isUser ? 64 : 8,
+            right: isUser ? 8 : 64,
+            bottom: 4,
+            top: 4,
           ),
-
-          // Message content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Sender name and time
-                Row(
-                  children: [
-                    Text(
-                      isUser ? 'You' : 'Farmer AI',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      time,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[500],
-                      ),
+          child: Column(
+            crossAxisAlignment:
+                isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: isUser ? AppColors.green : Colors.grey[200],
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(16),
+                    topRight: const Radius.circular(16),
+                    bottomLeft: Radius.circular(isUser ? 16 : 4),
+                    bottomRight: Radius.circular(isUser ? 4 : 16),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 6),
-
-                // Image if present
-                if (imageUrl != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      imageUrl!,
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 200,
-                          width: double.infinity,
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: Icon(Icons.image_not_supported,
-                                size: 50, color: Colors.grey),
+                child: Column(
+                  crossAxisAlignment: isUser
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
+                  children: [
+                    if (mediaType != 'text')
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                        child: _buildMediaContent(),
+                      ),
+                    if (message != null && message!.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          left: 12,
+                          right: 12,
+                          top: mediaType != 'text' ? 8 : 12,
+                          bottom: 12,
+                        ),
+                        child: Text(
+                          message!,
+                          style: TextStyle(
+                            color: isUser ? Colors.white : Colors.black87,
+                            fontSize: 16,
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-
-                // Message content with markdown rendering
-                MarkdownBody(
-                  data: message,
-                  styleSheet: MarkdownStyleSheet(
-                    p: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey[800],
-                      height: 1.4,
-                    ),
-                    strong: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                    listBullet: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey[800],
-                    ),
-                    h1: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                    h2: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                    h3: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                    blockquote: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey[600],
-                      fontStyle: FontStyle.italic,
-                    ),
-                    code: TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'monospace',
-                      backgroundColor: Colors.grey[200],
-                    ),
-                    codeblockDecoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  softLineBreak: true,
-                  selectable: true,
-                  onTapLink: (text, href, title) {
-                    // Handle link taps if needed
-                    print('Link tapped: $href');
-                    // You could implement url_launcher here
-                  },
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
+                child: Text(
+                  time,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

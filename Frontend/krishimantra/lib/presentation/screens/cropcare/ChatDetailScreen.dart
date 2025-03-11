@@ -9,6 +9,11 @@ import '../../../data/services/SocketService.dart';
 import '../../controllers/message_controller.dart';
 import '../../../data/models/participant_model.dart';
 import 'dart:math' show pi, sin;
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import '../../widgets/chat_message_bubble.dart';
+import '../../widgets/media_preview_dialog.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final dynamic chat;
@@ -347,7 +352,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           return Column(
             children: [
               if (showDateHeader) _buildDateHeader(message.createdAt),
-              _buildMessageBubble(message),
+              ChatMessageBubble(
+                message: message.content,
+                isUser: message.senderId == currentUserId,
+                timestamp: message.createdAt,
+                mediaUrl: message.mediaUrl,
+                mediaType: message.mediaType,
+                mediaMetadata: message.mediaMetadata,
+              ),
             ],
           );
         },
@@ -441,12 +453,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   children: [
                     if (!isMyMessage && widget.chat.type == 'group')
                       _buildSenderName(message),
-                    Text(
-                      message.content,
-                      style: TextStyle(
-                        color: isMyMessage ? Colors.white : Colors.black87,
+                    if (message.content != null)  // Add null check
+                      Text(
+                        message.content!,  // Use null assertion operator since we checked above
+                        style: TextStyle(
+                          color: isMyMessage ? Colors.white : Colors.black87,
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 4),
                     _buildMessageFooter(message, isMyMessage),
                   ],
@@ -674,25 +687,45 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 _buildAttachmentOption(
                   icon: Icons.photo,
                   label: 'Gallery',
-                  onTap: () {
-                    // Implement gallery attachment
+                  onTap: () async {
                     Navigator.pop(context);
+                    final ImagePicker picker = ImagePicker();
+                    final XFile? image = await picker.pickImage(
+                      source: ImageSource.gallery,
+                      imageQuality: 70,
+                    );
+                    if (image != null) {
+                      await _handleImageUpload(File(image.path));
+                    }
                   },
                 ),
                 _buildAttachmentOption(
                   icon: Icons.camera_alt,
                   label: 'Camera',
-                  onTap: () {
-                    // Implement camera attachment
+                  onTap: () async {
                     Navigator.pop(context);
+                    final ImagePicker picker = ImagePicker();
+                    final XFile? photo = await picker.pickImage(
+                      source: ImageSource.camera,
+                      imageQuality: 70,
+                    );
+                    if (photo != null) {
+                      await _handleImageUpload(File(photo.path));
+                    }
                   },
                 ),
                 _buildAttachmentOption(
                   icon: Icons.insert_drive_file,
                   label: 'Document',
-                  onTap: () {
-                    // Implement document attachment
+                  onTap: () async {
                     Navigator.pop(context);
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['pdf', 'doc', 'docx'],
+                    );
+                    if (result != null) {
+                      await _handleDocumentUpload(File(result.files.single.path!));
+                    }
                   },
                 ),
               ],
@@ -701,6 +734,104 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleImageUpload(File imageFile) async {
+    final TextEditingController captionController = TextEditingController();
+    
+    // Show preview dialog
+    await Get.dialog(
+      MediaPreviewDialog(
+        mediaFile: imageFile,
+        mediaType: 'image',
+        captionController: captionController,
+        onSend: (file) async {
+          try {
+            // Show loading indicator
+            Get.dialog(
+              const Center(child: CircularProgressIndicator()),
+              barrierDismissible: false,
+            );
+
+            // Upload image and get URL
+            final mediaUrl = await _messageController.uploadMedia(
+              file,
+              'chat_image',
+            );
+
+            if (mediaUrl != null) {
+              // Send message with image and caption
+              await _messageController.sendMessage(
+                chatId: widget.chat.id,
+                content: captionController.text.trim(),
+                mediaType: 'image',
+                mediaUrl: mediaUrl,
+              );
+            }
+          } catch (e) {
+            Get.snackbar(
+              'Error',
+              'Failed to upload image: ${e.toString()}',
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          } finally {
+            // Hide loading indicator
+            Get.back();
+          }
+        },
+      ),
+    );
+    
+    captionController.dispose();
+  }
+
+  Future<void> _handleDocumentUpload(File document) async {
+    final TextEditingController captionController = TextEditingController();
+    
+    await Get.dialog(
+      MediaPreviewDialog(
+        mediaFile: document,
+        mediaType: 'document',
+        captionController: captionController,
+        onSend: (file) async {
+          try {
+            Get.dialog(
+              const Center(child: CircularProgressIndicator()),
+              barrierDismissible: false,
+            );
+
+            final mediaUrl = await _messageController.uploadMedia(
+              file,
+              'chat_document',
+            );
+
+            if (mediaUrl != null) {
+              final fileName = file.path.split('/').last;
+              await _messageController.sendMessage(
+                chatId: widget.chat.id,
+                content: captionController.text.trim(),
+                mediaType: 'document',
+                mediaUrl: mediaUrl,
+                mediaMetadata: {
+                  'fileName': fileName,
+                  'fileSize': await file.length(),
+                },
+              );
+            }
+          } catch (e) {
+            Get.snackbar(
+              'Error',
+              'Failed to upload document: ${e.toString()}',
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          } finally {
+            Get.back();
+          }
+        },
+      ),
+    );
+    
+    captionController.dispose();
   }
 
   Widget _buildAttachmentOption({

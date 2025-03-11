@@ -30,6 +30,8 @@ import 'presentation/controllers/company_controller.dart';
 import 'presentation/controllers/product_controller.dart';
 import 'presentation/controllers/scheme_controller.dart';
 import 'presentation/screens/feed/widgets/feed_card.dart';
+import 'package:krishimantra/data/repositories/presigned_url_repository.dart';
+import 'package:krishimantra/presentation/controllers/presigned_url_controller.dart';
 
 void initDependencies() {
   // Initialize Dio and ApiService first
@@ -52,6 +54,7 @@ void initDependencies() {
   Get.put(CompanyRepository(Get.find<ApiService>()), permanent: true);
   Get.lazyPut(() => ProductRepository(Get.find<ApiService>()));
   Get.lazyPut(() => AIChatRepository(Get.find<ApiService>()));
+  Get.lazyPut(() => PresignedUrlRepository(Get.find<ApiService>()));
 
   // Initialize controllers (move before VideoTutorialRepository)
   Get.lazyPut(() => AuthController(Get.find<AuthRepository>()));
@@ -73,6 +76,8 @@ void initDependencies() {
         Get.find<AIChatRepository>(),
         Get.find<UserService>(),
       ));
+  Get.put(PresignedUrlController(Get.find<PresignedUrlRepository>()),
+      permanent: true);
 
   // Add VideoTutorialRepository (after controllers have been initialized)
   Get.put(VideoTutorialRepository(Get.find<ApiService>()), permanent: true);

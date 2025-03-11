@@ -451,9 +451,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
       }
 
       await _messageController.getConsultants(
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
+          // latitude: position.latitude,
+          // longitude: position.longitude,
+          );
 
       _showConsultantsBottomSheet();
     } catch (e) {

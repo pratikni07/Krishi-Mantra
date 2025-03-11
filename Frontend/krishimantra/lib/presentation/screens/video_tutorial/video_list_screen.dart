@@ -136,17 +136,15 @@ class VideoListScreen extends GetView<VideoTutorialController> {
 
   int _calculateItemCount() {
     final videoCount = controller.videos.length;
-    final reelSections = (videoCount / 2).floor();
-    return videoCount + reelSections + (controller.hasMoreVideos.value ? 1 : 0);
+    return videoCount + 1 + (controller.hasMoreVideos.value ? 1 : 0);
   }
 
   bool _isReelSection(int index) {
-    return (index + 1) % 3 == 0; // Every third item is a reel section
+    return index == 2;
   }
 
   int _getVideoIndex(int index) {
-    final reelSections = (index / 3).floor();
-    return index - reelSections;
+    return index > 2 ? index - 1 : index;
   }
 
   Widget _buildReelSection() {
@@ -154,45 +152,48 @@ class VideoListScreen extends GetView<VideoTutorialController> {
       return const SizedBox.shrink();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-          child: Row(
-            children: [
-              const Text(
-                'Shorts',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+            child: Row(
+              children: [
+                const Text(
+                  'Shorts',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => Get.to(() => const ReelsPage()),
-                child: const Text('View All'),
-              ),
-            ],
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Get.to(() => const ReelsPage()),
+                  child: const Text('View All'),
+                ),
+              ],
+            ),
           ),
-        ),
-        SizedBox(
-          height: 240,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            itemCount: _reelController.reels.length,
-            itemBuilder: (context, index) {
-              final reel = _reelController.reels[index];
-              return _ReelCard(
-                reel: reel,
-                index: index,
-                reels: _reelController.reels.toList(),
-              );
-            },
+          SizedBox(
+            height: 240,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              itemCount: _reelController.reels.length,
+              itemBuilder: (context, index) {
+                final reel = _reelController.reels[index];
+                return _ReelCard(
+                  reel: reel,
+                  index: index,
+                  reels: _reelController.reels.toList(),
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -237,27 +238,14 @@ class _ReelCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          color: Colors.black,
+          color: Colors.grey[200],
         ),
         child: Stack(
           fit: StackFit.expand,
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                imageUrl: reel.mediaUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  color: Colors.grey[300],
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.error),
-                ),
-              ),
+              child: VideoThumbnail(videoUrl: reel.mediaUrl),
             ),
             const Center(
               child: Icon(
@@ -338,6 +326,63 @@ class _ReelCard extends StatelessWidget {
       return '${(num / 1000).toStringAsFixed(num >= 10000 ? 0 : 1)}K';
     }
     return num.round().toString();
+  }
+}
+
+class VideoThumbnail extends StatefulWidget {
+  final String videoUrl;
+
+  const VideoThumbnail({Key? key, required this.videoUrl}) : super(key: key);
+
+  @override
+  State<VideoThumbnail> createState() => _VideoThumbnailState();
+}
+
+class _VideoThumbnailState extends State<VideoThumbnail> {
+  VideoPlayerController? _controller;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeController();
+  }
+
+  Future<void> _initializeController() async {
+    _controller = VideoPlayerController.network(widget.videoUrl);
+    try {
+      await _controller?.initialize();
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    } catch (e) {
+      print('Error initializing video controller: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInitialized || _controller == null) {
+      return Container(
+        color: Colors.grey[300],
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return AspectRatio(
+      aspectRatio: _controller!.value.aspectRatio,
+      child: VideoPlayer(_controller!),
+    );
   }
 }
 

@@ -64,12 +64,13 @@ class Message {
   final String senderId;
   final String senderName;
   final String? senderPhoto;
-  final String content;
+  final String? content;
   final String mediaType;
+  final String? mediaUrl;
+  final Map<String, dynamic>? mediaMetadata;
   final List<DeliveredTo> deliveredTo;
   final bool isDeleted;
-  final List<ReadByUser>
-      readBy; // Changed from List<String> to List<ReadByUser>
+  final List<ReadByUser> readBy;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -79,8 +80,10 @@ class Message {
     required this.senderId,
     required this.senderName,
     this.senderPhoto,
-    required this.content,
+    this.content,
     required this.mediaType,
+    this.mediaUrl,
+    this.mediaMetadata,
     required this.deliveredTo,
     required this.isDeleted,
     required this.readBy,
@@ -108,50 +111,52 @@ class Message {
   }
 
   factory Message.fromJson(Map<String, dynamic> json) {
-    try {
-      return Message(
-        id: json['_id'] ?? '',
-        chatId: json['chatId'] ?? '',
-        senderId: json['sender'] ?? '',
-        senderName: json['senderName'] ?? '',
-        senderPhoto: json['senderPhoto'],
-        content: json['content'] ?? '',
-        mediaType: json['mediaType'] ?? 'text',
-        deliveredTo: (json['deliveredTo'] as List?)
-                ?.map((x) => DeliveredTo.fromJson(x))
-                .toList() ??
-            [],
-        isDeleted: json['isDeleted'] ?? false,
-        readBy: (json['readBy'] as List?)
-                ?.map((x) => ReadByUser.fromJson(x))
-                .toList() ??
-            [],
-        createdAt: json['createdAt'] != null
-            ? DateTime.parse(json['createdAt'])
-            : DateTime.now(),
-        updatedAt: json['updatedAt'] != null
-            ? DateTime.parse(json['updatedAt'])
-            : DateTime.now(),
-      );
-    } catch (e) {
-      rethrow;
-    }
+    return Message(
+      id: json['_id'] ?? json['id'] ?? '',
+      chatId: json['chatId'] ?? '',
+      senderId: json['sender'] ?? '',
+      senderName: json['senderName'] ?? '',
+      senderPhoto: json['senderPhoto'],
+      content: json['content'],
+      mediaType: json['mediaType'] ?? 'text',
+      mediaUrl: json['mediaUrl'],
+      mediaMetadata: json['mediaMetadata'] as Map<String, dynamic>?,
+      deliveredTo: (json['deliveredTo'] as List<dynamic>?)
+              ?.map((x) => DeliveredTo.fromJson(x))
+              .toList() ??
+          [],
+      isDeleted: json['isDeleted'] ?? false,
+      readBy: (json['readBy'] as List<dynamic>?)
+              ?.map((x) => ReadByUser.fromJson(x))
+              .toList() ??
+          [],
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
+          : DateTime.now(),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
+          : DateTime.now(),
+    );
   }
 
-  Map<String, dynamic> toJson() => {
-        '_id': id,
-        'chatId': chatId,
-        'sender': senderId,
-        'senderName': senderName,
-        'senderPhoto': senderPhoto,
-        'content': content,
-        'mediaType': mediaType,
-        'deliveredTo': deliveredTo.map((x) => x.toJson()).toList(),
-        'isDeleted': isDeleted,
-        'readBy': readBy.map((x) => x.toJson()).toList(),
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+  Map<String, dynamic> toJson() {
+    return {
+      '_id': id,
+      'chatId': chatId,
+      'sender': senderId,
+      'senderName': senderName,
+      'senderPhoto': senderPhoto,
+      'content': content,
+      'mediaType': mediaType,
+      'mediaUrl': mediaUrl,
+      'mediaMetadata': mediaMetadata,
+      'deliveredTo': deliveredTo.map((x) => x.toJson()).toList(),
+      'isDeleted': isDeleted,
+      'readBy': readBy.map((x) => x.toJson()).toList(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
 
   List<String> get readByUserIds => readBy.map((user) => user.userId).toList();
 
@@ -163,26 +168,31 @@ class Message {
     String? senderPhoto,
     String? content,
     String? mediaType,
+    String? mediaUrl,
+    Map<String, dynamic>? mediaMetadata,
     List<DeliveredTo>? deliveredTo,
     bool? isDeleted,
     List<ReadByUser>? readBy,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) =>
-      Message(
-        id: id ?? this.id,
-        chatId: chatId ?? this.chatId,
-        senderId: senderId ?? this.senderId,
-        senderName: senderName ?? this.senderName,
-        senderPhoto: senderPhoto ?? this.senderPhoto,
-        content: content ?? this.content,
-        mediaType: mediaType ?? this.mediaType,
-        deliveredTo: deliveredTo ?? this.deliveredTo,
-        isDeleted: isDeleted ?? this.isDeleted,
-        readBy: readBy ?? this.readBy,
-        createdAt: createdAt ?? this.createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
+  }) {
+    return Message(
+      id: id ?? this.id,
+      chatId: chatId ?? this.chatId,
+      senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
+      senderPhoto: senderPhoto ?? this.senderPhoto,
+      content: content ?? this.content,
+      mediaType: mediaType ?? this.mediaType,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      mediaMetadata: mediaMetadata ?? this.mediaMetadata,
+      deliveredTo: deliveredTo ?? this.deliveredTo,
+      isDeleted: isDeleted ?? this.isDeleted,
+      readBy: readBy ?? this.readBy,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }
 
 // chat_model.dart

@@ -358,7 +358,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
             message: message.content,
             isUser: message.role == 'user',
             timestamp: message.timestamp,
-            imageUrl: message.imageUrl,
+            // imageUrl: message.imageUrl,
           );
         },
       );

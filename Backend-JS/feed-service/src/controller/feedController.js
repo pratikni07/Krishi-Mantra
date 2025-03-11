@@ -475,6 +475,7 @@ class FeedController {
       console.error("Error invalidating random feeds cache:", error);
     }
   }
+
   async createFeed(req, res) {
     try {
       const {
@@ -487,25 +488,33 @@ class FeedController {
         location,
       } = req.body;
 
-      const feed = new Feed({
+      // Create feed object with location as optional
+      const feedData = {
         userId,
         userName,
         profilePhoto,
         description,
         content,
         mediaUrl,
-        location: {
-          latitude: location.latitude,
-          longitude: location.longitude,
-        },
         like: { count: 0 },
         comment: { count: 0 },
-      });
+      };
 
+      // Add location only if it exists and has valid properties
+      if (
+        location &&
+        (location.latitude !== undefined || location.longitude !== undefined)
+      ) {
+        feedData.location = {
+          latitude: location.latitude ? parseFloat(location.latitude) : null,
+          longitude: location.longitude ? parseFloat(location.longitude) : null,
+        };
+      }
+
+      const feed = new Feed(feedData);
       await feed.save();
 
       const tags = extractTags(content);
-
       // Handle tags with proper error checking
       for (const tagName of tags) {
         try {
@@ -521,7 +530,6 @@ class FeedController {
               new: true,
             }
           );
-
           await redis.del(`${TAG_CACHE_KEY}${tagName}`);
         } catch (err) {
           console.error(`Error processing tag ${tagName}:`, err);
@@ -534,8 +542,8 @@ class FeedController {
         CACHE_DURATION,
         JSON.stringify(feed)
       );
-      await this.invalidateRandomFeedsCache();
 
+      await this.invalidateRandomFeedsCache();
       res.status(201).json(feed);
     } catch (error) {
       console.error("Error creating feed:", error);

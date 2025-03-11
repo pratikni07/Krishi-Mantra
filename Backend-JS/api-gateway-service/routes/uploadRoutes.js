@@ -3,14 +3,24 @@ const { generatePresignedUrl } = require("../services/s3UploadService");
 
 const router = express.Router();
 
+// Update the allowed content types to include chat-related types
+const ALLOWED_CONTENT_TYPES = [
+  "profile",
+  "feeds",
+  "reels",
+  "services",
+  "ads",
+  "users",
+  "videostuts",
+  "chat_image", // Add this
+  "chat_video", // Add this
+  "chat_document", // Add this
+  "chat_audio", // Add this
+];
+
 /**
  * Generate a pre-signed URL for uploading files to S3
  * @route POST /api/upload/getPresignedUrl
- * @param {string} fileName - Original file name
- * @param {string} fileType - MIME type of the file (e.g., image/jpeg, video/mp4)
- * @param {string} contentType - Category folder (feeds, reels, services, ads, users, videostuts)
- * @param {string} [userId] - Optional user ID for organizing files by user
- * @returns {Object} Pre-signed URL and file information
  */
 router.post("/getPresignedUrl", async (req, res) => {
   try {
@@ -22,6 +32,16 @@ router.post("/getPresignedUrl", async (req, res) => {
         status: "error",
         message:
           "Missing required parameters: fileName, fileType, and contentType are required",
+      });
+    }
+
+    // Validate content type
+    if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
+      return res.status(400).json({
+        status: "error",
+        message: `Invalid content type. Must be one of: ${ALLOWED_CONTENT_TYPES.join(
+          ", "
+        )}`,
       });
     }
 
@@ -61,20 +81,12 @@ router.post("/getPresignedUrl", async (req, res) => {
 /**
  * API endpoint to list allowed content types
  * @route GET /api/upload/contentTypes
- * @returns {Object} List of allowed content types
  */
 router.get("/contentTypes", (req, res) => {
   res.status(200).json({
     status: "success",
     data: {
-      contentTypes: [
-        "feeds",
-        "reels",
-        "services",
-        "ads",
-        "users",
-        "videostuts",
-      ],
+      contentTypes: ALLOWED_CONTENT_TYPES,
     },
   });
 });

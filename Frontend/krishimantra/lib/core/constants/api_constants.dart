@@ -21,6 +21,7 @@ class ApiConstants {
 
   // Upload endpoints
   static const String UPLOAD_IMAGE = '/upload/image';
+  static const String GET_PRESIGNED_URL = '/api/upload/getPresignedUrl';
 
   // User endpoints
   static const String USER_PROFILE = '/api/main/user/profile';

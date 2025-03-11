@@ -136,9 +136,9 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title
+                  // Title with proper null check and style
                   Text(
-                    controller.currentVideo.value?.title ?? '',
+                    controller.currentVideo.value?.title ?? 'Untitled',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -146,7 +146,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  // Views and date
+                  // Views, likes and date with proper formatting
                   Row(
                     children: [
                       Text(
@@ -164,9 +164,25 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                         ),
                       ),
                       Text(
+                        '${_formatCount(controller.currentVideo.value?.likes.count ?? 0)} likes',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        ' • ',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
                         timeago.format(
-                            controller.currentVideo.value?.createdAt ??
-                                DateTime.now()),
+                          controller.currentVideo.value?.createdAt ??
+                              DateTime.now(),
+                          locale: 'en_short',
+                        ),
                         style: TextStyle(
                           color: Colors.grey[600],
                           fontSize: 14,
@@ -176,26 +192,27 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Channel info
+                  // Channel info with proper null checks
                   Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundImage: controller
-                                    .currentVideo.value?.profilePhoto !=
-                                null
-                            ? CachedNetworkImageProvider(
-                                controller.currentVideo.value!.profilePhoto!)
-                            : null,
+                        backgroundImage:
+                            controller.currentVideo.value?.profilePhoto != null
+                                ? CachedNetworkImageProvider(
+                                    controller
+                                        .currentVideo.value!.profilePhoto!,
+                                  )
+                                : null,
                         child:
                             controller.currentVideo.value?.profilePhoto == null
                                 ? Text(
                                     controller.currentVideo.value?.userName
                                             .substring(0, 1)
                                             .toUpperCase() ??
-                                        '',
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
+                                        '?',
+                                    style: const TextStyle(
+                                      color: Colors.white,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   )
@@ -207,46 +224,61 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              controller.currentVideo.value?.userName ?? '',
+                              controller.currentVideo.value?.userName ??
+                                  'Unknown User',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
                             ),
-                            Text(
-                              '${_formatCount(controller.currentVideo.value?.likes.count ?? 0)} likes',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
+                            if (controller.currentVideo.value?.description !=
+                                null)
+                              Text(
+                                controller.currentVideo.value!.description!,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
                           ],
                         ),
                       ),
-                      TextButton.icon(
+                      IconButton(
                         onPressed: () {
-                          // TODO: Implement like functionality
+                          if (controller.currentVideo.value != null) {
+                            controller.toggleVideoLike(
+                                controller.currentVideo.value!.id);
+                          }
                         },
                         icon: Icon(
-                          Icons.thumb_up_outlined,
-                          color: Colors.grey[600],
-                        ),
-                        label: Text(
-                          'Like',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                          ),
+                          controller.currentVideo.value!.likes.users
+                                  .contains(controller.currentUserId)
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          color: controller.currentVideo.value!.likes.users
+                                  .contains(controller.currentUserId)
+                              ? Colors.red
+                              : null,
                         ),
                       ),
                     ],
                   ),
 
-                  // Description
-                  if (controller.currentVideo.value?.description != null) ...[
+                  // Tags section
+                  if (controller.currentVideo.value?.tags.isNotEmpty ??
+                      false) ...[
                     const SizedBox(height: 16),
-                    Text(
-                      controller.currentVideo.value!.description!,
-                      style: const TextStyle(fontSize: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: controller.currentVideo.value!.tags
+                          .map((tag) => Chip(
+                                label: Text(tag),
+                                backgroundColor: Colors.grey[200],
+                              ))
+                          .toList(),
                     ),
                   ],
 
