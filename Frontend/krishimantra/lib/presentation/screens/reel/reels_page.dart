@@ -774,7 +774,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _buildInteractionButton(
-                            widget.reel.like['isLiked'] ?? false
+                            widget.reel.like['isLiked'] == true
                                 ? Icons.favorite
                                 : Icons.favorite_border,
                             widget.reel.like['count'].toString(),
@@ -1093,7 +1093,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
       {VoidCallback? onTap}) {
     // Special handling for like button
     if (icon == Icons.favorite || icon == Icons.favorite_border) {
-      final isLiked = widget.reel.like['isLiked'] ?? false;
+      final isLiked = widget.reel.like['isLiked'] == true;
       return GestureDetector(
         onTap: onTap,
         child: Column(

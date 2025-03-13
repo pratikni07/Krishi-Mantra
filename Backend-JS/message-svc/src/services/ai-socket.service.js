@@ -11,26 +11,16 @@ class AISocketService {
 
   setupAIChatHandlers() {
     this.io.on("connection", (socket) => {
-      // Join AI chat rooms
       this.handleAIChatRooms(socket);
-
-      // Handle AI chat messages
       this.setupAIMessageHandlers(socket);
-
-      // Handle AI image analysis
       this.setupAIImageHandlers(socket);
-
-      // Handle typing indicators for AI chat
       this.setupAITypingHandlers(socket);
-
-      // Handle new chat creation
       this.setupNewChatHandler(socket);
     });
   }
 
   async handleAIChatRooms(socket) {
     try {
-      // Join user's AI chat rooms
       const aiChats = await AIChat.find({
         userId: socket.userId,
         isActive: true,
@@ -269,8 +259,6 @@ class AISocketService {
           chatId,
           isAnalyzing: false,
         });
-
-        // Emit the analysis result
         this.io.to(`ai-chat-${chatId}`).emit("ai:image:analyzed", {
           chatId,
           messages: [userMessage, assistantMessage],

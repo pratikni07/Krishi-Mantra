@@ -11,9 +11,10 @@ class ReelRepository {
   ReelRepository(this._apiService, this._userService);
 
   Future<Map<String, dynamic>> getReels({int page = 1, int limit = 10}) async {
+    final userId = await _userService.getUserId();
     final response = await _apiService.get(
       "/api/reels/reels",
-      queryParameters: {'page': page, 'limit': limit},
+      queryParameters: {'page': page, 'limit': limit, 'userId': userId},
     );
     return response.data;
   }
@@ -24,7 +25,11 @@ class ReelRepository {
   }
 
   Future<List<ReelModel>> getReelsByTag(String tagName) async {
-    final response = await _apiService.get('/api/reels/reels/tags/$tagName');
+    final userId = await _userService.getUserId();
+    final response = await _apiService.get(
+      '/api/reels/reels/tags/$tagName',
+      queryParameters: {'userId': userId}
+    );
     return (response.data['data'] as List)
         .map((reel) => ReelModel.fromJson(reel))
         .toList();
@@ -47,7 +52,11 @@ class ReelRepository {
   }
 
   Future<Map<String, dynamic>> getTrendingReels() async {
-    final response = await _apiService.get('/api/reels/reels/trending');
+    final userId = await _userService.getUserId();
+    final response = await _apiService.get(
+      '/api/reels/reels/trending',
+      queryParameters: {'userId': userId}
+    );
     return response.data;
   }
 

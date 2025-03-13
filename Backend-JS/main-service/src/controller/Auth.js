@@ -501,7 +501,6 @@ exports.verifyOTP = async (req, res) => {
         message: "Login successful",
       });
     } else {
-      // User doesn't exist - return success but indicate signup needed
       return res.status(200).json({
         success: true,
         isRegistered: false,
@@ -589,7 +588,6 @@ exports.signupWithPhone = async (req, res) => {
       httpOnly: true,
     };
 
-    // Return response with token and cookie, just like login API
     return res.cookie("token", token, options).status(201).json({
       success: true,
       token,

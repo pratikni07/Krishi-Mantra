@@ -23,7 +23,6 @@ class SocketService {
     this.userSocketMap = new Map();
     this.initialize();
 
-    // Initialize AI Socket Service
     this.aiSocketService = new AISocketService(this.io, this.userSocketMap);
   }
 
@@ -50,11 +49,9 @@ class SocketService {
 
   async handleConnection(socket) {
     try {
-      // Store socket mapping
       this.userSocketMap.set(socket.userId, socket.id);
       await Redis.hset("online_users", socket.userId, socket.id);
 
-      // Update user status
       await User.findOneAndUpdate(
         { userId: socket.userId },
         {
@@ -138,7 +135,7 @@ class SocketService {
     socket.on("message:send", async (data) => {
       try {
         const { chatId, content, mediaType, mediaUrl, mediaMetadata } = data;
-        
+
         const chat = await Chat.findById(chatId);
         if (!chat) {
           socket.emit("error", { message: "Chat not found" });
@@ -264,8 +261,6 @@ class SocketService {
 
         group.chatId = chat._id;
         await group.save();
-
-        // Notify group participants
         participants.forEach((participant) => {
           const participantSocket = this.userSocketMap.get(participant.userId);
           if (participantSocket) {

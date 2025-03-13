@@ -4,7 +4,6 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const fileUpload = require("express-fileupload");
 const helmet = require("helmet");
-const { cloudnairyconnect } = require("./config/cloudinary");
 const connect = require("./config/database");
 const winston = require("winston");
 const Joi = require("joi");
@@ -43,8 +42,8 @@ const envSchema = Joi.object({
   REDIS_HOST: Joi.string().required(),
   REDIS_PORT: Joi.number().default(6379),
   REDIS_PASSWORD: Joi.string().required(),
-  // ... other environment variables
 });
+
 const app = express();
 const PORT = process.env.PORT || 3002;
 
@@ -71,7 +70,7 @@ const logger = winston.createLogger({
 const { error } = envSchema.validate(process.env, { allowUnknown: true });
 if (error) {
   logger.error(`Config validation error: ${error.message}`);
-  process.exit(1); // Exit the process gracefully
+  process.exit(1);
 }
 
 // Connect to database
@@ -85,7 +84,6 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// Rate limiting setup using Redis (Optional: You can configure your own Redis)
 const redisClient = Redis.createClient({
   host: process.env.REDIS_HOST,
   port: process.env.REDIS_PORT,
@@ -123,21 +121,33 @@ app.use(
 
 console.log(process.env.MONGODB_URL);
 
-const limiter = rateLimit({
-  store: new MemoryStore(),
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: "Too many requests from this IP, please try again later.",
-});
+// const limiter = rateLimit({
+//   store: new MemoryStore(),
+//   windowMs: 15 * 60 * 1000,
+//   max: 100,
+//   message: "Too many requests from this IP, please try again later.",
+// });
 
-app.use(limiter);
-
-// Custom configuration for express-status-monitor
+// app.use(limiter);
 
 // Configure CORS for production
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: function (origin, callback) {
+      if (process.env.NODE_ENV === "development") {
+        return callback(null, true);
+      }
+      const allowedOrigins = process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(",")
+        : ["http://localhost:3000"];
+
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.log("Blocked by CORS in main-service:", origin);
+        callback(null, true);
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -162,7 +172,6 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
   try {
-    // Log the incoming request
     logger.info("Health check received", {
       headers: req.headers,
       ip: req.ip,
@@ -195,7 +204,6 @@ app.use("/user", userRoutesOne);
 app.use("/crop-calendar", cropRoutes);
 app.use("/schemes", schemeRoutes);
 
-// Add request logging middleware for debugging
 app.use((req, res, next) => {
   logger.info({
     method: req.method,
@@ -206,7 +214,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   logger.error("Error:", {
     message: err.message,

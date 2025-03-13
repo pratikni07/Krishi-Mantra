@@ -41,6 +41,10 @@ class AppRoutes {
   static const String OTP_VERIFICATION = '/otp';
   static const String SIGNUP = '/signup';
 
+  // Add notification routes
+  static const String NOTIFICATIONS = '/notifications';
+  static const String NOTIFICATION_SETTINGS = '/notification-settings';
+
   static final routes = [
     GetPage(name: SPLASH, page: () => SplashScreen()),
     GetPage(name: LOGIN, page: () => LoginScreen()),
@@ -63,5 +67,7 @@ class AppRoutes {
     GetPage(name: PHONE_NUMBER, page: () => const PhoneNumberScreen()),
     // Note: OTP and Signup screens need parameters, so they'll be navigated to using Get.to() directly
     // rather than using named routes
+
+    // Add notification routes
   ];
 }

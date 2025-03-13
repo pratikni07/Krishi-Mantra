@@ -13,10 +13,39 @@ class CropDetailScreen extends StatelessWidget {
     final CropController controller = Get.find<CropController>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F4F4),
+      backgroundColor: AppColors.white,
+      appBar: AppBar(
+        backgroundColor: AppColors.green,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.white),
+          onPressed: () => Get.back(),
+        ),
+        title: Obx(() {
+          if (!controller.isLoadingCalendar.value && 
+              controller.cropCalendar.value != null) {
+            return Text(
+              controller.cropCalendar.value!.cropId.name,
+              style: GoogleFonts.montserrat(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.white,
+              ),
+            );
+          }
+          return const Text(
+            'Crop Details',
+            style: TextStyle(
+              color: AppColors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        }),
+        centerTitle: true,
+      ),
       body: Obx(() {
         if (controller.isLoadingCalendar.value) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator(color: AppColors.green));
         }
 
         if (controller.calendarError.value.isNotEmpty) {
@@ -66,7 +95,7 @@ class CropDetailScreen extends StatelessWidget {
     return Stack(
       children: [
         Container(
-          height: 300,
+          height: 250,
           width: double.infinity,
           decoration: BoxDecoration(
             image: DecorationImage(
@@ -76,51 +105,30 @@ class CropDetailScreen extends StatelessWidget {
           ),
         ),
         Container(
-          height: 300,
+          height: 250,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withOpacity(0.7),
+                Colors.black.withOpacity(0.6),
                 Colors.transparent,
-                Colors.black.withOpacity(0.7),
+                Colors.black.withOpacity(0.6),
               ],
               stops: const [0.0, 0.5, 1.0],
             ),
           ),
         ),
-        SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: AppColors.white,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.black),
-                        onPressed: () => Get.back(),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        calendar.cropId.name,
-                        style: GoogleFonts.montserrat(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        Positioned(
+          bottom: 20,
+          left: 20,
+          child: Text(
+            calendar.cropId.scientificName,
+            style: GoogleFonts.montserrat(
+              fontSize: 16,
+              fontStyle: FontStyle.italic,
+              color: AppColors.white,
+            ),
           ),
         ),
       ],
@@ -167,8 +175,10 @@ class CropDetailScreen extends StatelessWidget {
 
   Widget _buildInfoCard(String title, String value) {
     return Card(
-      elevation: 4,
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 8.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -233,8 +243,10 @@ class CropDetailScreen extends StatelessWidget {
 
   Widget _buildCalendarSection(String title, String value, IconData icon) {
     return Card(
-      elevation: 4,
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -270,13 +282,15 @@ class CropDetailScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         _buildSectionTitle('Activities'),
         const SizedBox(height: 12),
         ...activities.map((activity) => Card(
+              elevation: 2,
               margin: const EdgeInsets.only(bottom: 12),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
+              color: AppColors.white,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -333,11 +347,13 @@ class CropDetailScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         _buildSectionTitle('Weather Considerations'),
         const SizedBox(height: 12),
         Card(
+          elevation: 2,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          color: AppColors.white,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -404,11 +420,13 @@ class CropDetailScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         _buildSectionTitle(title),
         const SizedBox(height: 12),
         Card(
+          elevation: 2,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          color: AppColors.white,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -447,13 +465,15 @@ class CropDetailScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         _buildSectionTitle('Possible Issues'),
         const SizedBox(height: 12),
         ...issues.map((issue) => Card(
+              elevation: 2,
               margin: const EdgeInsets.only(bottom: 12),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
+              color: AppColors.white,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(

@@ -9,6 +9,7 @@ import '../../data/services/language_service.dart';
 import '../../core/constants/colors.dart';
 import 'home/home_screen.dart';
 import 'reel/reels_page.dart';
+import 'package:get/get.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -24,7 +25,7 @@ class _MainScreenState extends State<MainScreen> {
   String cropCareText = 'Crop Care';
   String reelsText = 'Reels';
   String profileText = 'Profile';
-  
+
   final List<Widget> _pages = [
     const HomeScreen(),
     FeedScreen(),
@@ -58,7 +59,7 @@ class _MainScreenState extends State<MainScreen> {
       feedText = translations[1];
       cropCareText = translations[2];
       reelsText = translations[3];
-      profileText = translations[4];
+      profileText = translations[5];
     });
   }
 

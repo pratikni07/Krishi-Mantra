@@ -22,12 +22,23 @@ const FeedSchema = new mongoose.Schema({
   like: {
     count: {
       type: Number,
+      default: 0,
     },
   },
   comment: {
     count: {
       type: Number,
+      default: 0,
     },
+  },
+  views: {
+    count: {
+      type: Number,
+      default: 0,
+    },
+    lastViewed: {
+      type: Date,
+    }
   },
   location: {
     latitude: {

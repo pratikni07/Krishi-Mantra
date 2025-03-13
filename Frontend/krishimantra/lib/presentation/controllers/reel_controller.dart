@@ -43,8 +43,9 @@ class ReelController extends GetxController {
       hasMorePages.value = pagination['hasNextPage'];
       if (hasMorePages.value) {
         currentPage.value++;
-      } else {}
+      }
     } catch (e) {
+      // Handle error
     } finally {
       isLoading.value = false;
     }
@@ -124,6 +125,7 @@ class ReelController extends GetxController {
           .toList();
       reels.value = trendingReels;
     } catch (e) {
+      // Handle error
     } finally {
       isLoading.value = false;
     }

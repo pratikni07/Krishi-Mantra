@@ -12,7 +12,7 @@ const UserDetailSchema = new mongoose.Schema(
     },
     location: {
       type: {
-        type: String, // Must be 'Point'
+        type: String,
         enum: ["Point"],
         // required: true,
       },
@@ -51,7 +51,7 @@ const UserDetailSchema = new mongoose.Schema(
     ],
     subscription: {
       type: {
-        type: String, // Directly define 'type' as a String
+        type: String,
         enum: ["FREE", "PRIME", "MEGA"],
         default: "FREE",
       },

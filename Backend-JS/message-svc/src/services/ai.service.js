@@ -14,12 +14,11 @@ class AIService {
     this.groqFallbackModel = "llama2-70b-4096";
     this.geminiModel = "gemini-1.5-pro-vision-latest";
 
-    // Add rate limiting configuration
     this.rateLimitConfig = {
       maxRetries: 3,
-      initialDelay: 1000, // 1 second
-      maxDelay: 10000, // 10 seconds
-      backoffFactor: 2, // Exponential backoff multiplier
+      initialDelay: 1000,
+      maxDelay: 10000,
+      backoffFactor: 2,
     };
   }
 
@@ -181,8 +180,6 @@ Provide the response in ${preferredLanguage}.`,
       try {
         // Extract key information from previous messages for context
         const previousContext = this._extractContextFromMessages(messages);
-
-        // Create a conversation context from previous messages
         const conversationContext = messages
           .map(
             (msg) =>
