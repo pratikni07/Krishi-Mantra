@@ -6,17 +6,13 @@ class MessageLimitService {
   async checkAndUpdateMessageCount(userId) {
     try {
       const user = await require("../models/user.model").findOne({ userId });
-
-      // If user is premium, don't apply limits
       if (user && user.isPremium) {
         return {
           canSendMessage: true,
-          remainingMessages: null, // Unlimited
+          remainingMessages: null,
           isLimited: false,
         };
       }
-
-      // Get user's AI chats from today
       const AIChat = require("../models/ai-chat.model");
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -27,9 +23,7 @@ class MessageLimitService {
         { dailyMessageCount: 1 }
       ).sort({ "dailyMessageCount.lastResetDate": -1 });
 
-      // If no chats today or count needs to be reset
       if (!latestChat || latestChat.dailyMessageCount.lastResetDate < today) {
-        // Reset counter for today
         await AIChat.updateMany(
           { userId },
           {
@@ -46,7 +40,6 @@ class MessageLimitService {
         };
       }
 
-      // Check if user has reached daily limit
       const currentCount = latestChat.dailyMessageCount.count;
       if (currentCount >= this.FREE_DAILY_LIMIT) {
         return {

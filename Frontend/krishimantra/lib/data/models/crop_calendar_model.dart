@@ -98,9 +98,11 @@ class ExpectedOutcomes {
   }
 }
 
+// ... existing code ...
+
 class Activity {
   final Timing timing;
-  final String? activityId;
+  final ActivityId? activityId; // Change from String? to ActivityId?
   final String instructions;
   final String importance;
   final String id;
@@ -116,13 +118,32 @@ class Activity {
   factory Activity.fromJson(Map<String, dynamic> json) {
     return Activity(
       timing: Timing.fromJson(json['timing']),
-      activityId: json['activityId'],
+      activityId: json['activityId'] != null ? ActivityId.fromJson(json['activityId']) : null,
       instructions: json['instructions'],
       importance: json['importance'],
       id: json['_id'],
     );
   }
 }
+
+class ActivityId {
+  final String id;
+  final String name;
+
+  ActivityId({
+    required this.id,
+    required this.name,
+  });
+
+  factory ActivityId.fromJson(Map<String, dynamic> json) {
+    return ActivityId(
+      id: json['_id'],
+      name: json['name'],
+    );
+  }
+}
+
+// ... existing code ...
 
 class Timing {
   final int week;

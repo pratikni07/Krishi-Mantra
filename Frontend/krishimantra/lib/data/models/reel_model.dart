@@ -28,17 +28,25 @@ class ReelModel {
   });
 
   factory ReelModel.fromJson(Map<String, dynamic> json) {
+    // Ensure the like field has the correct structure with isLiked
+    final likeData = json['like'] ?? {};
+    if (likeData is Map<String, dynamic>) {
+      // Make sure isLiked is properly handled
+      likeData['isLiked'] = likeData['isLiked'] ?? false;
+      likeData['count'] = likeData['count'] ?? 0;
+    }
+
     return ReelModel(
       id: json['_id'],
       userId: json['userId'],
       userName: json['userName'],
-      profilePhoto: json['profilePhoto'],
-      description: json['description'],
+      profilePhoto: json['profilePhoto'] ?? '',
+      description: json['description'] ?? '',
       mediaUrl: json['mediaUrl'],
-      like: json['like'],
-      comment: json['comment'],
-      location: json['location'],
-      date: DateTime.parse(json['date']),
+      like: likeData,
+      comment: json['comment'] ?? {'count': 0},
+      location: json['location'] ?? {},
+      date: DateTime.parse(json['date'] ?? json['createdAt']),
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),
     );

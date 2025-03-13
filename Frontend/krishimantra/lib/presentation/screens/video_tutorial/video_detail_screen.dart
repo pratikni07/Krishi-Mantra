@@ -31,6 +31,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
   final GlobalKey<State<StatefulWidget>> _commentSectionKey = GlobalKey();
   String? _replyingToCommentId;
   String? _replyingToUserName;
+  final RxBool _isLikeLoading = false.obs;
 
   @override
   void initState() {
@@ -165,95 +166,152 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        const SizedBox(height: 4),
+
+                        // Views and upload date in one line
+                        Text(
+                          '${_formatViews(video.views.count)} views • ${_formatDate(video.createdAt)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[800],
+                          ),
+                        ),
                         const SizedBox(height: 12),
 
-                        // Action buttons (like, comment, share)
+                        // Like, comment, share icons in one line
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            // Like button
-                            _buildActionButton(
-                              icon: controller.currentVideo.value?.likes.users
-                                          .contains(controller.currentUserId) ??
-                                      false
-                                  ? Icons.favorite
-                                  : Icons.favorite_border,
-                              label: '${_formatCount(video.likes.count)}',
-                              color: controller.currentVideo.value?.likes.users
-                                          .contains(controller.currentUserId) ??
-                                      false
-                                  ? Colors.red
-                                  : Colors.grey,
-                              onTap: () {
-                                controller.toggleVideoLike(video.id);
-                              },
-                            ),
-
-                            // Comment button
-                            _buildActionButton(
-                              icon: Icons.comment,
-                              label: '${_formatCount(video.comments.count)}',
-                              color: Colors.grey,
-                              onTap: () {
-                                // Scroll to comments section
-                                Scrollable.ensureVisible(
-                                  _commentSectionKey.currentContext!,
-                                  duration: const Duration(milliseconds: 300),
-                                );
-                              },
-                            ),
-
-                            // Share button
-                            _buildActionButton(
-                              icon: Icons.share,
-                              label: 'Share',
-                              color: Colors.grey,
-                              onTap: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  backgroundColor: Colors.transparent,
-                                  builder: (context) => ShareBottomSheet(
-                                    postUrl: video.videoUrl,
+                            // Likes
+                            Column(
+                              children: [
+                                GestureDetector(
+                                  onTap: _isLikeLoading.value
+                                      ? null
+                                      : () async {
+                                          _isLikeLoading.value = true;
+                                          try {
+                                            await controller
+                                                .toggleLike(widget.videoId);
+                                          } finally {
+                                            _isLikeLoading.value = false;
+                                          }
+                                        },
+                                  child: Obx(
+                                    () => Icon(
+                                      controller.currentVideo.value?.likes.users
+                                                  .contains(controller
+                                                      .currentUserId) ==
+                                              true
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      color: controller.currentVideo.value
+                                                  ?.likes.users
+                                                  .contains(controller
+                                                      .currentUserId) ==
+                                              true
+                                          ? Colors.red
+                                          : Colors.grey[700],
+                                      size: 22,
+                                    ),
                                   ),
-                                );
-                              },
+                                ),
+                                const SizedBox(height: 4),
+                                Obx(() => Text(
+                                      '${controller.currentVideo.value?.likes.count ?? 0}',
+                                      style: TextStyle(
+                                        color: Colors.grey[800],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    )),
+                              ],
+                            ),
+
+                            // Comments
+                            Column(
+                              children: [
+                                Icon(
+                                  Icons.comment_outlined,
+                                  color: Colors.grey[700],
+                                  size: 22,
+                                ),
+                                const SizedBox(height: 4),
+                                Obx(() => Text(
+                                      '${controller.comments.length}',
+                                      style: TextStyle(
+                                        color: Colors.grey[800],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    )),
+                              ],
+                            ),
+
+                            // Share
+                            Column(
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.share_outlined,
+                                    color: Colors.grey[700],
+                                    size: 22,
+                                  ),
+                                  onPressed: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) => ShareBottomSheet(
+                                        postUrl: video.videoUrl,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 4),
+                              ],
                             ),
                           ],
                         ),
+
+                        // const Divider(height: 32),
+
+                        // // Action buttons (like, comment, share)
+                        // Row(
+                        //   mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        //   children: [
+                        //     // Comment button
+                        //     _buildActionButton(
+                        //       icon: Icons.comment,
+                        //       label: '${_formatCount(video.comments.count)}',
+                        //       color: Colors.grey,
+                        //       onTap: () {
+                        //         // Scroll to comments section
+                        //         Scrollable.ensureVisible(
+                        //           _commentSectionKey.currentContext!,
+                        //           duration: const Duration(milliseconds: 300),
+                        //         );
+                        //       },
+                        //     ),
+
+                        //     // Share button
+                        //     _buildActionButton(
+                        //       icon: Icons.share,
+                        //       label: 'Share',
+                        //       color: Colors.grey,
+                        //       onTap: () {
+                        //         showModalBottomSheet(
+                        //           context: context,
+                        //           isScrollControlled: true,
+                        //           backgroundColor: Colors.transparent,
+                        //           builder: (context) => ShareBottomSheet(
+                        //             postUrl: video.videoUrl,
+                        //           ),
+                        //         );
+                        //       },
+                        //     ),
+                        //   ],
+                        // ),
 
                         const Divider(height: 24),
-
-                        // Views and date
-                        Row(
-                          children: [
-                            Text(
-                              '${_formatViews(video.views.count)} views',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '•',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              timeago.format(video.createdAt),
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
 
                         // Description with show more/less and tags
                         if (video.description != null)
@@ -587,7 +645,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
         // Reply button
         Padding(
           padding: const EdgeInsets.only(left: 44),
-          child: TextButton.icon(
+          child: TextButton(
             onPressed: () {
               setState(() {
                 _replyingToCommentId = comment['_id'];
@@ -602,12 +660,12 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                 });
               });
             },
-            icon: const Icon(Icons.reply, size: 16),
-            label: const Text('Reply'),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.grey[700],
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: const Size(50, 30),
+            child: const Text(
+              'Reply',
+              style: TextStyle(
+                color: AppColors.green,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
@@ -714,50 +772,37 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-
-                // Like button for comment
-                Row(
-                  children: [
-                    InkWell(
-                      onTap: () async {
-                        try {
-                          await controller.toggleCommentLike(comment['_id']);
-                        } catch (e) {
-                          Get.snackbar('Error', 'Failed to like comment');
-                        }
-                      },
-                      child: Row(
-                        children: [
-                          Icon(
-                            (comment['likes']['users'] as List)
-                                    .contains(controller.currentUserId)
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                            size: 16,
-                            color: (comment['likes']['users'] as List)
-                                    .contains(controller.currentUserId)
-                                ? Colors.red
-                                : Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatCount(comment['likes']['count'] ?? 0),
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  void share(String title, String videoUrl) async {
+    try {
+      await Share.share(
+        'Check out this video: $title\n$videoUrl',
+        subject: 'Interesting video from KrishiMantra',
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Could not share the video',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
+  String formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K';
+    } else {
+      return count.toString();
+    }
   }
 }
 
@@ -862,10 +907,29 @@ String _formatViews(int views) {
 }
 
 String _formatCount(int count) {
-  if (count >= 1000000) {
-    return '${(count / 1000000).toStringAsFixed(1)}M';
-  } else if (count >= 1000) {
-    return '${(count / 1000).toStringAsFixed(1)}K';
+  if (count < 1000) return count.toString();
+  if (count < 1000000) return '${(count / 1000).toStringAsFixed(1)}K';
+  return '${(count / 1000000).toStringAsFixed(1)}M';
+}
+
+String _formatDate(DateTime date) {
+  final now = DateTime.now();
+  final difference = now.difference(date);
+
+  if (difference.inDays == 0) {
+    if (difference.inHours == 0) {
+      return '${difference.inMinutes}m ago';
+    }
+    return '${difference.inHours}h ago';
   }
-  return count.toString();
+  if (difference.inDays < 7) {
+    return '${difference.inDays}d ago';
+  }
+  if (difference.inDays < 30) {
+    return '${(difference.inDays / 7).floor()}w ago';
+  }
+  if (difference.inDays < 365) {
+    return '${(difference.inDays / 30).floor()}mo ago';
+  }
+  return '${(difference.inDays / 365).floor()}y ago';
 }

@@ -10,6 +10,8 @@ const {
   getConsultant,
   getUserGrowthStats,
   getDashboardStats,
+  getUserByUsername,
+  searchUsersByPartialUsername,
 } = require("../controller/UserController");
 
 router.get("/users", getUserByPage);
@@ -20,5 +22,9 @@ router.put("/details", updateUserDetails);
 router.put("/subscription", updateSubscription);
 
 router.get("/consultant", getConsultant);
+
+router.get("/users/username/:username", getUserByUsername);
+
+router.get("/username/search", searchUsersByPartialUsername);
 
 module.exports = router;

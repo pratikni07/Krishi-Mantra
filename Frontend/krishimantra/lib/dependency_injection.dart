@@ -32,6 +32,7 @@ import 'presentation/controllers/scheme_controller.dart';
 import 'presentation/screens/feed/widgets/feed_card.dart';
 import 'package:krishimantra/data/repositories/presigned_url_repository.dart';
 import 'package:krishimantra/presentation/controllers/presigned_url_controller.dart';
+import 'package:krishimantra/data/repositories/notification_repository.dart';
 
 void initDependencies() {
   // Initialize Dio and ApiService first
@@ -48,13 +49,17 @@ void initDependencies() {
   Get.lazyPut(() => FeedRepository(Get.find<ApiService>()), fenix: true);
   Get.lazyPut(() => AdsRepository(Get.find<ApiService>()), fenix: true);
   Get.lazyPut(() => MessageRepository(Get.find<ApiService>()), fenix: true);
-  Get.lazyPut(() => ReelRepository(Get.find<ApiService>(), Get.find<UserService>()), fenix: true);
-  Get.lazyPut(() => VideoTutorialRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(
+      () => ReelRepository(Get.find<ApiService>(), Get.find<UserService>()),
+      fenix: true);
+  Get.lazyPut(() => VideoTutorialRepository(Get.find<ApiService>()),
+      fenix: true);
   Get.lazyPut(() => SchemeRepository(Get.find<ApiService>()), fenix: true);
   Get.lazyPut(() => CompanyRepository(Get.find<ApiService>()), fenix: true);
   Get.lazyPut(() => ProductRepository(Get.find<ApiService>()), fenix: true);
   Get.lazyPut(() => AIChatRepository(Get.find<ApiService>()), fenix: true);
-  Get.lazyPut(() => PresignedUrlRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(() => PresignedUrlRepository(Get.find<ApiService>()),
+      fenix: true);
   Get.lazyPut(() => CropRepository(Get.find<ApiService>()), fenix: true);
 
   // Initialize controllers with fenix: true
@@ -62,7 +67,7 @@ void initDependencies() {
     () => AuthController(Get.find<AuthRepository>()),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => FeedController(
       Get.find<FeedRepository>(),
@@ -70,12 +75,12 @@ void initDependencies() {
     ),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => AdsController(Get.find<AdsRepository>()),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => MessageController(
       Get.find<MessageRepository>(),
@@ -83,12 +88,12 @@ void initDependencies() {
     ),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => ReelController(Get.find<ReelRepository>()),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => VideoTutorialController(
       Get.find<VideoTutorialRepository>(),
@@ -96,22 +101,22 @@ void initDependencies() {
     ),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => SchemeController(Get.find<SchemeRepository>()),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => CompanyController(Get.find<CompanyRepository>()),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => ProductController(Get.find<ProductRepository>()),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => AIChatController(
       Get.find<AIChatRepository>(),
@@ -119,12 +124,12 @@ void initDependencies() {
     ),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => PresignedUrlController(Get.find<PresignedUrlRepository>()),
     fenix: true,
   );
-  
+
   Get.lazyPut(
     () => CropController(Get.find<CropRepository>()),
     fenix: true,

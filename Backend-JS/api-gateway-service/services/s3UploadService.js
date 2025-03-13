@@ -26,6 +26,7 @@ const validateContentType = (contentType) => {
     "chat_video",
     "chat_document",
     "chat_audio",
+    "notification",
   ];
 
   if (!contentType || !allowedContentTypes.includes(contentType)) {

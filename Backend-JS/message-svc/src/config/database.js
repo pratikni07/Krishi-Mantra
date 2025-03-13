@@ -12,14 +12,6 @@ class Database {
         useNewUrlParser: true,
         useUnifiedTopology: true,
         serverSelectionTimeoutMS: 5000,
-        // useNewUrlParser: true,
-        // useUnifiedTopology: true,
-        // maxPoolSize: 100,
-        // socketTimeoutMS: 30000,
-        // keepAlive: true,
-        // autoIndex: true,
-        // serverSelectionTimeoutMS: 5000,
-        // heartbeatFrequencyMS: 10000,
       };
 
       await mongoose.connect(this.mongoURI, options);

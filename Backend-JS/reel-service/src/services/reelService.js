@@ -30,10 +30,11 @@ class ReelService {
     }
   }
 
-  static async getReels(page = 1, limit = 10, filters = {}) {
+  static async getReels(page = 1, limit = 10, filters = {}, userId = null) {
     const cacheKey = `reels:page:${page}:limit:${limit}:${JSON.stringify(
       filters
-    )}`;
+    )}:user:${userId || 'guest'}`;
+    
     const cachedData = await redis.get(cacheKey);
 
     if (cachedData) {
@@ -46,6 +47,19 @@ class ReelService {
       Reel.find(filters).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Reel.countDocuments(filters),
     ]);
+
+    // Enhance reels with like status if userId is provided
+    if (userId) {
+      await Promise.all(
+        reels.map(async (reel) => {
+          const like = await Like.findOne({ reel: reel._id, userId });
+          reel.like = {
+            ...reel.like,
+            isLiked: !!like,
+          };
+        })
+      );
+    }
 
     const result = PaginationUtils.formatPaginationResponse(
       reels,
@@ -109,8 +123,8 @@ class ReelService {
     return result;
   }
 
-  static async getTrendingReels(page = 1, limit = 10) {
-    const cacheKey = `reels:trending:${page}:${limit}`;
+  static async getTrendingReels(page = 1, limit = 10, userId = null) {
+    const cacheKey = `reels:trending:${page}:${limit}:user:${userId || 'guest'}`;
     const cachedData = await redis.get(cacheKey);
 
     if (cachedData) {
@@ -148,6 +162,19 @@ class ReelService {
       ]),
       Reel.countDocuments(),
     ]);
+
+    // Enhance reels with like status if userId is provided
+    if (userId) {
+      await Promise.all(
+        reels.map(async (reel) => {
+          const like = await Like.findOne({ reel: reel._id, userId });
+          reel.like = {
+            ...reel.like || {},
+            isLiked: !!like,
+          };
+        })
+      );
+    }
 
     const result = PaginationUtils.formatPaginationResponse(
       reels,
@@ -195,15 +222,16 @@ class ReelService {
         }
       );
 
-      // Clear relevant cache
-      const cachePatterns = [
-        `reel:${reelId}*`,
-        'reels:trending*',
-        `reels:user:${userData.userId}*`
-      ];
-      await Promise.all(cachePatterns.map(pattern => redis.del(pattern)));
+      // Clear ALL relevant cache keys
+      await redis.del(`reel:${reelId}`);
+      await redis.del(`reels:trending:*`);
+      await redis.del(`reels:user:${userData.userId}:*`);
+      await redis.del(`reels:page:*`);
 
-      return like;
+      return {
+        ...like.toObject(),
+        isLiked: true,
+      };
     } catch (error) {
       throw error;
     }
@@ -236,15 +264,16 @@ class ReelService {
         }
       );
 
-      // Clear relevant cache
-      const cachePatterns = [
-        `reel:${reelId}*`,
-        'reels:trending*',
-        `reels:user:${userId}*`
-      ];
-      await Promise.all(cachePatterns.map(pattern => redis.del(pattern)));
+      // Clear ALL relevant cache keys
+      await redis.del(`reel:${reelId}`);
+      await redis.del(`reels:trending:*`);
+      await redis.del(`reels:user:${userId}:*`);
+      await redis.del(`reels:page:*`);
 
-      return deletedLike;
+      return {
+        ...deletedLike.toObject(),
+        isLiked: false,
+      };
     } catch (error) {
       throw error;
     }
@@ -389,8 +418,8 @@ class ReelService {
     return comment;
   }
 
-  static async getUserReels(userId, page = 1, limit = 10) {
-    const cacheKey = `reels:user:${userId}:${page}:${limit}`;
+  static async getUserReels(userId, page = 1, limit = 10, viewerId = null) {
+    const cacheKey = `reels:user:${userId}:${page}:${limit}:viewer:${viewerId || 'guest'}`;
     const cachedData = await redis.get(cacheKey);
 
     if (cachedData) {
@@ -407,6 +436,19 @@ class ReelService {
         .lean(),
       Reel.countDocuments({ userId }),
     ]);
+
+    // Enhance reels with like status if viewerId is provided
+    if (viewerId) {
+      await Promise.all(
+        reels.map(async (reel) => {
+          const like = await Like.findOne({ reel: reel._id, userId: viewerId });
+          reel.like = {
+            ...reel.like,
+            isLiked: !!like,
+          };
+        })
+      );
+    }
 
     const result = PaginationUtils.formatPaginationResponse(
       reels,

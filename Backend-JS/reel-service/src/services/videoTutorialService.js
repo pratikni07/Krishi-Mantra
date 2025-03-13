@@ -23,51 +23,69 @@ class VideoTutorialService {
 
   static async getVideos({ page = 1, limit = 12, category, sort = "recent" }) {
     const cacheKey = `videos:${category || "all"}:${sort}:${page}:${limit}`;
-    const cachedData = await redis.get(cacheKey);
+    
+    try {
+      const query = category ? { category } : {};
+      const sortOptions = {
+        recent: { createdAt: -1 },
+        popular: { "views.count": -1 },
+        trending: { "likes.count": -1 },
+      };
 
-    if (cachedData) {
-      return JSON.parse(cachedData);
+      const [videos, total] = await Promise.all([
+        VideoTutorial.find(query)
+          .sort(sortOptions[sort])
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .lean(),
+        VideoTutorial.countDocuments(query),
+      ]);
+
+      const result = PaginationUtils.formatPaginationResponse(
+        videos,
+        page,
+        limit,
+        total
+      );
+
+      // Write-through caching - update cache immediately
+      await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+      return result;
+    } catch (error) {
+      // If there's an error, try to get from cache
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        return JSON.parse(cachedData);
+      }
+      throw error;
     }
-
-    const query = category ? { category } : {};
-    const sortOptions = {
-      recent: { createdAt: -1 },
-      popular: { "views.count": -1 },
-      trending: { "likes.count": -1 },
-    };
-
-    const [videos, total] = await Promise.all([
-      VideoTutorial.find(query)
-        .sort(sortOptions[sort])
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      VideoTutorial.countDocuments(query),
-    ]);
-
-    const result = PaginationUtils.formatPaginationResponse(
-      videos,
-      page,
-      limit,
-      total
-    );
-
-    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
-    return result;
   }
 
   static async getVideo(videoId, userId = null) {
-    const video = await VideoTutorial.findById(videoId);
-    
-    if (!video) return null;
+    try {
+      const video = await VideoTutorial.findById(videoId);
+      if (!video) return null;
 
-    if (userId && !video.views.unique.includes(userId)) {
-      video.views.count += 1;
-      video.views.unique.push(userId);
-      await video.save();
+      if (userId && !video.views.unique.includes(userId)) {
+        video.views.count += 1;
+        video.views.unique.push(userId);
+        await video.save();
+
+        // Clear all related caches
+        await redis.del(`video:${videoId}`);
+        await redis.del(`videos:category:${video.category}`);
+        await redis.del(`videos:user:${video.userId}`);
+        // Clear all videos cache patterns
+        const keys = await redis.keys('videos:*');
+        if (keys.length > 0) {
+          await redis.del(keys);
+        }
+      }
+
+      return video;
+    } catch (error) {
+      throw error;
     }
-
-    return video;
   }
 
   static async updateVideo(videoId, userId, updateData) {
@@ -115,31 +133,42 @@ class VideoTutorialService {
   }
 
   static async toggleLike(videoId, userId) {
-    const video = await VideoTutorial.findById(videoId);
+    try {
+      const video = await VideoTutorial.findById(videoId);
+      if (!video) {
+        throw new Error("Video not found");
+      }
 
-    if (!video) {
-      throw new Error("Video not found");
+      const userLiked = video.likes.users.includes(userId);
+      if (userLiked) {
+        // Unlike
+        video.likes.count -= 1;
+        video.likes.users = video.likes.users.filter(id => id !== userId);
+      } else {
+        // Like
+        video.likes.count += 1;
+        video.likes.users.push(userId);
+      }
+
+      await video.save();
+
+      // Clear all related caches
+      await redis.del(`video:${videoId}`);
+      await redis.del(`videos:category:${video.category}`);
+      await redis.del(`videos:user:${video.userId}`);
+      // Clear all videos cache patterns
+      const keys = await redis.keys('videos:*');
+      if (keys.length > 0) {
+        await redis.del(keys);
+      }
+
+      return {
+        liked: !userLiked,
+        likesCount: video.likes.count
+      };
+    } catch (error) {
+      throw error;
     }
-
-    const userLiked = video.likes.users.includes(userId);
-
-    if (userLiked) {
-      video.likes.count -= 1;
-      video.likes.users = video.likes.users.filter(id => id !== userId);
-    } else {
-      video.likes.count += 1;
-      video.likes.users.push(userId);
-    }
-
-    await video.save();
-
-    // Clear relevant cache
-    await redis.del(`videos:category:${video.category}`);
-
-    return {
-      liked: !userLiked,
-      likesCount: video.likes.count,
-    };
   }
 
   static async getRelatedVideos(videoId, limit = 8) {

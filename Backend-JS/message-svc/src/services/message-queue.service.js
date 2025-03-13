@@ -37,7 +37,7 @@ class MessageQueueService {
   }
 
   async processMessageDelivery(data) {
-    // Implement message delivery logic
+    // message delivery logic
   }
 }
 

@@ -26,7 +26,14 @@ class ReelController {
 
   static getReels = catchAsync(async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
-    const reels = await ReelService.getReels(parseInt(page), parseInt(limit));
+    const userId = req.body.userId || req.query.userId || null;  // Get userId from request if available
+
+    const reels = await ReelService.getReels(
+      parseInt(page), 
+      parseInt(limit), 
+      {}, 
+      userId
+    );
 
     res.json({
       status: "success",
@@ -59,9 +66,12 @@ class ReelController {
 
   static getTrendingReels = catchAsync(async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
+    const userId = req.body.userId || req.query.userId || null;  // Get userId from request if available
+    
     const reels = await ReelService.getTrendingReels(
       parseInt(page),
-      parseInt(limit)
+      parseInt(limit),
+      userId
     );
 
     res.json({
@@ -189,11 +199,13 @@ class ReelController {
   static getUserReels = catchAsync(async (req, res) => {
     const { userId } = req.params;
     const { page = 1, limit = 10 } = req.query;
+    const viewerId = req.body.userId || req.query.userId || null;  // Current user viewing the reels
 
     const reels = await ReelService.getUserReels(
       userId,
       parseInt(page),
-      parseInt(limit)
+      parseInt(limit),
+      viewerId
     );
 
     res.json({

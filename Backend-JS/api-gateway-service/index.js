@@ -28,8 +28,23 @@ console.log("Configured CORS allowed origins:", allowedOrigins);
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+
+      if (
+        allowedOrigins.indexOf(origin) !== -1 ||
+        process.env.NODE_ENV === "development"
+      ) {
+        callback(null, true);
+      } else {
+        console.log("Blocked by CORS:", origin);
+        callback(null, true);
+      }
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -41,7 +56,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add console.log to debug environment variables
 console.log("Environment Variables:", {
   MAIN_SERVICE_URL: process.env.MAIN_SERVICE_URL,
   MESSAGE_SERVICE_URL: process.env.MESSAGE_SERVICE_URL,
@@ -69,28 +83,19 @@ const createServiceProxy = (serviceName, serviceUrl, pathRewrite) => {
     pathRewrite: pathRewrite,
     on: {
       proxyReq: (proxyReq, req, res) => {
-        // Log the incoming request
         console.log("--------------------------------");
         console.log("Request received:", req.method, req.url);
 
-        // Handle POST/PUT/PATCH requests with body
         if (["POST", "PUT", "PATCH"].includes(req.method) && req.body) {
           const bodyData = JSON.stringify(req.body);
           console.log("Body data:", bodyData);
-
-          // Set headers before writing body
           proxyReq.setHeader("Content-Type", "application/json");
           proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
-
-          // Add forwarded headers
           proxyReq.setHeader("x-forwarded-for", req.ip);
           proxyReq.setHeader("x-forwarded-host", req.headers.host);
           proxyReq.setHeader("x-forwarded-proto", req.protocol);
-
-          // Write body data
           proxyReq.write(bodyData);
         } else {
-          // For non-body requests, just set forwarded headers
           proxyReq.setHeader("x-forwarded-for", req.ip);
           proxyReq.setHeader("x-forwarded-host", req.headers.host);
           proxyReq.setHeader("x-forwarded-proto", req.protocol);
@@ -140,12 +145,18 @@ try {
     process.env.REEL_SERVICE_URL,
     { "^/api/reels": "" }
   );
+  const notificationServiceProxy = createServiceProxy(
+    "Notification Service",
+    process.env.NOTIFICATION_SERVICE_URL,
+    { "^/api/notification": "" }
+  );
 
   // Routes
   app.use("/api/main", mainServiceProxy);
   app.use("/api/messages", messageServiceProxy);
   app.use("/api/feed", feedServiceProxy);
   app.use("/api/reels", reelServiceProxy);
+  app.use("/api/notification", notificationServiceProxy);
   app.use("/api/upload", uploadRoutes);
 } catch (error) {
   console.error("Error setting up proxies:", error.message);
@@ -160,7 +171,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
   console.error("Global error:", err);
   res.status(500).json({

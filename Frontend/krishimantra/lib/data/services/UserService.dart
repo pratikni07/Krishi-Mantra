@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 class UserService {
   final FlutterSecureStorage _storage = FlutterSecureStorage();
   final String _key = 'user_data';
+  final String _tokenKey = 'auth_token';
   UserModel? _currentUser;
 
   // Getter for current user
@@ -24,6 +25,14 @@ class UserService {
       return _currentUser;
     }
     return null;
+  }
+
+  Future<void> saveToken(String token) async {
+    await _storage.write(key: _tokenKey, value: token);
+  }
+
+  Future<String?> getToken() async {
+    return await _storage.read(key: _tokenKey);
   }
 
   Future<void> clearAllData() async {

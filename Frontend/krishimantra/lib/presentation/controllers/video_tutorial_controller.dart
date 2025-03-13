@@ -116,9 +116,48 @@ class VideoTutorialController extends GetxController {
       isLoading.value = true;
       hasError.value = false;
 
-      final video = await _repository.getVideoById(videoId);
+      // Get non-null user ID or use a placeholder for anonymous views
+      final userId = currentUserId ?? 'anonymous';
+      
+      final videoData = await _repository.getVideoById(videoId);
+      VideoTutorial video = VideoTutorial.fromJson(videoData);
+      
+      // Check if the user has already viewed this video
+      bool alreadyViewed = video.views.users.contains(userId);
+      
+      // Only update view count on first view for this user
+      if (!alreadyViewed && currentUserId != null) {
+        // Create updated views with the user added and count increased
+        VideoStats updatedViews = VideoStats(
+          count: video.views.count + 1,
+          users: [...video.views.users, userId],
+        );
+        
+        // Create a new video object with the updated views
+        video = VideoTutorial(
+          id: video.id,
+          userId: video.userId,
+          userName: video.userName,
+          profilePhoto: video.profilePhoto,
+          title: video.title,
+          description: video.description,
+          thumbnail: video.thumbnail,
+          videoUrl: video.videoUrl,
+          videoType: video.videoType,
+          duration: video.duration,
+          tags: video.tags,
+          category: video.category,
+          visibility: video.visibility,
+          likes: video.likes,
+          views: updatedViews,
+          comments: video.comments,
+          createdAt: video.createdAt,
+          updatedAt: video.updatedAt,
+        );
+      }
+      
       currentVideo.value = video;
-
+      
       // Fetch related videos
       final related = await _repository.getRelatedVideos(videoId);
       relatedVideos.value = related;
@@ -126,8 +165,8 @@ class VideoTutorialController extends GetxController {
       // Fetch comments
       await fetchComments(videoId);
     } catch (e) {
+      print('Error loading video details: $e');
       hasError.value = true;
-      errorMessage.value = e.toString();
     } finally {
       isLoading.value = false;
     }
@@ -185,46 +224,96 @@ class VideoTutorialController extends GetxController {
     }
   }
 
-  Future<void> toggleVideoLike(String videoId) async {
+  Future<void> toggleLike(String videoId) async {
     try {
-      await _repository.toggleLike(videoId);
-
-      // Update local state
+      // Need non-null user ID
+      if (currentUserId == null) {
+        Get.snackbar('Error', 'You need to be logged in to like videos');
+        return;
+      }
+      
+      // Store current state
       final video = currentVideo.value;
-      if (video != null) {
-        final userId = currentUserId;
-        if (userId != null) {
-          final hasLiked = video.likes.users.contains(userId);
-          final updatedLikes = VideoStats(
-            count: hasLiked ? video.likes.count - 1 : video.likes.count + 1,
-            users: hasLiked
-                ? video.likes.users.where((id) => id != userId).toList()
-                : [...video.likes.users, userId],
-          );
-          currentVideo.value = VideoTutorial(
-            id: video.id,
-            userId: video.userId,
-            userName: video.userName,
-            profilePhoto: video.profilePhoto,
-            title: video.title,
-            description: video.description,
-            thumbnail: video.thumbnail,
-            videoUrl: video.videoUrl,
-            videoType: video.videoType,
-            duration: video.duration,
-            tags: video.tags,
-            category: video.category,
-            visibility: video.visibility,
-            likes: updatedLikes,
-            views: video.views,
-            comments: video.comments,
-            createdAt: video.createdAt,
-            updatedAt: video.updatedAt,
-          );
-        }
+      if (video == null) return;
+      
+      // Determine current like state
+      final bool isCurrentlyLiked = video.likes.users.contains(currentUserId!);
+      
+      // Apply optimistic update immediately
+      VideoStats updatedLikes = VideoStats(
+        count: isCurrentlyLiked ? video.likes.count - 1 : video.likes.count + 1,
+        users: isCurrentlyLiked 
+          ? video.likes.users.where((id) => id != currentUserId).toList()
+          : [...video.likes.users, currentUserId!],
+      );
+      
+      // Update UI immediately with optimistic change
+      currentVideo.value = VideoTutorial(
+        id: video.id,
+        userId: video.userId,
+        userName: video.userName,
+        profilePhoto: video.profilePhoto,
+        title: video.title,
+        description: video.description,
+        thumbnail: video.thumbnail,
+        videoUrl: video.videoUrl,
+        videoType: video.videoType,
+        duration: video.duration,
+        tags: video.tags,
+        category: video.category,
+        visibility: video.visibility,
+        likes: updatedLikes,
+        views: video.views,
+        comments: video.comments,
+        createdAt: video.createdAt,
+        updatedAt: video.updatedAt,
+      );
+      currentVideo.refresh();
+      
+      // Call the API
+      final response = await _repository.toggleLike(videoId);
+      
+      // If API response differs from our optimistic update, correct the UI
+      final serverLiked = response['data']?['liked'] ?? !isCurrentlyLiked;
+      final serverLikesCount = response['data']?['likesCount'] ?? updatedLikes.count;
+      
+      if (serverLiked != !isCurrentlyLiked || serverLikesCount != updatedLikes.count) {
+        // Server response different from our prediction, update UI with correct data
+        VideoStats serverLikes = VideoStats(
+          count: serverLikesCount,
+          users: serverLiked 
+            ? [...video.likes.users.where((id) => id != currentUserId).toList(), currentUserId!]
+            : video.likes.users.where((id) => id != currentUserId).toList(),
+        );
+        
+        currentVideo.value = VideoTutorial(
+          id: video.id,
+          userId: video.userId,
+          userName: video.userName,
+          profilePhoto: video.profilePhoto,
+          title: video.title,
+          description: video.description,
+          thumbnail: video.thumbnail,
+          videoUrl: video.videoUrl,
+          videoType: video.videoType,
+          duration: video.duration,
+          tags: video.tags,
+          category: video.category,
+          visibility: video.visibility,
+          likes: serverLikes,
+          views: video.views,
+          comments: video.comments,
+          createdAt: video.createdAt,
+          updatedAt: video.updatedAt,
+        );
+        currentVideo.refresh();
       }
     } catch (e) {
+      print('Error toggling like: $e');
       Get.snackbar('Error', 'Failed to toggle like');
+      
+      // Revert to original state on error
+      await loadVideoDetails(videoId);
     }
   }
 

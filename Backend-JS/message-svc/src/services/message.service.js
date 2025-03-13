@@ -41,16 +41,12 @@ class MessageService {
     if (!senderInfo) {
       throw new Error("Access denied");
     }
-
-    // For group chats, check admin privileges
     if (chat.type === "group") {
       const group = await Group.findOne({ chatId });
       if (group.onlyAdminCanMessage && !group.admin.includes(sender)) {
         throw new Error("Only admins can send messages");
       }
     }
-
-    // Create message
     const message = await Message.create({
       chatId,
       sender,
@@ -69,8 +65,6 @@ class MessageService {
         },
       ],
     });
-
-    // Update last message in chat
     await Chat.findByIdAndUpdate(chatId, {
       lastMessage: message._id,
       $inc: { [`unreadCount.${sender}`]: 1 },

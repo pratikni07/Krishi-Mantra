@@ -33,33 +33,24 @@ class VideoTutorialRepository {
     }
   }
 
-  Future<VideoTutorial> getVideoById(String id) async {
+  Future<Map<String, dynamic>> getVideoById(String videoId) async {
     try {
-      final response = await _apiService.get('/api/reels/videos/$id');
+      final userId = await _userService.getUserId();
 
-      if (response.data is Map &&
-          response.data['status'] == 'success' &&
+      final response = await _apiService.get(
+        '/api/reels/videos/$videoId',
+        queryParameters: userId != null ? {'userId': userId} : {},
+      );
+
+      if (response.data['status'] == 'success' &&
           response.data['data'] != null) {
-        final videoData = response.data['data'];
-        // Convert the data to Map<String, dynamic> to ensure type safety
-        final Map<String, dynamic> videoMap = {
-          ...Map<String, dynamic>.from(videoData),
-          // Ensure nested objects are properly structured
-          'likes': videoData['likes'] ?? {'count': 0, 'users': []},
-          'views': videoData['views'] ?? {'count': 0, 'unique': []},
-          'comments': videoData['comments'] ?? {'count': 0},
-          // Convert tags to List<String> if it's a single string
-          'tags': videoData['tags'] is String
-              ? videoData['tags'].split(',').map((tag) => tag.trim()).toList()
-              : List<String>.from(videoData['tags'] ?? []),
-        };
-
-        return VideoTutorial.fromJson(videoMap);
+        return response.data['data'];
+      } else {
+        throw Exception('Failed to get video details');
       }
-
-      throw Exception('Invalid video data structure');
     } catch (e) {
-      throw Exception('Failed to fetch video: $e');
+      print('Error getting video by ID: $e');
+      rethrow;
     }
   }
 
@@ -78,12 +69,26 @@ class VideoTutorialRepository {
     }
   }
 
-  Future<void> toggleLike(String videoId) async {
+  Future<Map<String, dynamic>> toggleLike(String videoId) async {
     try {
-      await _apiService
-          .post(ApiConstants.VIDEO_TUTORIAL_LIKE.replaceAll(':id', videoId));
+      final userId = await _userService.getUserId();
+      if (userId == null) {
+        throw Exception('User ID is null');
+      }
+
+      final response = await _apiService.post(
+        '/api/reels/videos/$videoId/like',
+        data: {
+          'userId': userId,
+          'userName':
+              '${await _userService.getFirstName()} ${await _userService.getLastName() ?? ''}',
+          'profilePhoto': await _userService.getImage(),
+        },
+      );
+      return response.data;
     } catch (e) {
-      throw Exception('Failed to toggle like: $e');
+      print('Error in toggleLike: $e');
+      rethrow;
     }
   }
 

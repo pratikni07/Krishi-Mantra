@@ -5,7 +5,6 @@ const User = require("../model/User");
 //auth
 exports.auth = async (req, res, next) => {
   try {
-    //extract token
     const token =
       req.cookies.token ||
       req.body.token ||
@@ -16,11 +15,8 @@ exports.auth = async (req, res, next) => {
         message: "TOken is missing",
       });
     }
-
-    //verify the token
     try {
       const decode = jwt.verify(token, process.env.JWT_SECRET);
-      // console.log("decode= ", decode);
       req.user = decode;
     } catch (err) {
       return res.status(401).json({

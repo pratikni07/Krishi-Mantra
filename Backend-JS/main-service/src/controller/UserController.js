@@ -177,7 +177,7 @@ exports.getUserByPage = async (req, res) => {
 
 exports.getUserById = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const { userId } = req.body;
     const user = await User.findById(userId);
     res.status(200).json({
       user,
@@ -336,6 +336,69 @@ exports.getConsultant = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch consultants",
+      error: error.message,
+    });
+  }
+};
+
+exports.getUserByUsername = async (req, res) => {
+  try {
+    const { username } = req.params;
+
+    // Find user by name field (assuming name is used as username)
+    const user = await User.findOne({ name: username }).populate(
+      "additionalDetails"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found with the provided username",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (error) {
+    console.error("Error fetching user by username:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch user",
+      error: error.message,
+    });
+  }
+};
+
+exports.searchUsersByPartialUsername = async (req, res) => {
+  try {
+    const { prefix } = req.query;
+
+    if (!prefix || prefix.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide at least 2 characters for search",
+      });
+    }
+
+    // Create a case-insensitive regex for the search prefix
+    const searchRegex = new RegExp(`^${prefix}`, "i");
+
+    // Find users where name starts with the provided prefix
+    const users = await User.find({ name: searchRegex })
+      .select("name image accountType") // Only return necessary fields
+      .limit(10); // Limit the number of results
+
+    return res.status(200).json({
+      success: true,
+      data: users,
+    });
+  } catch (error) {
+    console.error("Error searching users:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to search users",
       error: error.message,
     });
   }

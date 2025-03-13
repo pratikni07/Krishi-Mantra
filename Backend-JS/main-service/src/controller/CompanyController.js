@@ -3,7 +3,6 @@ const Product = require("../model/Products");
 
 exports.createCompany = async (req, res) => {
   try {
-    console.log(req.body);
     const company = new Company(req.body);
     await company.save();
     res.status(201).json({
