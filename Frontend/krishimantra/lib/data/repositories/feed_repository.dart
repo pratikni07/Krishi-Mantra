@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import '../models/feed_model.dart';
 import '../models/comment_modal.dart';
 import '../services/api_service.dart';
@@ -9,26 +8,26 @@ class FeedRepository {
 
   FeedRepository(this._apiService);
 
-  Future<Map<String, dynamic>> getFeeds({int page = 1, int limit = 10}) async {
-    try {
-      final response = await _apiService.get(
-        '/api/feed/feeds',
-        queryParameters: {'page': page, 'limit': limit},
-      );
+  // Future<Map<String, dynamic>> getFeeds({int page = 1, int limit = 10}) async {
+  //   try {
+  //     final response = await _apiService.get(
+  //       '/api/feed/feeds',
+  //       queryParameters: {'page': page, 'limit': limit},
+  //     );
 
-      final data = ApiHelper.handleResponse(response);
-      final List<FeedModel> feeds = (data['feeds'] as List)
-          .map((feed) => FeedModel.fromJson(feed))
-          .toList();
+  //     final data = ApiHelper.handleResponse(response);
+  //     final List<FeedModel> feeds = (data['feeds'] as List)
+  //         .map((feed) => FeedModel.fromJson(feed))
+  //         .toList();
 
-      return {
-        'feeds': feeds,
-        'pagination': data['pagination'],
-      };
-    } catch (e) {
-      throw ApiHelper.handleError(e);
-    }
-  }
+  //     return {
+  //       'feeds': feeds,
+  //       'pagination': data['pagination'],
+  //     };
+  //   } catch (e) {
+  //     throw ApiHelper.handleError(e);
+  //   }
+  // }
 
   // Get feed by ID with comments
   Future<FeedModel> getFeedById(String feedId,

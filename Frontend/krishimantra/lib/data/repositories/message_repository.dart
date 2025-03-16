@@ -1,5 +1,3 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import '../models/consultant_model.dart';
 import '../models/message_model.dart';
 import '../services/api_service.dart';
@@ -98,7 +96,7 @@ class MessageRepository {
       return (response.data as List)
           .map((message) => Message.fromJson(message))
           .toList();
-    } catch (e, stackTrace) {
+    } catch (e) {
       throw Exception('Failed to get messages: $e');
     }
   }

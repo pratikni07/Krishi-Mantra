@@ -1,6 +1,7 @@
+// ignore_for_file: unused_element
+
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
-import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../../core/constants/api_constants.dart';
@@ -111,7 +112,7 @@ class SocketService {
       if (!connected) {
         throw Exception('Failed to establish socket connection');
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       _errorController.add('Initialization error: $e');
       rethrow;
     }
@@ -157,7 +158,6 @@ class SocketService {
   void setupSocketListeners() {
     socket?.onConnect((_) async {
       try {
-        final user = await _userService.getUser();
         // Debug log
         isConnected = true;
         isReconnecting = false;
@@ -614,7 +614,7 @@ class SocketService {
               messageData['weather'] ?? {'temperature': 25, 'humidity': 60},
           'userId': user.id,
           'userName': '${user.firstName} ${user.lastName}'.trim(),
-          'userProfilePhoto': user.image ?? '',
+          'userProfilePhoto': user.image,
         }, ack: (data) {
           timer.cancel();
 

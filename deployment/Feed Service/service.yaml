@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-service
+  namespace: microservices
+spec:
+  selector:
+    app: feed-service
+  ports:
+  - port: 80
+    targetPort: 3003
+  type: ClusterIP

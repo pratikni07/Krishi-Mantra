@@ -1,8 +1,6 @@
-import 'package:dio/dio.dart';
 import '../services/UserService.dart';
 import '../services/api_service.dart';
 import '../models/reel_model.dart';
-import '../../core/constants/api_constants.dart';
 
 class ReelRepository {
   final ApiService _apiService;
@@ -26,10 +24,8 @@ class ReelRepository {
 
   Future<List<ReelModel>> getReelsByTag(String tagName) async {
     final userId = await _userService.getUserId();
-    final response = await _apiService.get(
-      '/api/reels/reels/tags/$tagName',
-      queryParameters: {'userId': userId}
-    );
+    final response = await _apiService.get('/api/reels/reels/tags/$tagName',
+        queryParameters: {'userId': userId});
     return (response.data['data'] as List)
         .map((reel) => ReelModel.fromJson(reel))
         .toList();
@@ -53,10 +49,8 @@ class ReelRepository {
 
   Future<Map<String, dynamic>> getTrendingReels() async {
     final userId = await _userService.getUserId();
-    final response = await _apiService.get(
-      '/api/reels/reels/trending',
-      queryParameters: {'userId': userId}
-    );
+    final response = await _apiService
+        .get('/api/reels/reels/trending', queryParameters: {'userId': userId});
     return response.data;
   }
 

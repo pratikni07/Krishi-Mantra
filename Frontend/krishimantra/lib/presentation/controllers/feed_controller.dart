@@ -41,51 +41,51 @@ class FeedController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    getFeeds();
+    // getFeeds();
   }
 
-  Future<void> getFeeds({bool refresh = false}) async {
-    try {
-      if (refresh) {
-        currentPage.value = 1;
-        hasMore.value = true;
-        feeds.clear();
-      }
+  // Future<void> getFeeds({bool refresh = false}) async {
+  //   try {
+  //     if (refresh) {
+  //       currentPage.value = 1;
+  //       hasMore.value = true;
+  //       feeds.clear();
+  //     }
 
-      if (!hasMore.value) return;
-      isLoading.value = true;
+  //     if (!hasMore.value) return;
+  //     isLoading.value = true;
 
-      final result = await _feedRepository.getFeeds(
-        page: currentPage.value,
-        limit: limit,
-      );
+  //     final result = await _feedRepository.getFeeds(
+  //       page: currentPage.value,
+  //       limit: limit,
+  //     );
 
-      final newFeeds = (result['feeds'] as List<FeedModel>);
+  //     final newFeeds = (result['feeds'] as List<FeedModel>);
 
-      // Get current user ID to check if posts are liked
-      final userData = await _userService.getUser();
-      if (userData != null) {
-        for (var feed in newFeeds) {
-          final likesList = feed.like['users'] as List? ?? [];
-          feed.isLiked = likesList.contains(userData.id);
-        }
-      }
+  //     // Get current user ID to check if posts are liked
+  //     final userData = await _userService.getUser();
+  //     if (userData != null) {
+  //       for (var feed in newFeeds) {
+  //         final likesList = feed.like['users'] as List? ?? [];
+  //         feed.isLiked = likesList.contains(userData.id);
+  //       }
+  //     }
 
-      feeds.addAll(newFeeds);
+  //     feeds.addAll(newFeeds);
 
-      final pagination = result['pagination'];
-      hasMore.value = pagination['hasMore'] ?? false;
-      if (hasMore.value) currentPage.value++;
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } finally {
-      isLoading.value = false;
-    }
-  }
+  //     final pagination = result['pagination'];
+  //     hasMore.value = pagination['hasMore'] ?? false;
+  //     if (hasMore.value) currentPage.value++;
+  //   } catch (e) {
+  //     Get.snackbar(
+  //       'Error',
+  //       e.toString(),
+  //       snackPosition: SnackPosition.BOTTOM,
+  //     );
+  //   } finally {
+  //     isLoading.value = false;
+  //   }
+  // }
 
   // Get comments for a feed
   Future<void> getComments(String feedId, {bool refresh = false}) async {
@@ -268,9 +268,9 @@ class FeedController extends GetxController {
     await getComments(feedId, refresh: true);
   }
 
-  Future<void> refreshFeeds() async {
-    await getFeeds(refresh: true);
-  }
+  // Future<void> refreshFeeds() async {
+  //   await getFeeds(refresh: true);
+  // }
 
   Future<void> fetchTopFeeds() async {
     try {

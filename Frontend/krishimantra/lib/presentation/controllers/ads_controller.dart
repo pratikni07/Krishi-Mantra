@@ -20,4 +20,8 @@ class AdsController {
   Future<List<dynamic>> fetchHomeScreenSlider() async {
     return await _adsRepository.getHomeScreenSlider();
   }
+
+  Future<List<dynamic>> fetchFeedAds() async {
+    return await _adsRepository.getFeedAds();
+  }
 }

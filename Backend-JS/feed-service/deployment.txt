@@ -1,0 +1,15 @@
+# Build and run with Docker directly
+docker build -t feed-service-dev -f Dockerfile.dev .
+docker run -p 3003:3003 feed-service-dev
+
+# Or using Docker Compose
+docker-compose -f docker-compose.dev.yml up
+
+
+
+# Build and run with Docker directly
+docker build -t feed-service -f Dockerfile .
+docker run -p 3003:3003 feed-service
+
+# Or using Docker Compose
+docker-compose up

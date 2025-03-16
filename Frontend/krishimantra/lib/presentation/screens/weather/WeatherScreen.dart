@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:krishimantra/core/constants/colors.dart';
 import 'package:weather_icons/weather_icons.dart';
 import '../../../data/services/language_service.dart';
 
@@ -186,14 +187,38 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: customColors['background'],
+      appBar: AppBar(
+        backgroundColor: AppColors.green,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: customColors['textDark'],
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.refresh,
+              color: customColors['textDark'],
+            ),
+            onPressed: () {
+              setState(() {
+                isLoading = true;
+              });
+              _getCurrentLocation();
+            },
+          ),
+        ],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              customColors['cardBg']!,
-              customColors['background']!,
+              customColors['primary']!.withOpacity(0.5),
               customColors['background']!,
             ],
           ),
@@ -265,20 +290,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   ),
                 ),
               ],
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              color: customColors['primary'],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              onPressed: _getCurrentLocation,
-              constraints: const BoxConstraints(
-                minWidth: 40,
-                minHeight: 40,
-              ),
             ),
           ),
         ],

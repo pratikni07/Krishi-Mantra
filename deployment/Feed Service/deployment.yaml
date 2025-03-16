@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feed-service
+  namespace: microservices
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: feed-service
+  template:
+    metadata:
+      labels:
+        app: feed-service
+    spec:
+      containers:
+      - name: feed-service
+        image: your-registry/feed-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3003
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        envFrom:
+        - configMapRef:
+            name: feed-service-config
+        - secretRef:
+            name: feed-service-secret
+        readinessProbe:
+          httpGet:
+            path: /feeds
+            port: 3003
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /feeds
+            port: 3003
+          initialDelaySeconds: 20
+          periodSeconds: 30

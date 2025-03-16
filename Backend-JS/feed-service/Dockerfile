@@ -1,5 +1,5 @@
 # API Gateway Dockerfile
-FROM node:20-alpine AS builder
+FROM node:18-alpine as builder
 
 # Set working directory
 WORKDIR /app
@@ -7,27 +7,26 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (production only)
+RUN npm ci --only=production
 
-# Copy source code
+# Copy application code
 COPY . .
 
-# Build TypeScript
-RUN npm run build
+# Set environment variables
+ENV NODE_ENV=production
 
-# Production stage
-FROM node:20-alpine
+# Use a smaller image for the final stage
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy built files and node_modules
-COPY --from=builder /app/dist ./dist
+# Copy node modules and app from builder stage
 COPY --from=builder /app/node_modules ./node_modules
-COPY package*.json ./
+COPY --from=builder /app .
 
-# Expose port
-EXPOSE 3000
+# Expose the port from .env.production
+EXPOSE 3003
 
-# Start command
-CMD ["npm", "run", "start:prod"]
+# Start the app in production mode
+CMD ["npm", "start"]

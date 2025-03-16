@@ -1,4 +1,6 @@
 // feed_details_screen.dart
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../data/services/language_service.dart';
@@ -241,7 +243,7 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
 class MediaContent extends StatelessWidget {
   final String? mediaUrl;
 
-  const MediaContent({Key? key, this.mediaUrl}) : super(key: key);
+  const MediaContent({super.key, this.mediaUrl});
 
   @override
   Widget build(BuildContext context) {

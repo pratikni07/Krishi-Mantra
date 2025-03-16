@@ -1,5 +1,6 @@
 // crop_model.dart
 import 'dart:convert';
+import '../services/language_service.dart';
 
 class CropModel {
   final String id;
@@ -13,6 +14,11 @@ class CropModel {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // Cached translations
+  String? _translatedName;
+  String? _translatedScientificName;
+  String? _translatedDescription;
+
   CropModel({
     required this.id,
     required this.name,
@@ -25,6 +31,33 @@ class CropModel {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  // Get translated name
+  Future<String> getTranslatedName() async {
+    if (_translatedName != null) return _translatedName!;
+    
+    final languageService = await LanguageService.getInstance();
+    _translatedName = await languageService.translate(name);
+    return _translatedName!;
+  }
+
+  // Get translated scientific name
+  Future<String> getTranslatedScientificName() async {
+    if (_translatedScientificName != null) return _translatedScientificName!;
+    
+    final languageService = await LanguageService.getInstance();
+    _translatedScientificName = await languageService.translate(scientificName);
+    return _translatedScientificName!;
+  }
+
+  // Get translated description
+  Future<String> getTranslatedDescription() async {
+    if (_translatedDescription != null) return _translatedDescription!;
+    
+    final languageService = await LanguageService.getInstance();
+    _translatedDescription = await languageService.translate(description);
+    return _translatedDescription!;
+  }
 
   factory CropModel.fromJson(Map<String, dynamic> json) {
     return CropModel(

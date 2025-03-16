@@ -16,7 +16,8 @@ router.post("/user/interest", feedController.updateUserInterest);
 router.post("/user/interaction", feedController.recordInteraction);
 
 // New recommendation route
-router.get("/user/:userId/recommended", feedController.getRecommendedFeeds);
+// router.get("/user/:userId/recommended", feedController.getRecommendedFeeds);
+router.get("/user/:userId/recommended", feedController.getAllFeeds);
 
 // New trending hashtags route
 router.get("/trending/hashtags", feedController.getTrendingHashtags);

@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: krishi-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - MONGODB_URL=mongodb://mongo:27017/krishi
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "3002:3002"
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - krishi-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  mongo:
+    image: mongo:5
+    container_name: krishi-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - krishi-network
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:6-alpine
+    container_name: krishi-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - krishi-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  nginx:
+    image: nginx:alpine
+    container_name: krishi-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - app
+    networks:
+      - krishi-network
+
+networks:
+  krishi-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  redis-data: 

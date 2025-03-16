@@ -81,6 +81,7 @@ class ReelController extends GetxController {
 
         // Add the new comment to the existing comments list
         final newComment = response['data'];
+        // ignore: invalid_use_of_protected_member
         final currentComments = reelComments.value[reelId] ?? [];
 
         if (parentCommentId != null) {
@@ -98,12 +99,13 @@ class ReelController extends GetxController {
         }
 
         reelComments.value = {
+          // ignore: invalid_use_of_protected_member
           ...reelComments.value,
           reelId: currentComments,
         };
         reelComments.refresh();
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       rethrow;
     }
   }

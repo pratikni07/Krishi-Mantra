@@ -5,6 +5,9 @@ const Tag = require("../model/Tags");
 const Like = require("../model/LikeModel");
 const redis = require("../config/redis");
 const UserInterest = require("../model/userInterest");
+const {
+  updateUserInterestForInteraction,
+} = require("../utils/interactionUtils");
 
 const FEED_CACHE_KEY = "feed:";
 const COMMENTS_CACHE_KEY = "comments:";
@@ -13,7 +16,7 @@ const CACHE_DURATION = 3600;
 const RANDOM_FEEDS_CACHE_KEY = "random-feeds:";
 const RECOMMENDED_FEEDS_CACHE_KEY = "recommended-feeds:";
 const USER_INTEREST_CACHE_KEY = "user-interest:";
-const MAX_RADIUS_KM = 500;
+const MAX_RADIUS_KM = 1000;
 
 function extractTags(content) {
   const tagRegex = /#(\w+)/g;
@@ -44,6 +47,7 @@ class FeedController {
     this.getRecommendedFeeds = this.getRecommendedFeeds.bind(this);
     this.getTopFeeds = this.getTopFeeds.bind(this);
     this.getTrendingHashtags = this.getTrendingHashtags.bind(this);
+    this.getAllFeeds = this.getAllFeeds.bind(this);
   }
   getCommonAggregationPipeline() {
     return [
@@ -53,9 +57,9 @@ class FeedController {
           localField: "_id",
           foreignField: "feed",
           pipeline: [
-            { $match: { parentComment: null, isDeleted: false } }, 
+            { $match: { parentComment: null, isDeleted: false } },
             { $sort: { createdAt: -1 } },
-            { $limit: 3 }
+            { $limit: 3 },
           ],
           as: "recentComments",
         },
@@ -98,7 +102,7 @@ class FeedController {
           },
           views: {
             count: "$viewCount",
-            lastViewed: 1
+            lastViewed: 1,
           },
           recentComments: {
             $map: {
@@ -110,9 +114,9 @@ class FeedController {
                 userName: "$$comment.userName",
                 content: "$$comment.content",
                 createdAt: "$$comment.createdAt",
-                profilePhoto: "$$comment.profilePhoto"
-              }
-            }
+                profilePhoto: "$$comment.profilePhoto",
+              },
+            },
           },
         },
       },
@@ -171,23 +175,46 @@ class FeedController {
                 $add: [
                   {
                     $pow: [
-                      { $multiply: [
-                        { $subtract: ["$location.latitude", userLocation.latitude] },
-                        111 // km per degree latitude (approximate)
-                      ]},
+                      {
+                        $multiply: [
+                          {
+                            $subtract: [
+                              "$location.latitude",
+                              userLocation.latitude,
+                            ],
+                          },
+                          111, // km per degree latitude (approximate)
+                        ],
+                      },
                       2,
                     ],
                   },
                   {
                     $pow: [
-                      { $multiply: [
-                        { $subtract: ["$location.longitude", userLocation.longitude] },
-                        // Adjust for longitude distance variation by latitude
-                        { $multiply: [
-                          111, 
-                          { $cos: { $multiply: [userLocation.latitude, 3.14159 / 180] } }
-                        ]}
-                      ]},
+                      {
+                        $multiply: [
+                          {
+                            $subtract: [
+                              "$location.longitude",
+                              userLocation.longitude,
+                            ],
+                          },
+                          // Adjust for longitude distance variation by latitude
+                          {
+                            $multiply: [
+                              111,
+                              {
+                                $cos: {
+                                  $multiply: [
+                                    userLocation.latitude,
+                                    3.14159 / 180,
+                                  ],
+                                },
+                              },
+                            ],
+                          },
+                        ],
+                      },
                       2,
                     ],
                   },
@@ -198,27 +225,27 @@ class FeedController {
             recencyScore: {
               $divide: [
                 1,
-                { 
+                {
                   $add: [
-                    1, 
-                    { 
+                    1,
+                    {
                       $divide: [
                         { $subtract: [new Date(), "$date"] },
-                        1000 * 60 * 60 * 24 // Convert ms to days
-                      ] 
-                    }
-                  ] 
-                }
-              ]
+                        1000 * 60 * 60 * 24, // Convert ms to days
+                      ],
+                    },
+                  ],
+                },
+              ],
             },
             // Calculate engagement score
             engagementScore: {
               $add: [
                 { $ifNull: ["$views.count", 0] },
                 { $multiply: [{ $ifNull: ["$like.count", 0] }, 3] },
-                { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] }
-              ]
-            }
+                { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] },
+              ],
+            },
           },
         },
         {
@@ -232,14 +259,21 @@ class FeedController {
             relevanceScore: {
               $add: [
                 // Distance matters most (inverted: closer = higher score)
-                { $multiply: [{ $subtract: [radius, "$distance"] }, 10 / radius] },
+                {
+                  $multiply: [
+                    { $subtract: [radius, "$distance"] },
+                    10 / radius,
+                  ],
+                },
                 // Recency is important
                 { $multiply: ["$recencyScore", 5] },
                 // Engagement matters too
-                { $multiply: [{ $log10: { $add: ["$engagementScore", 1] } }, 2] }
-              ]
-            }
-          }
+                {
+                  $multiply: [{ $log10: { $add: ["$engagementScore", 1] } }, 2],
+                },
+              ],
+            },
+          },
         },
         { $sort: { relevanceScore: -1 } },
         { $skip: skip },
@@ -278,11 +312,11 @@ class FeedController {
         userInterest = new UserInterest({
           userId,
           // Only set location if provided
-          ...(location && { 
+          ...(location && {
             location: {
               ...location,
-              lastUpdated: new Date()
-            }
+              lastUpdated: new Date(),
+            },
           }),
           interests: [],
           recentViews: [],
@@ -291,7 +325,7 @@ class FeedController {
         // Only update location if provided
         userInterest.location = {
           ...location,
-          lastUpdated: new Date()
+          lastUpdated: new Date(),
         };
       }
 
@@ -327,13 +361,14 @@ class FeedController {
       userInterest.lastActive = new Date();
 
       const tags = extractTags(feed.content);
-      const interactionScore = {
-        view: 0.2,
-        like: 0.5,
-        comment: 1.0,
-        share: 1.5,
-        save: 1.2,
-      }[interactionType] || 0.1;
+      const interactionScore =
+        {
+          view: 0.2,
+          like: 0.5,
+          comment: 1.0,
+          share: 1.5,
+          save: 1.2,
+        }[interactionType] || 0.1;
 
       // Update interest scores
       for (const tag of tags) {
@@ -393,7 +428,8 @@ class FeedController {
 
       // Calculate user engagement level based on interaction patterns
       const lastMonthInteractions = userInterest.recentViews.filter(
-        (view) => new Date() - new Date(view.viewedAt) < 30 * 24 * 60 * 60 * 1000
+        (view) =>
+          new Date() - new Date(view.viewedAt) < 30 * 24 * 60 * 60 * 1000
       ).length;
 
       if (lastMonthInteractions > 100) {
@@ -738,6 +774,11 @@ class FeedController {
         $inc: { "comment.count": 1 },
       });
 
+      // Update user interest for comment
+      if (userId) {
+        await updateUserInterestForInteraction(userId, feedId, "comment");
+      }
+
       // Invalidate feed and comments cache
       await redis.del(`${FEED_CACHE_KEY}${feedId}`);
       const keys = await redis.client.keys(`${COMMENTS_CACHE_KEY}${feedId}:*`);
@@ -765,11 +806,9 @@ class FeedController {
           $inc: { "like.count": -1 },
         });
 
-        // Track this as an "unlike" interaction
+        // Update user interest for unlike
         if (userId) {
-          await this.recordInteraction({
-            body: { userId, feedId, interactionType: "unlike" }
-          }, { json: () => {} });
+          await updateUserInterestForInteraction(userId, feedId, "unlike");
         }
       } else {
         const like = new Like({
@@ -783,11 +822,9 @@ class FeedController {
           $inc: { "like.count": 1 },
         });
 
-        // Track this as a "like" interaction
+        // Update user interest for like
         if (userId) {
-          await this.recordInteraction({
-            body: { userId, feedId, interactionType: "like" }
-          }, { json: () => {} });
+          await updateUserInterestForInteraction(userId, feedId, "like");
         }
       }
 
@@ -1006,13 +1043,89 @@ class FeedController {
     }
   }
 
+  async getAllFeeds(req, res) {
+    try {
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+      const skip = (page - 1) * limit;
+      const sort = req.query.sort || "newest"; // Default sort by newest
+
+      // Cache mechanism similar to getRecommendedFeeds
+      const ALL_FEEDS_CACHE_KEY = "all_feeds:";
+      const CACHE_DURATION = 600; // 10 minutes in seconds
+
+      const cacheKey = `${ALL_FEEDS_CACHE_KEY}${page}:${limit}:${sort}`;
+      const cachedFeeds = await redis.get(cacheKey);
+
+      if (cachedFeeds) {
+        return res.json(JSON.parse(cachedFeeds));
+      }
+
+      // Build sort options
+      let sortOptions = {};
+      switch (sort) {
+        case "oldest":
+          sortOptions = { date: 1 };
+          break;
+        case "mostLiked":
+          sortOptions = { "like.count": -1, date: -1 };
+          break;
+        case "mostCommented":
+          sortOptions = { "comment.count": -1, date: -1 };
+          break;
+        case "mostViewed":
+          sortOptions = { "views.count": -1, date: -1 };
+          break;
+        case "newest":
+        default:
+          sortOptions = { date: -1 };
+          break;
+      }
+
+      // Get total count for pagination
+      const totalFeeds = await Feed.countDocuments();
+
+      // Fetch feeds with pagination
+      const feeds = await Feed.aggregate([
+        { $sort: sortOptions },
+        { $skip: skip },
+        { $limit: limit },
+        ...this.getCommonAggregationPipeline(),
+      ]);
+
+      const result = {
+        feeds,
+        recommendationType: "all", // Different from getRecommendedFeeds
+        recommendationStrategy: ["chronological"], // Different strategy
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(totalFeeds / limit),
+          totalFeeds,
+          hasMore: page * limit < totalFeeds,
+        },
+        metadata: {
+          sortBy: sort,
+          timestamp: new Date(),
+        },
+      };
+
+      // Cache the results
+      await redis.setex(cacheKey, CACHE_DURATION, JSON.stringify(result));
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching all feeds:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+
   async getRecommendedFeeds(req, res) {
     try {
       const { userId } = req.params;
       const page = Math.max(1, parseInt(req.query.page) || 1);
       const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
       const skip = (page - 1) * limit;
-      const shuffle = req.query.shuffle !== "false"; // Default to true
+      const shuffle = req.query.shuffle !== "false";
 
       const cacheKey = `${RECOMMENDED_FEEDS_CACHE_KEY}${userId}:${page}:${limit}:${shuffle}`;
       const cachedRecommendations = await redis.get(cacheKey);
@@ -1024,12 +1137,12 @@ class FeedController {
       // Get user profile with interests and view history
       const userInterest = await UserInterest.findOne({ userId });
       const isNewUser = !userInterest || userInterest.recentViews.length < 5;
-      
-      // Get IDs of feeds the user has already viewed
-      const viewedFeedIds = userInterest?.recentViews?.map(
-        view => mongoose.Types.ObjectId(view.feedId)
-      ) || [];
-      
+
+      const viewedFeedIds =
+        userInterest?.recentViews?.map(
+          (view) => new mongoose.Types.ObjectId(view.feedId)
+        ) || [];
+
       let feeds = [];
       let totalFeeds = 0;
       let recommendationType = "";
@@ -1045,18 +1158,26 @@ class FeedController {
           .map((interest) => ({
             tag: interest.tag,
             // Exponential decay based on time since last interaction
-            score: interest.score * Math.exp(
-              -((Date.now() - new Date(interest.lastInteraction)) / 
-                (1000 * 60 * 60 * 24 * 14)) // Two-week half-life
-            )
+            score:
+              interest.score *
+              Math.exp(
+                -(
+                  (Date.now() - new Date(interest.lastInteraction)) /
+                  (1000 * 60 * 60 * 24 * 14)
+                ) // Two-week half-life
+              ),
           }))
           .sort((a, b) => b.score - a.score);
 
         // Get top user interests (more if high engagement)
-        const maxTags = userInterest.engagementLevel === "high" ? 10 : 
-                        userInterest.engagementLevel === "medium" ? 7 : 5;
-        const topTags = weightedInterests.slice(0, maxTags).map(i => i.tag);
-        
+        const maxTags =
+          userInterest.engagementLevel === "high"
+            ? 10
+            : userInterest.engagementLevel === "medium"
+            ? 7
+            : 5;
+        const topTags = weightedInterests.slice(0, maxTags).map((i) => i.tag);
+
         if (topTags.length > 0) {
           // Find feeds matching user's top interests, excluding viewed feeds
           const tagFeeds = await Feed.aggregate([
@@ -1065,11 +1186,11 @@ class FeedController {
                 _id: { $nin: viewedFeedIds },
                 content: {
                   $regex: new RegExp(
-                    topTags.map(tag => `#${tag}`).join("|"),
+                    topTags.map((tag) => `#${tag}`).join("|"),
                     "i"
-                  )
-                }
-              }
+                  ),
+                },
+              },
             },
             {
               $addFields: {
@@ -1081,52 +1202,52 @@ class FeedController {
                       {
                         $map: {
                           input: {
-                            $regexFindAll: { 
-                              input: "$content", 
-                              regex: /#(\w+)/g 
-                            }
+                            $regexFindAll: {
+                              input: "$content",
+                              regex: /#(\w+)/g,
+                            },
                           },
                           as: "tag",
-                          in: { 
-                            $toLower: { 
+                          in: {
+                            $toLower: {
                               $substr: [
-                                { $arrayElemAt: ["$$tag.match", 0] }, 
-                                1, 
-                                -1
-                              ] 
-                            } 
-                          }
-                        }
-                      }
-                    ]
-                  }
+                                { $arrayElemAt: ["$$tag.match", 0] },
+                                1,
+                                -1,
+                              ],
+                            },
+                          },
+                        },
+                      },
+                    ],
+                  },
                 },
                 // Calculate engagement score for ranking
                 engagementScore: {
                   $add: [
                     { $ifNull: ["$views.count", 0] },
                     { $multiply: [{ $ifNull: ["$like.count", 0] }, 3] },
-                    { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] }
-                  ]
+                    { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] },
+                  ],
                 },
                 // Calculate recency score (newer = higher score)
                 recencyScore: {
                   $divide: [
                     1,
-                    { 
+                    {
                       $add: [
-                        1, 
-                        { 
+                        1,
+                        {
                           $divide: [
                             { $subtract: [new Date(), "$date"] },
-                            1000 * 60 * 60 * 24 // Convert ms to days
-                          ] 
-                        }
-                      ] 
-                    }
-                  ]
-                }
-              }
+                            1000 * 60 * 60 * 24, // Convert ms to days
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
             },
             // Calculate combined relevance score
             {
@@ -1135,15 +1256,15 @@ class FeedController {
                   $add: [
                     { $multiply: ["$matchingTags", 10] },
                     { $multiply: ["$engagementScore", 0.1] },
-                    { $multiply: ["$recencyScore", 50] }
-                  ]
-                }
-              }
+                    { $multiply: ["$recencyScore", 50] },
+                  ],
+                },
+              },
             },
             { $sort: { relevanceScore: -1 } },
             { $skip: skip },
             { $limit: limit * 2 }, // Get more than needed for shuffling
-            ...this.getCommonAggregationPipeline()
+            ...this.getCommonAggregationPipeline(),
           ]);
 
           if (tagFeeds.length > 0) {
@@ -1152,10 +1273,10 @@ class FeedController {
               _id: { $nin: viewedFeedIds },
               content: {
                 $regex: new RegExp(
-                  topTags.map(tag => `#${tag}`).join("|"),
+                  topTags.map((tag) => `#${tag}`).join("|"),
                   "i"
-                )
-              }
+                ),
+              },
             });
           }
         }
@@ -1163,27 +1284,41 @@ class FeedController {
 
       // 2. LOCATION-BASED RECOMMENDATIONS
       // Try location-based if interest-based didn't return enough results and user has location
-      if (feeds.length < limit && userInterest?.location?.latitude && userInterest?.location?.longitude) {
+      if (
+        feeds.length < limit &&
+        userInterest?.location?.latitude &&
+        userInterest?.location?.longitude
+      ) {
         recommendationType = feeds.length > 0 ? "mixed" : "location";
         recommendationStrategy.push("location-based");
-        
+
         const { location } = userInterest;
-        const hoursFromLocationUpdate = location.lastUpdated ? 
-          Math.abs((new Date() - new Date(location.lastUpdated)) / (1000 * 60 * 60)) : 72;
-        
+        const hoursFromLocationUpdate = location.lastUpdated
+          ? Math.abs(
+              (new Date() - new Date(location.lastUpdated)) / (1000 * 60 * 60)
+            )
+          : 72;
+
         // Start with smaller radius for recent location, larger for older
-        const initialRadius = hoursFromLocationUpdate < 24 ? 25 : 
-                              hoursFromLocationUpdate < 72 ? 50 : 100;
-                              
+        const initialRadius =
+          hoursFromLocationUpdate < 24
+            ? 25
+            : hoursFromLocationUpdate < 72
+            ? 50
+            : 100;
+
         // Try with increasing radius until we get enough results
         let radius = initialRadius;
         let locationFeeds = [];
         let locationTotalFeeds = 0;
-        
-        while (radius <= MAX_RADIUS_KM && locationFeeds.length < limit - feeds.length) {
+
+        while (
+          radius <= MAX_RADIUS_KM &&
+          locationFeeds.length < limit - feeds.length
+        ) {
           // Exclude feeds we've already added from interest-based recommendations
-          const excludeIds = [...viewedFeedIds, ...feeds.map(f => f._id)];
-          
+          const excludeIds = [...viewedFeedIds, ...feeds.map((f) => f._id)];
+
           const locationResults = await this.getLocationBasedFeeds(
             location,
             excludeIds,
@@ -1192,16 +1327,16 @@ class FeedController {
             limit - feeds.length, // Only get what we need
             0 // No skip for location-based
           );
-          
+
           locationFeeds = locationResults.feeds;
           locationTotalFeeds = locationResults.totalFeeds;
-          
+
           if (locationFeeds.length > 0) break;
-          
+
           // Increase radius and try again
           radius *= 2;
         }
-        
+
         if (locationFeeds.length > 0) {
           feeds = [...feeds, ...locationFeeds];
           totalFeeds += locationTotalFeeds;
@@ -1211,23 +1346,24 @@ class FeedController {
       // 3. TRENDING/DISCOVERY RECOMMENDATIONS
       // If we still don't have enough feeds or user is new
       if (feeds.length < limit || isNewUser) {
-        recommendationType = feeds.length > 0 ? "mixed" : (isNewUser ? "new-user" : "trending");
+        recommendationType =
+          feeds.length > 0 ? "mixed" : isNewUser ? "new-user" : "trending";
         recommendationStrategy.push("trending-discovery");
-        
+
         // Exclude feeds we've already added from previous strategies
-        const excludeIds = [...viewedFeedIds, ...feeds.map(f => f._id)];
-        
+        const excludeIds = [...viewedFeedIds, ...feeds.map((f) => f._id)];
+
         // For new users, focus more on popular content
         // For returning users with not enough recommendations, focus on discovery
         const popularityWeight = isNewUser ? 0.7 : 0.3;
         const recencyWeight = isNewUser ? 0.3 : 0.5;
         const randomnessWeight = isNewUser ? 0.0 : 0.2;
-        
+
         const discoveryFeeds = await Feed.aggregate([
           {
             $match: {
-              _id: { $nin: excludeIds }
-            }
+              _id: { $nin: excludeIds },
+            },
           },
           {
             $addFields: {
@@ -1236,29 +1372,29 @@ class FeedController {
                 $add: [
                   { $ifNull: ["$views.count", 0] },
                   { $multiply: [{ $ifNull: ["$like.count", 0] }, 3] },
-                  { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] }
-                ]
+                  { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] },
+                ],
               },
               // Calculate recency score
               recencyScore: {
                 $divide: [
                   1,
-                  { 
+                  {
                     $add: [
-                      1, 
-                      { 
+                      1,
+                      {
                         $divide: [
                           { $subtract: [new Date(), "$date"] },
-                          1000 * 60 * 60 * 24 // Convert ms to days
-                        ] 
-                      }
-                    ] 
-                  }
-                ]
+                          1000 * 60 * 60 * 24, // Convert ms to days
+                        ],
+                      },
+                    ],
+                  },
+                ],
               },
               // Add randomness factor
-              randomFactor: { $rand: {} }
-            }
+              randomFactor: { $rand: {} },
+            },
           },
           {
             $addFields: {
@@ -1267,21 +1403,21 @@ class FeedController {
                 $add: [
                   { $multiply: ["$popularityScore", popularityWeight] },
                   { $multiply: ["$recencyScore", 100 * recencyWeight] },
-                  { $multiply: ["$randomFactor", 20 * randomnessWeight] }
-                ]
-              }
-            }
+                  { $multiply: ["$randomFactor", 20 * randomnessWeight] },
+                ],
+              },
+            },
           },
           { $sort: { discoveryScore: -1 } },
           { $skip: isNewUser ? 0 : skip }, // No skip for new users to get best content
-          { $limit: isNewUser ? limit : (limit - feeds.length) },
-          ...this.getCommonAggregationPipeline()
+          { $limit: isNewUser ? limit : limit - feeds.length },
+          ...this.getCommonAggregationPipeline(),
         ]);
 
         const discoveryTotalFeeds = await Feed.countDocuments({
-          _id: { $nin: excludeIds }
+          _id: { $nin: excludeIds },
         });
-        
+
         if (discoveryFeeds.length > 0) {
           feeds = [...feeds, ...discoveryFeeds];
           totalFeeds += discoveryTotalFeeds;
@@ -1313,7 +1449,7 @@ class FeedController {
           isNewUser,
           timestamp: new Date(),
           shuffled: shuffle,
-        }
+        },
       };
 
       // Cache the results
