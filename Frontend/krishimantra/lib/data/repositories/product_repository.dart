@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_null_comparison
+
 import 'package:dio/dio.dart';
 import '../models/product_model.dart';
 import '../services/api_service.dart';
@@ -14,13 +16,14 @@ class ProductRepository {
         final List<dynamic> data = response.data['data'] ?? [];
         return data.map((json) => ProductModel.fromJson(json)).where((product) {
           // Filter out products with null required fields
-          return product.name != null && 
-                 product.image != null && 
-                 product.company.name != null && 
-                 product.company.logo != null;
+          return product.name != null &&
+              product.image != null &&
+              product.company.name != null &&
+              product.company.logo != null;
         }).toList();
       }
-      throw Exception('Failed to fetch products: ${response.data['message'] ?? 'Unknown error'}');
+      throw Exception(
+          'Failed to fetch products: ${response.data['message'] ?? 'Unknown error'}');
     } on DioException catch (e) {
       throw Exception('Network error: ${e.message}');
     } catch (e) {
@@ -34,19 +37,20 @@ class ProductRepository {
       if (response.data['status'] == 'success') {
         final product = ProductModel.fromJson(response.data['data']);
         // Verify required fields are not null
-        if (product.name == null || 
-            product.image == null || 
-            product.company.name == null || 
+        if (product.name == null ||
+            product.image == null ||
+            product.company.name == null ||
             product.company.logo == null) {
           throw Exception('Invalid product data: Missing required fields');
         }
         return product;
       }
-      throw Exception('Failed to fetch product: ${response.data['message'] ?? 'Unknown error'}');
+      throw Exception(
+          'Failed to fetch product: ${response.data['message'] ?? 'Unknown error'}');
     } on DioException catch (e) {
       throw Exception('Network error: ${e.message}');
     } catch (e) {
       rethrow;
     }
   }
-} 
+}

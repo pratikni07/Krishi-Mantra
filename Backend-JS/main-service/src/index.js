@@ -22,13 +22,9 @@ const serviceRoutes = require("./routes/ServiceRoutes");
 const userRoutesOne = require("./routes/UserRoutes");
 const cropRoutes = require("./routes/cropCalendar");
 const schemeRoutes = require("./routes/schemeRoutes");
+
 // Load environment variables based on NODE_ENV
-dotenv.config({
-  path: path.join(
-    __dirname,
-    `../.env.${process.env.NODE_ENV || "development"}`
-  ),
-});
+require('./config/environment')();
 
 // Validate environment variables
 const envSchema = Joi.object({
@@ -41,7 +37,7 @@ const envSchema = Joi.object({
   JWT_SECRET: Joi.string().required(),
   REDIS_HOST: Joi.string().required(),
   REDIS_PORT: Joi.number().default(6379),
-  REDIS_PASSWORD: Joi.string().required(),
+  REDIS_PASSWORD: Joi.string().allow(''),
 });
 
 const app = express();
@@ -84,18 +80,51 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-const redisClient = Redis.createClient({
-  host: process.env.REDIS_HOST,
-  port: process.env.REDIS_PORT,
-  password: process.env.REDIS_PASSWORD,
-  // Add TLS configuration for production
-  ...(process.env.NODE_ENV === "production" && {
-    tls: {},
-    socket: {
-      tls: true,
-      rejectUnauthorized: false,
-    },
-  }),
+// Redis client configuration with proper error handling
+let redisClient = null;
+try {
+  redisClient = Redis.createClient({
+    host: process.env.REDIS_HOST,
+    port: process.env.REDIS_PORT,
+    password: process.env.REDIS_PASSWORD,
+    // Add TLS configuration for production
+    ...(process.env.NODE_ENV === "production" && {
+      tls: {},
+      socket: {
+        servername: process.env.REDIS_HOST,
+      },
+    }),
+  });
+
+  redisClient.on("error", (err) => {
+    console.warn("Redis client error:", err.message);
+    console.warn("Application will continue without Redis rate limiting");
+  });
+
+  // Only connect if the connection is needed
+  if (process.env.NODE_ENV === 'production') {
+    redisClient.connect().catch(err => {
+      console.warn("Redis connection failed:", err.message);
+    });
+  }
+} catch (error) {
+  console.warn("Redis client initialization error:", error.message);
+  console.warn("Application will continue without Redis rate limiting");
+}
+
+// Configure rate limiting with memory store
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new MemoryStore(),
+  skipFailedRequests: true,
+  handler: (req, res) => {
+    res.status(429).json({
+      error: "Too many requests, please try again later.",
+    });
+  },
 });
 
 app.use(
@@ -120,15 +149,6 @@ app.use(
 );
 
 console.log(process.env.MONGODB_URL);
-
-// const limiter = rateLimit({
-//   store: new MemoryStore(),
-//   windowMs: 15 * 60 * 1000,
-//   max: 100,
-//   message: "Too many requests from this IP, please try again later.",
-// });
-
-// app.use(limiter);
 
 // Configure CORS for production
 app.use(

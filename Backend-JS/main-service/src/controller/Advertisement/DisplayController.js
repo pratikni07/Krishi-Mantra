@@ -7,10 +7,19 @@ const RedisClient = require("../../config/redis");
 class DisplayController {
   async getDynamicDisplay(req, res) {
     try {
-      const cachedDisplay = await RedisClient.get("dynamic_display");
+      // Try to get from cache but don't fail if Redis is down
+      let cachedDisplay = null;
+      try {
+        cachedDisplay = await RedisClient.get("dynamic_display");
+      } catch (error) {
+        console.warn("Redis error when getting dynamic display:", error.message);
+      }
+      
       if (cachedDisplay) {
         return res.json(JSON.parse(cachedDisplay));
       }
+      
+      // If no cache or Redis is down, get from database
       const displaySettings = await UIDisplay.findOne();
 
       const dynamicContent = {
@@ -24,21 +33,23 @@ class DisplayController {
         homeScreenAds: displaySettings?.HomeScreenAdOne
           ? await HomeSlider.findOne()
           : null,
-
         feedAds: displaySettings?.FeedAds ? await NewsAds.find() : [],
         reelAds: displaySettings?.ReelAds ? await NewsAds.find() : [],
         newsAds: displaySettings?.NewsAds ? await NewsAds.find() : [],
       };
 
-      // Cache the result
-      await RedisClient.setex(
-        "dynamic_display",
-        3600,
-        JSON.stringify(dynamicContent),
-        JSON.stringify(displaySettings)
-      );
+      // Try to cache the result but don't fail if Redis is down
+      try {
+        await RedisClient.setex(
+          "dynamic_display",
+          3600, // 1 hour expiry
+          JSON.stringify(dynamicContent)
+        );
+      } catch (error) {
+        console.warn("Redis error when setting dynamic display:", error.message);
+      }
 
-      return res.status(200).json({
+      res.json({
         success: true,
         displaySettings,
         dynamicContent,
@@ -66,8 +77,12 @@ class DisplayController {
         await displaySettings.save();
       }
 
-      // Clear dynamic display cache
-      await RedisClient.del("dynamic_display");
+      // Try to clear dynamic display cache but don't fail if Redis is down
+      try {
+        await RedisClient.del("dynamic_display");
+      } catch (error) {
+        console.warn("Redis error when deleting dynamic display cache:", error.message);
+      }
 
       res.json(displaySettings);
     } catch (error) {

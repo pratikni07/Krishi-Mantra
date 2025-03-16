@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: message-service
+  namespace: microservices
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: message-service
+  template:
+    metadata:
+      labels:
+        app: message-service
+    spec:
+      containers:
+      - name: message-service
+        image: your-registry/message-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3004
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        envFrom:
+        - configMapRef:
+            name: message-service-config
+        - secretRef:
+            name: message-service-secret
+        readinessProbe:
+          httpGet:
+            path: /messages
+            port: 3004
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /messages
+            port: 3004
+          initialDelaySeconds: 20
+          periodSeconds: 30

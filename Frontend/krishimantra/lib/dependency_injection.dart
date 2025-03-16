@@ -32,7 +32,6 @@ import 'presentation/controllers/scheme_controller.dart';
 import 'presentation/screens/feed/widgets/feed_card.dart';
 import 'package:krishimantra/data/repositories/presigned_url_repository.dart';
 import 'package:krishimantra/presentation/controllers/presigned_url_controller.dart';
-import 'package:krishimantra/data/repositories/notification_repository.dart';
 
 void initDependencies() {
   // Initialize Dio and ApiService first

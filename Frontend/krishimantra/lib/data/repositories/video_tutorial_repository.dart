@@ -1,5 +1,6 @@
+// ignore_for_file: unused_field
+
 import 'package:get/get.dart';
-import 'package:dio/dio.dart';
 import 'package:krishimantra/data/services/api_service.dart';
 import 'package:krishimantra/data/models/video_tutorial.dart';
 import 'package:krishimantra/core/constants/api_constants.dart';

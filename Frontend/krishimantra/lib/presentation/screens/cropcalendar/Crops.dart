@@ -272,26 +272,36 @@ class CropsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      crop.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.green,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    FutureBuilder<String>(
+                      future: crop.getTranslatedName(),
+                      builder: (context, snapshot) {
+                        return Text(
+                          snapshot.data ?? crop.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.green,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      crop.scientificName,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        color: AppColors.textGrey,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    FutureBuilder<String>(
+                      future: crop.getTranslatedScientificName(),
+                      builder: (context, snapshot) {
+                        return Text(
+                          snapshot.data ?? crop.scientificName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: AppColors.textGrey,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
                     ),
                     const Spacer(),
                     Container(

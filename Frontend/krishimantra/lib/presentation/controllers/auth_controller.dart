@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:dio/dio.dart' as dio;
 import 'package:get/get.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../core/constants/api_constants.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/otp_response_model.dart';
 import '../../data/repositories/auth_repository.dart';
@@ -46,6 +44,7 @@ class AuthController extends GetxController {
 
       final result = await _authRepository.login(email, password);
 
+      // ignore: unnecessary_null_comparison
       if (result != null) {
         user.value = result;
 
@@ -60,7 +59,7 @@ class AuthController extends GetxController {
       } else {
         throw Exception('Login failed: User data is null');
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       Get.snackbar(
         'Error',
         e.toString(),
@@ -203,10 +202,9 @@ class AuthController extends GetxController {
       return await presignedUrlController.uploadImage(
         imageFile: imageFile,
         contentType: 'profile',
-        userId: user.value?.id, // Pass user ID if available
+        userId: user.value?.id,
       );
     } catch (e) {
-      print('Error uploading image: $e');
       return null;
     }
   }

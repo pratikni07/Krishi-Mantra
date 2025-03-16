@@ -1,10 +1,10 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:share_plus/share_plus.dart';
 import 'package:get/get.dart';
-import '../../../../core/constants/colors.dart';
 import '../../../../data/models/feed_model.dart';
-import '../../../widgets/video_player_widget.dart';
 import '../FeedDetailsScreen.dart';
 import 'package:chewie/chewie.dart';
 import 'package:video_player/video_player.dart';
@@ -25,11 +25,11 @@ class FeedCard extends StatefulWidget {
   final VoidCallback? onSave;
 
   const FeedCard({
-    Key? key,
+    super.key,
     required this.feed,
     required this.onLike,
     this.onSave,
-  }) : super(key: key);
+  });
 
   @override
   State<FeedCard> createState() => _FeedCardState();

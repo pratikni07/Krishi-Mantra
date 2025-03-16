@@ -676,3 +676,50 @@
 {"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-13T06:55:57.605Z"}
 {"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-13T17:37:44.220Z"}
 {"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-13T18:14:01.833Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T19:39:16.177Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-15T20:10:00.302Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:20:53.677Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:21:48.295Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:21:56.080Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:22:09.931Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:22:50.542Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:23:45.545Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:26:35.541Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:27:15.602Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:27:44.406Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:28:10.045Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:28:12.930Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:30:50.843Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:32:25.859Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:32:26.925Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:32:28.960Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:33:01.798Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:33:02.973Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:33:04.994Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:33:17.819Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:33:19.004Z"}
+{"level":"info","message":{"headers":{"accept-encoding":"gzip","connection":"close","host":"localhost:3002","user-agent":"Dart/3.7 (dart:io)","x-forwarded-for":"::ffff:127.0.0.1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:33:21.045Z"}
+{"level":"info","message":{"headers":{"accept":"*/*","accept-encoding":"gzip, deflate, br","connection":"close","host":"localhost:3002","postman-token":"6db6e5d4-0341-4b44-863f-bd206e1e942a","user-agent":"PostmanRuntime/7.43.2","x-forwarded-for":"::1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/ads/splash-modal"},"timestamp":"2025-03-15T20:33:41.753Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:35:25.838Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:35:49.261Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-15T20:37:42.555Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:52:14.578Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-15T20:52:42.470Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:52:44.254Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:55:32.788Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:55:37.619Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:55:43.529Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:55:46.023Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:55:54.392Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T20:57:25.136Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-15T21:02:36.152Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-16T04:10:36.436Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-16T04:35:58.880Z"}
+{"level":"error","message":"Error: request aborted","method":"GET","path":"/ads/feed-ads","stack":"BadRequestError: request aborted\n    at IncomingMessage.onAborted (/Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/raw-body/index.js:245:10)\n    at IncomingMessage.emit (node:events:507:28)\n    at IncomingMessage._destroy (node:_http_incoming:221:10)\n    at _destroy (node:internal/streams/destroy:122:10)\n    at IncomingMessage.destroy (node:internal/streams/destroy:84:5)\n    at abortIncoming (node:_http_server:809:9)\n    at socketOnClose (node:_http_server:803:3)\n    at Socket.emit (node:events:519:35)\n    at TCP.<anonymous> (node:net:351:12)","timestamp":"2025-03-16T04:48:52.443Z"}
+{"level":"error","message":"Error: request aborted","method":"GET","path":"/ads/feed-ads","stack":"BadRequestError: request aborted\n    at IncomingMessage.onAborted (/Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/raw-body/index.js:245:10)\n    at IncomingMessage.emit (node:events:507:28)\n    at IncomingMessage._destroy (node:_http_incoming:221:10)\n    at _destroy (node:internal/streams/destroy:122:10)\n    at IncomingMessage.destroy (node:internal/streams/destroy:84:5)\n    at abortIncoming (node:_http_server:809:9)\n    at socketOnClose (node:_http_server:803:3)\n    at Socket.emit (node:events:519:35)\n    at TCP.<anonymous> (node:net:351:12)","timestamp":"2025-03-16T04:48:52.495Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-16T04:49:42.602Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-16T04:49:45.327Z"}
+{"level":"error","message":"Error: request aborted","method":"GET","path":"/ads/feed-ads","stack":"BadRequestError: request aborted\n    at IncomingMessage.onAborted (/Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/raw-body/index.js:245:10)\n    at IncomingMessage.emit (node:events:507:28)\n    at IncomingMessage._destroy (node:_http_incoming:221:10)\n    at _destroy (node:internal/streams/destroy:122:10)\n    at IncomingMessage.destroy (node:internal/streams/destroy:84:5)\n    at abortIncoming (node:_http_server:809:9)\n    at socketOnClose (node:_http_server:803:3)\n    at Socket.emit (node:events:519:35)\n    at TCP.<anonymous> (node:net:351:12)","timestamp":"2025-03-16T04:55:15.352Z"}
+{"level":"error","message":"Error: request aborted","method":"GET","path":"/ads/feed-ads","stack":"BadRequestError: request aborted\n    at IncomingMessage.onAborted (/Users/pratik/Desktop/PRAT/FarmDoctor/Backend-JS/main-service/node_modules/raw-body/index.js:245:10)\n    at IncomingMessage.emit (node:events:507:28)\n    at IncomingMessage._destroy (node:_http_incoming:221:10)\n    at _destroy (node:internal/streams/destroy:122:10)\n    at IncomingMessage.destroy (node:internal/streams/destroy:84:5)\n    at abortIncoming (node:_http_server:809:9)\n    at socketOnClose (node:_http_server:803:3)\n    at Socket.emit (node:events:519:35)\n    at TCP.<anonymous> (node:net:351:12)","timestamp":"2025-03-16T04:58:45.356Z"}
+{"level":"info","message":"Server is shutting down...","timestamp":"2025-03-16T09:22:32.503Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-16T09:22:34.877Z"}

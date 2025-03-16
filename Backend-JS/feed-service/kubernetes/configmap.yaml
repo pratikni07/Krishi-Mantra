@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feed-service-config
+  namespace: default
+data:
+  PORT: "3003"
+  NODE_ENV: "production"
+  JWT_EXPIRATION: "1d"
+  CLOUDINARY_CLOUD_NAME: "your_cloud_name"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  EMAIL_HOST: "smtp.gmail.com"
+  EMAIL_PORT: "587"
+  EMAIL_USER: "pratik04pratik@gmail.com"
+  CORS_ORIGIN: "http://frontend-service"
+  RATE_LIMIT_WINDOW_MS: "15"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+  DEBUG: "false" 

@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, unused_catch_stack
 
 import 'package:dio/dio.dart';
 import '../../core/constants/api_constants.dart';

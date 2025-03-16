@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: feed-service-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: api.yourwebsite.com
+    http:
+      paths:
+      - path: /feeds
+        pathType: Prefix
+        backend:
+          service:
+            name: feed-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - api.yourwebsite.com
+    secretName: tls-secret 

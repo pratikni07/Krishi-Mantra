@@ -1,9 +1,10 @@
-const { v2 }  = require("cloudinary")
+const { v2 } = require("cloudinary")
 
+// Get configuration from environment variables
 v2.config({ 
-    cloud_name: "dkemrlxyt", 
-    api_key: "928577748254365", 
-    api_secret: "G3uGJh44Jvm6L9txpS4v67wwGEY" // Click 'View Credentials' below to copy your API secret
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "dkemrlxyt", 
+    api_key: process.env.CLOUDINARY_API_KEY || "928577748254365",
+    api_secret: process.env.CLOUDINARY_API_SECRET || "G3uGJh44Jvm6L9txpS4v67wwGEY" 
 });
 
-module.exports= v2 ; 
+module.exports = v2; 

@@ -4,34 +4,33 @@ const redisClient = require('../config/redis');
 
 exports.createService = async (req, res) => {
     try {
-        const { title, image, titleImage, description, priority } = req.body;
-
-        // Create new service
-        const service = new Service({
+        const { title, image, description, order } = req.body;
+        
+        const newService = new Service({
             title,
             image,
-            titleImage,
             description,
-            priority: priority 
+            order: order || 0
         });
-
-        // Save to database
-        await service.save();
-
-        // Cache the service
-        await redisClient.setex(
-            `service:${service._id}`, 
-            3600, 
-            JSON.stringify(service)
-        );
-
+        
+        await newService.save();
+        
+        // Clear cache but don't fail if Redis is down
+        try {
+            await redisClient.del('all_services');
+        } catch (error) {
+            console.warn('Redis error when clearing services cache:', error.message);
+        }
+        
         res.status(201).json({
+            success: true,
             message: 'Service created successfully',
-            service
+            service: newService
         });
     } catch (error) {
         console.error('Error creating service:', error);
         res.status(500).json({
+            success: false,
             message: 'Failed to create service',
             error: error.message
         });
@@ -40,43 +39,42 @@ exports.createService = async (req, res) => {
 
 exports.getAllServices = async (req, res) => {
     try {
-        const { page = 1, limit = 10 } = req.query;
-        const skip = (page - 1) * limit;
-
-        // Check cache first
-        const cacheKey = `services:page:${page}:limit:${limit}`;
-        const cachedServices = await redisClient.get(cacheKey);
-
-        if (cachedServices) {
-            return res.status(200).json(JSON.parse(cachedServices));
+        const cacheKey = 'all_services';
+        
+        // Try to get from cache but don't fail if Redis is down
+        let cachedData = null;
+        try {
+            cachedData = await redisClient.get(cacheKey);
+        } catch (error) {
+            console.warn('Redis error when getting services:', error.message);
         }
-
-        // If not in cache, fetch from database
-        const services = await Service.find()
-            .sort({ priority: -1 }) // Sort by priority
-            .skip(Number(skip))
-            .limit(Number(limit));
-
-        const total = await Service.countDocuments();
-
-        const result = {
-            services,
-            currentPage: Number(page),
-            totalPages: Math.ceil(total / limit),
-            totalServices: total
-        };
-
-        // Cache the result
-        await redisClient.setex(
-            cacheKey, 
-            3600, 
-            JSON.stringify(result)
-        );
-
-        res.status(200).json(result);
+        
+        if (cachedData) {
+            return res.status(200).json(JSON.parse(cachedData));
+        }
+        
+        const services = await Service.find().sort({ order: 1 });
+        
+        // Cache for 1 hour but don't fail if Redis is down
+        try {
+            await redisClient.setex(cacheKey, 3600, JSON.stringify({
+                success: true,
+                message: 'Services fetched successfully',
+                services
+            }));
+        } catch (error) {
+            console.warn('Redis error when setting services cache:', error.message);
+        }
+        
+        res.status(200).json({
+            success: true,
+            message: 'Services fetched successfully',
+            services
+        });
     } catch (error) {
         console.error('Error fetching services:', error);
         res.status(500).json({
+            success: false,
             message: 'Failed to fetch services',
             error: error.message
         });
@@ -86,32 +84,53 @@ exports.getAllServices = async (req, res) => {
 exports.getServiceById = async (req, res) => {
     try {
         const { id } = req.params;
-
-        // Check cache first
-        const cachedService = await redisClient.get(`service:${id}`);
+        const cacheKey = `service_${id}`;
         
-        if (cachedService) {
-            return res.status(200).json(JSON.parse(cachedService));
+        // Try to get from cache but don't fail if Redis is down
+        let cachedData = null;
+        try {
+            cachedData = await redisClient.get(cacheKey);
+        } catch (error) {
+            console.warn(`Redis error when getting service ${id}:`, error.message);
         }
-
-        // If not in cache, fetch from database
+        
+        if (cachedData) {
+            return res.status(200).json(JSON.parse(cachedData));
+        }
+        
         const service = await Service.findById(id);
-
+        
         if (!service) {
-            return res.status(404).json({ message: 'Service not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Service not found'
+            });
         }
-
-        // Cache the service
-        await redisClient.setex(
-            `service:${id}`, 
-            3600, 
-            JSON.stringify(service)
-        );
-
-        res.status(200).json(service);
+        
+        // Cache for 1 hour but don't fail if Redis is down
+        try {
+            await redisClient.setex(
+                cacheKey,
+                3600,
+                JSON.stringify({
+                    success: true,
+                    message: 'Service fetched successfully',
+                    service
+                })
+            );
+        } catch (error) {
+            console.warn(`Redis error when setting service ${id} cache:`, error.message);
+        }
+        
+        res.status(200).json({
+            success: true,
+            message: 'Service fetched successfully',
+            service
+        });
     } catch (error) {
         console.error('Error fetching service:', error);
         res.status(500).json({
+            success: false,
             message: 'Failed to fetch service',
             error: error.message
         });
@@ -121,39 +140,38 @@ exports.getServiceById = async (req, res) => {
 exports.updateService = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, image, titleImage, description, priority } = req.body;
-
-        // Update service in database
-        const service = await Service.findByIdAndUpdate(
-            id, 
-            {
-                title,
-                image,
-                titleImage,
-                description,
-                priority: priority
-            }, 
-            { new: true }
+        const { title, image, description, order } = req.body;
+        
+        const updatedService = await Service.findByIdAndUpdate(
+            id,
+            { title, image, description, order },
+            { new: true, runValidators: true }
         );
-
-        if (!service) {
-            return res.status(404).json({ message: 'Service not found' });
+        
+        if (!updatedService) {
+            return res.status(404).json({
+                success: false,
+                message: 'Service not found'
+            });
         }
-
-        // Update cache
-        await redisClient.setex(
-            `service:${id}`, 
-            3600, 
-            JSON.stringify(service)
-        );
-
+        
+        // Clear caches but don't fail if Redis is down
+        try {
+            await redisClient.del(`service_${id}`);
+            await redisClient.del('all_services');
+        } catch (error) {
+            console.warn(`Redis error when clearing service caches:`, error.message);
+        }
+        
         res.status(200).json({
+            success: true,
             message: 'Service updated successfully',
-            service
+            service: updatedService
         });
     } catch (error) {
         console.error('Error updating service:', error);
         res.status(500).json({
+            success: false,
             message: 'Failed to update service',
             error: error.message
         });
@@ -163,23 +181,32 @@ exports.updateService = async (req, res) => {
 exports.deleteService = async (req, res) => {
     try {
         const { id } = req.params;
-
-        // Delete from database
+        
         const service = await Service.findByIdAndDelete(id);
-
+        
         if (!service) {
-            return res.status(404).json({ message: 'Service not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Service not found'
+            });
         }
-
-        // Remove from cache
-        await redisClient.del(`service:${id}`);
-
+        
+        // Clear caches but don't fail if Redis is down
+        try {
+            await redisClient.del(`service_${id}`);
+            await redisClient.del('all_services');
+        } catch (error) {
+            console.warn(`Redis error when clearing service caches:`, error.message);
+        }
+        
         res.status(200).json({
+            success: true,
             message: 'Service deleted successfully'
         });
     } catch (error) {
         console.error('Error deleting service:', error);
         res.status(500).json({
+            success: false,
             message: 'Failed to delete service',
             error: error.message
         });

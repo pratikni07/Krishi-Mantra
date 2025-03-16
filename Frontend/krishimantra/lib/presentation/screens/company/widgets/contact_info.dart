@@ -1,11 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../data/models/company_model.dart';
+import '../../../../data/services/language_service.dart';
 
-class ContactInfo extends StatelessWidget {
+class ContactInfo extends StatefulWidget {
   final CompanyModel company;
 
   const ContactInfo({Key? key, required this.company}) : super(key: key);
+
+  @override
+  State<ContactInfo> createState() => _ContactInfoState();
+}
+
+class _ContactInfoState extends State<ContactInfo> {
+  String contactInfoText = "Contact Information";
+  String addressText = "Address";
+  String emailText = "Email";
+  String phoneText = "Phone";
+  String websiteText = "Website";
+  bool _translationsInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeTranslations();
+  }
+
+  Future<void> _initializeTranslations() async {
+    final languageService = await LanguageService.getInstance();
+    
+    final translations = await Future.wait([
+      languageService.translate('Contact Information'),
+      languageService.translate('Address'),
+      languageService.translate('Email'),
+      languageService.translate('Phone'),
+      languageService.translate('Website'),
+    ]);
+    
+    if (mounted) {
+      setState(() {
+        contactInfoText = translations[0];
+        addressText = translations[1];
+        emailText = translations[2];
+        phoneText = translations[3];
+        websiteText = translations[4];
+        _translationsInitialized = true;
+      });
+    }
+  }
 
   Future<void> _launchURL(String url) async {
     final uri = Uri.parse(url);
@@ -62,67 +104,109 @@ class ContactInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.all(20),
-            child: Text(
-              'Contact Information',
+    return Card(
+      elevation: 2,
+      color: Colors.grey[50],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              contactInfoText,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
               ),
             ),
-          ),
-          Divider(height: 1, color: Colors.grey[200]),
-          _buildContactTile(
-            icon: Icons.email,
-            title: 'Email',
-            subtitle: company.email,
-            onTap: company.email != null 
-                ? () => _launchURL('mailto:${company.email}')
-                : null,
-          ),
-          _buildContactTile(
-            icon: Icons.phone,
-            title: 'Phone',
-            subtitle: company.phone,
-            onTap: company.phone != null 
-                ? () => _launchURL('tel:${company.phone}')
-                : null,
-          ),
-          _buildContactTile(
-            icon: Icons.language,
-            title: 'Website',
-            subtitle: company.website,
-            onTap: company.website != null 
-                ? () => _launchURL(company.website!)
-                : null,
-          ),
-          if (company.address != null)
-            _buildContactTile(
-              icon: Icons.location_on,
-              title: 'Address',
-              subtitle: '${company.address!.street}\n${company.address!.city}, ${company.address!.state} ${company.address!.zip}',
-              isLast: true,
-            ),
-        ],
+            Divider(height: 24),
+            if (widget.company.address != null) ...[
+              _buildInfoRow(
+                Icons.location_on,
+                addressText,
+                FutureBuilder<String>(
+                  future: widget.company.address!.getTranslatedFullAddress(),
+                  builder: (context, snapshot) {
+                    final address = widget.company.address;
+                    if (snapshot.hasData) {
+                      return Text(
+                        snapshot.data!,
+                        overflow: TextOverflow.visible,
+                      );
+                    }
+                    return Text(
+                      '${address!.street}, ${address.city}, ${address.state}, ${address.zip}',
+                      overflow: TextOverflow.visible,
+                    );
+                  }
+                ),
+              ),
+              SizedBox(height: 12),
+            ],
+            if (widget.company.email != null) ...[
+              _buildInfoRow(
+                Icons.email,
+                emailText,
+                Text(
+                  widget.company.email!,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(height: 12),
+            ],
+            if (widget.company.phone != null) ...[
+              _buildInfoRow(
+                Icons.phone,
+                phoneText,
+                Text(widget.company.phone!),
+              ),
+              SizedBox(height: 12),
+            ],
+            if (widget.company.website != null) ...[
+              _buildInfoRow(
+                Icons.language,
+                websiteText,
+                Text(
+                  widget.company.website!,
+                  style: TextStyle(
+                    color: Colors.blue,
+                    decoration: TextDecoration.underline,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, Widget value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: Colors.grey[700]),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 2),
+              value,
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

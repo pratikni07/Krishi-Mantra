@@ -5,9 +5,11 @@ import 'package:krishimantra/routes/app_routes.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/services/UserService.dart';
 import '../../../data/services/language_service.dart';
+import '../../controllers/ads_controller.dart';
 import '../../controllers/feed_controller.dart';
 import '../../widgets/app_header.dart';
 import 'widgets/feed_card.dart';
+import 'dart:math';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({Key? key}) : super(key: key);
@@ -18,11 +20,16 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   final FeedController _feedController = Get.find<FeedController>();
+  final AdsController _adsController = Get.find<AdsController>();
   final UserService _userService = UserService();
   late LanguageService _languageService;
   final ScrollController _scrollController = ScrollController();
   bool _showTrendingHashtags = true;
   bool _showCreatePost = false;
+  
+  // Add properties for feed ads
+  List<dynamic> _feedAds = [];
+  final Random _random = Random();
 
   // Add this property to track if the screen was inactive
   bool _wasInactive = false;
@@ -38,6 +45,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     _feedController.fetchRecommendedFeeds();
     _checkUserRole();
     _initializeLanguage();
+    _loadFeedAds(); // Load feed ads
     // Register for lifecycle events
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setSystemUIOverlayStyle(
@@ -120,6 +128,16 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   void _resetToRecommendedFeeds() {
     if (_feedController.selectedTag.value.isNotEmpty) {
       _feedController.clearSelectedTag();
+    }
+  }
+
+  // Add method to load feed ads
+  Future<void> _loadFeedAds() async {
+    try {
+      _feedAds = await _adsController.fetchFeedAds();
+      setState(() {});
+    } catch (e) {
+      print('Error loading feed ads: $e');
     }
   }
 
@@ -244,38 +262,104 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                       onRefresh: () async {
                         await _feedController.fetchRecommendedFeeds(
                             refresh: true);
+                        await _loadFeedAds(); // Refresh ads too
                       },
                       child: Obx(
-                        () => ListView.builder(
-                          controller: _scrollController,
-                          itemCount:
-                              _feedController.recommendedFeeds.length + 1,
-                          itemBuilder: (context, index) {
-                            if (index ==
-                                _feedController.recommendedFeeds.length) {
-                              return Obx(() {
-                                if (_feedController
-                                    .isRecommendedLoading.value) {
-                                  return const Center(
-                                    child: Padding(
-                                      padding: EdgeInsets.all(16.0),
-                                      child: CircularProgressIndicator(
-                                        color: AppColors.green,
+                        () {
+                          final feeds = _feedController.recommendedFeeds;
+                          // Calculate total items including ads after 5th position
+                          int totalItems = feeds.length + 1; // +1 for loading indicator
+                          if (feeds.length > 5 && _feedAds.isNotEmpty) {
+                            // Add potential ad positions after 5th item
+                            int adPositions = (feeds.length - 5) ~/ 3;
+                            totalItems += adPositions;
+                          }
+                          
+                          return ListView.builder(
+                            controller: _scrollController,
+                            itemCount: totalItems,
+                            itemBuilder: (context, index) {
+                              // Check if this is the last item (loading indicator)
+                              if (index == totalItems - 1) {
+                                return Obx(() {
+                                  if (_feedController.isRecommendedLoading.value) {
+                                    return const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(16.0),
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.green,
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                              });
-                            }
-                            return FeedCard(
-                              feed: _feedController.recommendedFeeds[index],
-                              onLike: () => _feedController.likeFeed(
-                                _feedController.recommendedFeeds[index].id,
-                              ),
-                            );
-                          },
-                        ),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                });
+                              }
+                              
+                              // Determine if this position should show an ad
+                              // Logic: after 5th item, potentially show an ad every 3 items with some randomness
+                              if (index > 5 && _feedAds.isNotEmpty && (index - 5) % 3 == 0 && _random.nextBool()) {
+                                // Show a random ad
+                                final adIndex = _random.nextInt(_feedAds.length);
+                                final ad = _feedAds[adIndex];
+                                
+                                // Display ad content as image
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: InkWell(
+                                          onTap: () {
+                                            // Handle ad click if needed
+                                            if (ad['dirURL'] != null) {
+                                              // Navigate or handle the ad link
+                                            }
+                                          },
+                                          child: Image.network(
+                                            ad['content'],
+                                            width: double.infinity,
+                                            height: 200,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return Container(
+                                                width: double.infinity,
+                                                height: 200,
+                                                color: Colors.grey[300],
+                                                child: const Icon(Icons.image_not_supported, size: 50),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      const Divider(),
+                                    ],
+                                  ),
+                                );
+                              }
+                              
+                              // Adjust the feed index to account for ads
+                              int feedIndex = index;
+                              if (index > 5 && _feedAds.isNotEmpty) {
+                                feedIndex = index - ((index - 5) ~/ 3);
+                              }
+                              
+                              // Return regular feed item if within range
+                              if (feedIndex < feeds.length) {
+                                return FeedCard(
+                                  feed: feeds[feedIndex],
+                                  onLike: () => _feedController.likeFeed(
+                                    feeds[feedIndex].id,
+                                  ),
+                                );
+                              }
+                              
+                              return const SizedBox.shrink();
+                            },
+                          );
+                        },
                       ),
                     ),
                   ),

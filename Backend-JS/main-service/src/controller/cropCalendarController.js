@@ -23,7 +23,14 @@ class CropCalendarController {
     try {
       const crop = new Crop(req.body);
       await crop.save();
-      await redis.del("all_crops");
+      
+      // Clear cache but don't fail if Redis is down
+      try {
+        await redis.del("all_crops");
+      } catch (error) {
+        console.warn("Redis error when deleting crops cache:", error.message);
+      }
+      
       res.status(201).json({
         success: true,
         data: crop,
@@ -35,18 +42,30 @@ class CropCalendarController {
 
   static async getAllCrops(req, res) {
     try {
-      const cachedCrops = await redis.get("all_crops");
+      // Try to get from cache but don't fail if Redis is down
+      let cachedCrops = null;
+      try {
+        cachedCrops = await redis.get("all_crops");
+      } catch (error) {
+        console.warn("Redis error when getting crops:", error.message);
+      }
+      
       if (cachedCrops) {
-        return res.json({
-          success: true,
-          data: JSON.parse(cachedCrops),
-        });
+        return res.json(JSON.parse(cachedCrops));
       }
 
-      const crops = await Crop.find().sort({ name: 1 });
-      await redis.setex("all_crops", 3600, JSON.stringify(crops)); // Cache for 1 hour
+      const crops = await Crop.find({ status: "active" }).sort({ name: 1 });
+      
+      // Cache with 1 hour expiry but don't fail if Redis is down
+      try {
+        await redis.setex("all_crops", 3600, JSON.stringify(crops));
+      } catch (error) {
+        console.warn("Redis error when setting crops cache:", error.message);
+      }
+      
       res.json({
         success: true,
+        count: crops.length,
         data: crops,
       });
     } catch (error) {
@@ -279,18 +298,26 @@ class CropCalendarController {
   // SEARCH AND FILTER OPERATIONS
   static async searchCrops(req, res) {
     try {
-      const { search, season, page = 1, limit = 10 } = req.query;
-      const cacheKey = `search_${search}_${season}_${page}_${limit}`;
-
-      const cachedResults = await redis.get(cacheKey);
-      if (cachedResults) {
-        return res.json({
-          success: true,
-          data: JSON.parse(cachedResults),
-        });
+      const { search, season, page = 1, limit = 20 } = req.query;
+      
+      // Generate a unique cache key based on search parameters
+      const cacheKey = `crops:search:${search || ""}:${season || ""}:${page}:${limit}`;
+      
+      // Try to get from cache but don't fail if Redis is down
+      let cachedResult = null;
+      try {
+        cachedResult = await redis.get(cacheKey);
+      } catch (error) {
+        console.warn("Redis error when getting search results:", error.message);
+      }
+      
+      if (cachedResult) {
+        return res.json(JSON.parse(cachedResult));
       }
 
+      // Build query based on provided parameters
       const query = {
+        status: "active",
         ...(search && {
           $or: [
             { name: new RegExp(search, "i") },
@@ -317,7 +344,13 @@ class CropCalendarController {
         },
       };
 
-      await redis.setex(cacheKey, 1800, JSON.stringify(result)); // Cache for 30 minutes
+      // Cache for 30 minutes but don't fail if Redis is down
+      try {
+        await redis.setex(cacheKey, 1800, JSON.stringify(result));
+      } catch (error) {
+        console.warn("Redis error when setting search results cache:", error.message);
+      }
+      
       res.json({
         success: true,
         data: result,

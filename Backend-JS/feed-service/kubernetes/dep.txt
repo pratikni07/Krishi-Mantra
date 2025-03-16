@@ -1,0 +1,20 @@
+1 Before deploying the secret, make sure to base64 encode all sensitive values:
+
+   echo -n "your_secret_value" | base64
+
+
+2 Create the namespace (if not using default):
+
+   kubectl create namespace feed-service-namespace
+
+3 Apply the resources in the correct order:
+
+   kubectl apply -f kubernetes/configmap.yaml
+   kubectl apply -f kubernetes/secret.yaml
+   kubectl apply -f kubernetes/deployment.yaml
+   kubectl apply -f kubernetes/service.yaml
+   kubectl apply -f kubernetes/hpa.yaml
+   kubectl apply -f kubernetes/ingress.yaml # optional
+
+4 Check the status:
+   kubectl get pods,svc,hpa

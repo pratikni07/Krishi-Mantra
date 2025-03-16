@@ -1,0 +1,21 @@
+FROM node:18
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies (including dev dependencies)
+RUN npm install
+
+# Copy application code
+COPY . .
+
+# Set environment variables
+ENV NODE_ENV=development
+
+# Expose the port from .env.development
+EXPOSE 3003
+
+# Start the app in development mode
+CMD ["npm", "run", "dev"] 

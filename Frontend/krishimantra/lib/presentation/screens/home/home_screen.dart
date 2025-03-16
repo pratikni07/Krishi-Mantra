@@ -1,3 +1,5 @@
+// ignore_for_file: unused_field
+
 import 'dart:async';
 import 'dart:math';
 import 'package:geolocator/geolocator.dart';
@@ -8,7 +10,6 @@ import '../../../core/constants/colors.dart';
 import 'widgets/weather_section.dart';
 import '../../widgets/app_header.dart';
 import 'widgets/location_dialog.dart';
-import 'widgets/list_item.dart';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -39,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final AdsController _adsController = Get.find<AdsController>();
   List<dynamic> _homeScreenAds = [];
   List<dynamic> _splashAds = [];
+  // ignore: constant_identifier_names
   static const String LAST_SPLASH_SHOWN_KEY = 'last_splash_shown_time';
   final PageController _pageController = PageController();
   List<dynamic> _homeScreenSlider = [];
@@ -59,6 +61,10 @@ class _HomeScreenState extends State<HomeScreen> {
       "You have denied location permission permanently. Go to settings to enable it.";
   String errorFetchingLocationText = "Error fetching location";
   String closeText = "Close";
+  List<Map<String, String>> _testimonials = [];
+  String testimonialsText = "What Farmers Say";
+  String shareAppText =
+      "Share KrishiMantra with more farmers and enjoy our free services. Let's grow with technology together!";
 
   @override
   void initState() {
@@ -70,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _initializeAds();
     _initializeSlider();
     _feedController.fetchTopFeeds();
+    _initializeTestimonials();
   }
 
   void _onScroll() {
@@ -105,6 +112,9 @@ class _HomeScreenState extends State<HomeScreen> {
           'You have denied location permission permanently. Go to settings to enable it.'),
       _languageService.translate('Error fetching location'),
       _languageService.translate('Close'),
+      _languageService.translate('What Farmers Say'),
+      _languageService.translate(
+          'Share KrishiMantra with more farmers and enjoy our free services. Let\'s grow with technology together!'),
     ]);
 
     setState(() {
@@ -117,7 +127,15 @@ class _HomeScreenState extends State<HomeScreen> {
       goToSettingsText = translations[6];
       errorFetchingLocationText = translations[7];
       closeText = translations[8];
+      testimonialsText = translations[9];
+      shareAppText = translations[10];
     });
+
+    // Translate testimonials
+    for (var i = 0; i < _testimonials.length; i++) {
+      _testimonials[i]['content'] =
+          await _languageService.translate(_testimonials[i]['content'] ?? '');
+    }
   }
 
   Future<void> _fetchLocation() async {
@@ -457,6 +475,53 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  void _initializeTestimonials() {
+    _testimonials = [
+      {
+        'name': 'Rajesh Patel',
+        'village': 'Ahmedabad, Gujarat',
+        'content':
+            'KrishiMantra helped me understand the best time to sow my wheat crop. My yield increased by 20% this season!'
+      },
+      {
+        'name': 'Sunita Devi',
+        'village': 'Jaipur, Rajasthan',
+        'content':
+            'The weather alerts from this app saved my crops during unexpected rainfall. Thank you KrishiMantra!'
+      },
+      {
+        'name': 'Anand Singh',
+        'village': 'Lucknow, UP',
+        'content':
+            'I got the best price for my produce using the market rates feature. This app has changed how I do farming.'
+      },
+      {
+        'name': 'Lakshmi Venkatesh',
+        'village': 'Chennai, Tamil Nadu',
+        'content':
+            'The pest control tips helped me save my entire paddy field. KrishiMantra is truly a blessing for farmers.'
+      },
+      {
+        'name': 'Mohammad Farooq',
+        'village': 'Srinagar, Kashmir',
+        'content':
+            'I learned modern farming techniques through this app. My apple orchard is thriving now!'
+      },
+      {
+        'name': 'Gurpreet Kaur',
+        'village': 'Amritsar, Punjab',
+        'content':
+            'The soil testing advice from KrishiMantra experts doubled my crop yield this year. Highly recommended!'
+      },
+      {
+        'name': 'Deepak Mahto',
+        'village': 'Ranchi, Jharkhand',
+        'content':
+            'KrishiMantra connected me with other farmers facing similar challenges. Together we found solutions!'
+      },
+    ];
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -519,18 +584,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   margin: EdgeInsets.symmetric(horizontal: 8.0),
                   child: Services(),
                 ),
-                // if (_homeScreenAds.isNotEmpty) Container(
-                //   margin: EdgeInsets.only(top: 20.0, bottom: 0.0),
-                //   child: Text(
-                //     'Advertisements',
-                //     style: TextStyle(
-                //       color: AppColors.green,
-                //       fontSize: 22,
-                //       fontWeight: FontWeight.bold,
-                //     ),
-                //     textAlign: TextAlign.center,
-                //   ),
-                // ),
                 if (_homeScreenAds.isNotEmpty)
                   Container(
                     margin:
@@ -571,18 +624,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                // Container(
-                //   margin: EdgeInsets.only(top: 20.0, bottom: 0.0),
-                //   child: Text(
-                //     'Top Feeds',
-                //     style: TextStyle(
-                //       color: AppColors.green,
-                //       fontSize: 22,
-                //       fontWeight: FontWeight.bold,
-                //     ),
-                //     textAlign: TextAlign.center,
-                //   ),
-                // ),
                 Obx(() {
                   if (_feedController.isLoadingTopFeeds.value) {
                     return Center(child: CircularProgressIndicator());
@@ -647,6 +688,51 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ))
                       .toList(),
+                Container(
+                  margin: EdgeInsets.only(top: 20.0, bottom: 8.0),
+                  child: Text(
+                    testimonialsText,
+                    style: TextStyle(
+                      color: AppColors.green,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                Container(
+                  height: 180, // Reduced from 220 to 180
+                  margin: EdgeInsets.only(bottom: 10.0),
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: EdgeInsets.symmetric(horizontal: 10.0),
+                    itemCount: _testimonials.length,
+                    itemBuilder: (context, index) {
+                      return _buildHorizontalTestimonialCard(
+                          _testimonials[index]);
+                    },
+                  ),
+                ),
+                Container(
+                  margin:
+                      EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+                  padding: EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    color: AppColors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10.0),
+                    border: Border.all(color: AppColors.green, width: 1.0),
+                  ),
+                  child: Text(
+                    shareAppText,
+                    style: TextStyle(
+                      color: AppColors.green,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                SizedBox(height: 20),
               ],
             ),
           ),
@@ -737,6 +823,72 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHorizontalTestimonialCard(Map<String, String> testimonial) {
+    return Container(
+      width: 320, // Increased width for each card
+      margin: EdgeInsets.only(right: 12.0),
+      padding: EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(color: AppColors.green, width: 2.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            offset: Offset(0, 2),
+            blurRadius: 4.0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Quote icon at the top
+          Align(
+            alignment: Alignment.topLeft,
+            child: Icon(
+              Icons.format_quote,
+              color: AppColors.green,
+              size: 24,
+            ),
+          ),
+
+          // Content first (main testimonial text)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(
+                testimonial['content'] ?? '',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.black87,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 5,
+              ),
+            ),
+          ),
+
+          // Name and location at the bottom right
+          Align(
+            alignment: Alignment.bottomRight,
+            child: Text(
+              "- ${testimonial['name'] ?? ''} (${testimonial['village']?.split(',')[0] ?? ''})",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+                color: Colors.black87,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/models/crop_calendar_model.dart';
+import '../../../data/services/language_service.dart';
 import '../../controllers/crop_controller.dart';
 
 class CropDetailScreen extends StatelessWidget {
@@ -22,15 +23,20 @@ class CropDetailScreen extends StatelessWidget {
           onPressed: () => Get.back(),
         ),
         title: Obx(() {
-          if (!controller.isLoadingCalendar.value && 
+          if (!controller.isLoadingCalendar.value &&
               controller.cropCalendar.value != null) {
-            return Text(
-              controller.cropCalendar.value!.cropId.name,
-              style: GoogleFonts.montserrat(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.white,
-              ),
+            return FutureBuilder<String>(
+              future: controller.cropCalendar.value!.cropId.getTranslatedName(),
+              builder: (context, snapshot) {
+                return Text(
+                  snapshot.data ?? controller.cropCalendar.value!.cropId.name,
+                  style: GoogleFonts.montserrat(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.white,
+                  ),
+                );
+              },
             );
           }
           return const Text(
@@ -45,7 +51,8 @@ class CropDetailScreen extends StatelessWidget {
       ),
       body: Obx(() {
         if (controller.isLoadingCalendar.value) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.green));
+          return const Center(
+              child: CircularProgressIndicator(color: AppColors.green));
         }
 
         if (controller.calendarError.value.isNotEmpty) {
@@ -122,13 +129,18 @@ class CropDetailScreen extends StatelessWidget {
         Positioned(
           bottom: 20,
           left: 20,
-          child: Text(
-            calendar.cropId.scientificName,
-            style: GoogleFonts.montserrat(
-              fontSize: 16,
-              fontStyle: FontStyle.italic,
-              color: AppColors.white,
-            ),
+          child: FutureBuilder<String>(
+            future: calendar.cropId.getTranslatedScientificName(),
+            builder: (context, snapshot) {
+              return Text(
+                snapshot.data ?? calendar.cropId.scientificName,
+                style: GoogleFonts.montserrat(
+                  fontSize: 16,
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.white,
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -139,30 +151,45 @@ class CropDetailScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          calendar.cropId.name,
-          style: GoogleFonts.montserrat(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: AppColors.green,
-          ),
+        FutureBuilder<String>(
+          future: calendar.cropId.getTranslatedName(),
+          builder: (context, snapshot) {
+            return Text(
+              snapshot.data ?? calendar.cropId.name,
+              style: GoogleFonts.montserrat(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: AppColors.green,
+              ),
+            );
+          },
         ),
         const SizedBox(height: 8),
-        Text(
-          calendar.cropId.scientificName,
-          style: GoogleFonts.montserrat(
-            fontSize: 18,
-            fontStyle: FontStyle.italic,
-            color: AppColors.textGrey,
-          ),
+        FutureBuilder<String>(
+          future: calendar.cropId.getTranslatedScientificName(),
+          builder: (context, snapshot) {
+            return Text(
+              snapshot.data ?? calendar.cropId.scientificName,
+              style: GoogleFonts.montserrat(
+                fontSize: 18,
+                fontStyle: FontStyle.italic,
+                color: AppColors.textGrey,
+              ),
+            );
+          },
         ),
         const SizedBox(height: 16),
-        Text(
-          calendar.cropId.description,
-          style: GoogleFonts.nunito(
-            fontSize: 16,
-            color: AppColors.textGrey,
-          ),
+        FutureBuilder<String>(
+          future: calendar.cropId.getTranslatedDescription(),
+          builder: (context, snapshot) {
+            return Text(
+              snapshot.data ?? calendar.cropId.description,
+              style: GoogleFonts.nunito(
+                fontSize: 16,
+                color: AppColors.textGrey,
+              ),
+            );
+          },
         ),
         const SizedBox(height: 16),
         _buildInfoCard(
@@ -223,8 +250,9 @@ class CropDetailScreen extends StatelessWidget {
         ),
         _buildActivitiesList(calendar.activities),
         _buildWeatherInfo(calendar.weatherConsiderations),
-        _buildTipsList('Tips', calendar.tips),
-        _buildTipsList('Next Month Preparation', calendar.nextMonthPreparation),
+        _buildTipsList('Tips', calendar.tips, calendar),
+        _buildTipsList(
+            'Next Month Preparation', calendar.nextMonthPreparation, calendar),
         _buildIssuesList(calendar.possibleIssues),
       ],
     );
@@ -263,12 +291,20 @@ class CropDetailScreen extends StatelessWidget {
                     color: AppColors.textGrey,
                   ),
                 ),
-                Text(
-                  value,
-                  style: GoogleFonts.montserrat(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                FutureBuilder<String>(
+                  future: value == 'Sowing'
+                      ? LanguageService.getInstance()
+                          .then((s) => s.translate(value))
+                      : Future.value(value),
+                  builder: (context, snapshot) {
+                    return Text(
+                      snapshot.data ?? value,
+                      style: GoogleFonts.montserrat(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -298,24 +334,36 @@ class CropDetailScreen extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.access_time, color: AppColors.green, size: 20),
+                        Icon(Icons.access_time,
+                            color: AppColors.green, size: 20),
                         const SizedBox(width: 8),
-                        Text(
-                          'Week ${activity.timing.week} - ${activity.timing.recommendedTime}',
-                          style: GoogleFonts.nunito(
-                            fontSize: 14,
-                            color: AppColors.textGrey,
-                          ),
+                        FutureBuilder<String>(
+                          future:
+                              activity.timing.getTranslatedRecommendedTime(),
+                          builder: (context, snapshot) {
+                            return Text(
+                              'Week ${activity.timing.week} - ${snapshot.data ?? activity.timing.recommendedTime}',
+                              style: GoogleFonts.nunito(
+                                fontSize: 14,
+                                color: AppColors.textGrey,
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      activity.instructions,
-                      style: GoogleFonts.montserrat(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    FutureBuilder<String>(
+                      future: activity.getTranslatedInstructions(),
+                      builder: (context, snapshot) {
+                        return Text(
+                          snapshot.data ?? activity.instructions,
+                          style: GoogleFonts.montserrat(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 4),
                     Container(
@@ -327,12 +375,17 @@ class CropDetailScreen extends StatelessWidget {
                         color: AppColors.faintGreen,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
-                        activity.importance,
-                        style: GoogleFonts.nunito(
-                          fontSize: 12,
-                          color: AppColors.green,
-                        ),
+                      child: FutureBuilder<String>(
+                        future: activity.getTranslatedImportance(),
+                        builder: (context, snapshot) {
+                          return Text(
+                            snapshot.data ?? activity.importance,
+                            style: GoogleFonts.nunito(
+                              fontSize: 12,
+                              color: AppColors.green,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -352,7 +405,8 @@ class CropDetailScreen extends StatelessWidget {
         const SizedBox(height: 12),
         Card(
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           color: AppColors.white,
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -364,16 +418,26 @@ class CropDetailScreen extends StatelessWidget {
                   Icons.thermostat,
                 ),
                 const Divider(),
-                _buildWeatherRow(
-                  'Rainfall',
-                  weather.rainfall,
-                  Icons.water_drop,
+                FutureBuilder<String>(
+                  future: weather.getTranslatedRainfall(),
+                  builder: (context, snapshot) {
+                    return _buildWeatherRow(
+                      'Rainfall',
+                      snapshot.data ?? weather.rainfall,
+                      Icons.water_drop,
+                    );
+                  },
                 ),
                 const Divider(),
-                _buildWeatherRow(
-                  'Humidity',
-                  weather.humidity,
-                  Icons.water,
+                FutureBuilder<String>(
+                  future: weather.getTranslatedHumidity(),
+                  builder: (context, snapshot) {
+                    return _buildWeatherRow(
+                      'Humidity',
+                      snapshot.data ?? weather.humidity,
+                      Icons.water,
+                    );
+                  },
                 ),
               ],
             ),
@@ -414,7 +478,8 @@ class CropDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTipsList(String title, List<String> items) {
+  Widget _buildTipsList(
+      String title, List<String> items, CropCalendarModel calendar) {
     if (items.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -425,33 +490,42 @@ class CropDetailScreen extends StatelessWidget {
         const SizedBox(height: 12),
         Card(
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           color: AppColors.white,
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              children: items
-                  .map((tip) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline,
-                              color: AppColors.green,
-                              size: 20,
+            child: FutureBuilder<List<String>>(
+              future: title == 'Tips'
+                  ? calendar.getTranslatedTips()
+                  : calendar.getTranslatedNextMonthPreparation(),
+              builder: (context, snapshot) {
+                final displayItems = snapshot.data ?? items;
+                return Column(
+                  children: displayItems
+                      .map((tip) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.check_circle_outline,
+                                  color: AppColors.green,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    tip,
+                                    style: GoogleFonts.nunito(fontSize: 16),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                tip,
-                                style: GoogleFonts.nunito(fontSize: 16),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ))
-                  .toList(),
+                          ))
+                      .toList(),
+                );
+              },
             ),
           ),
         ),
@@ -479,18 +553,28 @@ class CropDetailScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      issue.problem,
-                      style: GoogleFonts.montserrat(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.orange,
-                      ),
+                    FutureBuilder<String>(
+                      future: issue.getTranslatedProblem(),
+                      builder: (context, snapshot) {
+                        return Text(
+                          snapshot.data ?? issue.problem,
+                          style: GoogleFonts.montserrat(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.orange,
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Solution: ${issue.solution}',
-                      style: GoogleFonts.nunito(fontSize: 14),
+                    FutureBuilder<String>(
+                      future: issue.getTranslatedSolution(),
+                      builder: (context, snapshot) {
+                        return Text(
+                          'Solution: ${snapshot.data ?? issue.solution}',
+                          style: GoogleFonts.nunito(fontSize: 14),
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -500,21 +584,34 @@ class CropDetailScreen extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    ...issue.preventiveMeasures.map((measure) => Padding(
-                          padding: const EdgeInsets.only(left: 16, top: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.arrow_right, size: 20),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  measure,
-                                  style: GoogleFonts.nunito(fontSize: 14),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )),
+                    FutureBuilder<List<String>>(
+                      future: issue.getTranslatedPreventiveMeasures(),
+                      builder: (context, snapshot) {
+                        final measures =
+                            snapshot.data ?? issue.preventiveMeasures;
+                        return Column(
+                          children: measures
+                              .map((measure) => Padding(
+                                    padding:
+                                        const EdgeInsets.only(left: 16, top: 4),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.arrow_right, size: 20),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            measure,
+                                            style: GoogleFonts.nunito(
+                                                fontSize: 14),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ))
+                              .toList(),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -522,4 +619,4 @@ class CropDetailScreen extends StatelessWidget {
       ],
     );
   }
-} 
+}

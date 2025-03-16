@@ -34,42 +34,48 @@ const VideoTutorialSchema = new mongoose.Schema(
     },
     videoType: {
       type: String,
-      enum: ['youtube', 'drive', 'cloudinary', 'direct'],
+      enum: ["youtube", "drive", "cloudinary", "direct"],
       required: true,
     },
     duration: {
-      type: Number, // Duration in seconds
+      type: Number,
     },
-    tags: [{
-      type: String,
-      trim: true,
-    }],
+    tags: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     category: {
       type: String,
       required: true,
     },
     visibility: {
       type: String,
-      enum: ['public', 'private', 'unlisted'],
-      default: 'public',
+      enum: ["public", "private", "unlisted"],
+      default: "public",
     },
     likes: {
       count: {
         type: Number,
         default: 0,
       },
-      users: [{
-        type: String, // userId
-      }]
+      users: [
+        {
+          type: String, // userId
+        },
+      ],
     },
     views: {
       count: {
         type: Number,
         default: 0,
       },
-      unique: [{
-        type: String, // userId
-      }]
+      unique: [
+        {
+          type: String, // userId
+        },
+      ],
     },
     comments: {
       count: {
@@ -77,15 +83,17 @@ const VideoTutorialSchema = new mongoose.Schema(
         default: 0,
       },
     },
-    reports: [{
-      userId: String,
-      reason: String,
-      description: String,
-      date: {
-        type: Date,
-        default: Date.now,
+    reports: [
+      {
+        userId: String,
+        reason: String,
+        description: String,
+        date: {
+          type: Date,
+          default: Date.now,
+        },
       },
-    }],
+    ],
   },
   {
     timestamps: true,
@@ -94,9 +102,9 @@ const VideoTutorialSchema = new mongoose.Schema(
 
 // Indexes for better query performance
 VideoTutorialSchema.index({ userId: 1, createdAt: -1 });
-VideoTutorialSchema.index({ title: 'text', description: 'text', tags: 'text' });
+VideoTutorialSchema.index({ title: "text", description: "text", tags: "text" });
 VideoTutorialSchema.index({ "likes.count": -1, createdAt: -1 });
 VideoTutorialSchema.index({ "views.count": -1, createdAt: -1 });
 VideoTutorialSchema.index({ category: 1, createdAt: -1 });
 
-module.exports = mongoose.model("VideoTutorial", VideoTutorialSchema); 
+module.exports = mongoose.model("VideoTutorial", VideoTutorialSchema);
