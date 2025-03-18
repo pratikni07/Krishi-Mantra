@@ -15,6 +15,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const { redisClient } = require("./config/redis");
+const analyticsRoutes = require("./routes/analytics");
 
 const app = express();
 
@@ -22,11 +23,11 @@ const app = express();
 app.use(helmet());
 
 // Rate Limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // limit each IP to 100 requests per windowMs
+// });
+// app.use(limiter);
 
 // Middleware
 app.use(cors());
@@ -55,6 +56,7 @@ mongoose.connection.on("error", (err) => {
 app.use("/feeds", require("./routes/feed"));
 app.use("/comments", require("./routes/comment"));
 app.use("/likes", require("./routes/like"));
+app.use("/analytics", analyticsRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

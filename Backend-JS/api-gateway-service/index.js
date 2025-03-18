@@ -9,13 +9,13 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Rate limiting configuration
-const limiter = rateLimit({
-  windowMs: process.env.RATE_LIMIT_WINDOW_MS || 900000,
-  max: process.env.RATE_LIMIT_MAX_REQUESTS || 100,
-});
+// const limiter = rateLimit({
+//   windowMs: process.env.RATE_LIMIT_WINDOW_MS || 900000,
+//   max: process.env.RATE_LIMIT_MAX_REQUESTS || 100,
+// });
 
 // Middleware
-app.use(limiter);
+// app.use(limiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 

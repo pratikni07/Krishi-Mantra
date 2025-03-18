@@ -9,6 +9,7 @@ const compression = require("compression");
 const connectDB = require("./config/database");
 const reelRoutes = require("./routes/reelRoutes");
 const videoTutorialRoutes = require("./routes/videoTutorialRoutes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 connectDB();
 app.use("/reels", reelRoutes);
 app.use("/videos", videoTutorialRoutes);
+app.use("/analytics", analyticsRoutes);
 
 // mongoose
 //   .connect(process.env.MONGODB_URI, {

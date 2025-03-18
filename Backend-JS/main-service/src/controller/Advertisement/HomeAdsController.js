@@ -3,6 +3,52 @@ const cloudinary = require("../../config/cloudinary");
 const RedisClient = require("../../config/redis");
 const HomeScreenAds = require("../../model/UIModel/HomeScreen/HomeScreenAd");
 const SplashModal = require("../../model/UIModel/HomeScreen/SplashModel");
+const GeoLocation = require("../../model/Analytics/GeoLocation");
+const axios = require("axios");
+
+// Move the function outside the class as a standalone function
+async function trackUserLocation(ip, userAgent, userId) {
+  try {
+    // Skip for localhost IPs
+    if (ip === '127.0.0.1' || ip === '::1' || ip.includes('192.168.')) {
+      // For local testing, you can use a mock location
+      const mockLocation = {
+        ipAddress: ip,
+        country: "United States",
+        region: "California",
+        city: "San Francisco",
+        latitude: 37.7749,
+        longitude: -122.4194,
+        deviceInfo: userAgent,
+        userId: userId
+      };
+      
+      await new GeoLocation(mockLocation).save();
+      return;
+    }
+    
+    // Call IP geolocation service
+    const geoResponse = await axios.get(`https://ipapi.co/${ip}/json/`);
+    
+    if (geoResponse.data) {
+      const locationData = {
+        ipAddress: ip,
+        country: geoResponse.data.country_name,
+        region: geoResponse.data.region,
+        city: geoResponse.data.city,
+        latitude: geoResponse.data.latitude,
+        longitude: geoResponse.data.longitude,
+        deviceInfo: userAgent,
+        userId: userId
+      };
+      
+      await new GeoLocation(locationData).save();
+    }
+  } catch (error) {
+    console.error("Error tracking location:", error);
+  }
+}
+
 class HomeAdsController {
   // HOME SLIDER
   async createHomeAd(req, res) {
@@ -46,15 +92,25 @@ class HomeAdsController {
 
   async getHomeAds(req, res) {
     try {
+      // Track user geolocation when fetching home ads
+      const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      const userId = req.user ? req.user._id : null;
+      
+      // Call the standalone function instead of a method
+      trackUserLocation(ip, userAgent, userId).catch(err => 
+        console.error("Error tracking location:", err)
+      );
+      
       const cachedAds = await RedisClient.get("home_ads");
       if (cachedAds) return res.json(JSON.parse(cachedAds));
 
-      const homeAds = await HomeSlider.find().sort({ prority: -1 });
-      await RedisClient.setex("home_ads", 3600, JSON.stringify(homeAds));
-
-      res.json(homeAds);
+      const ads = await HomeScreenAds.find();
+      await RedisClient.setex("home_ads", 3600, JSON.stringify(ads));
+      
+      res.json(ads);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ message: error.message });
     }
   }
 
