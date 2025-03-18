@@ -2,7 +2,18 @@ const express = require("express");
 const router = express.Router();
 const feedController = require("../controller/feedController");
 
-// Existing routes
+// Debug middleware
+const testingmiddleware = (req, res, next) => {
+  console.log("[TESTING MIDDLEWARE] Request received for:", req.originalUrl);
+  console.log("[TESTING MIDDLEWARE] Request query:", req.query);
+  console.log("[TESTING MIDDLEWARE] Request body:", req.body);
+  next();
+};
+
+// Start fresh with a clean route
+router.get("/getAllFeedsAdmin", testingmiddleware, feedController.getAllFeedsForAdmin);
+
+// Other routes
 router.get("/getoptwo", feedController.getTopFeeds);
 router.post("/", feedController.createFeed);
 router.get("/:feedId", feedController.getFeed);
@@ -15,13 +26,10 @@ router.get("/feeds/random", feedController.getRandomFeeds);
 router.post("/user/interest", feedController.updateUserInterest);
 router.post("/user/interaction", feedController.recordInteraction);
 
-// New recommendation route
-// router.get("/user/:userId/recommended", feedController.getRecommendedFeeds);
+// Recommended feeds route
 router.get("/user/:userId/recommended", feedController.getAllFeeds);
 
-// New trending hashtags route
+// Trending hashtags route
 router.get("/trending/hashtags", feedController.getTrendingHashtags);
-
-// get top feeds
 
 module.exports = router;

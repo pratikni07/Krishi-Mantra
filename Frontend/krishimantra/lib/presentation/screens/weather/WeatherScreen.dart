@@ -3,8 +3,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import 'package:krishimantra/core/constants/colors.dart';
 import 'package:weather_icons/weather_icons.dart';
+import '../../../core/constants/colors.dart';
 import '../../../data/services/language_service.dart';
 
 class WeatherScreen extends StatefulWidget {

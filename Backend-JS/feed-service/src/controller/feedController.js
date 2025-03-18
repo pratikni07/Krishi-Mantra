@@ -48,6 +48,7 @@ class FeedController {
     this.getTopFeeds = this.getTopFeeds.bind(this);
     this.getTrendingHashtags = this.getTrendingHashtags.bind(this);
     this.getAllFeeds = this.getAllFeeds.bind(this);
+    this.getAllFeedsForAdmin = this.getAllFeedsForAdmin.bind(this);
   }
   getCommonAggregationPipeline() {
     return [
@@ -1045,14 +1046,13 @@ class FeedController {
 
   async getAllFeeds(req, res) {
     try {
+      console.log("getAllFeeds called");
       const page = Math.max(1, parseInt(req.query.page) || 1);
       const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
       const skip = (page - 1) * limit;
-      const sort = req.query.sort || "newest"; // Default sort by newest
-
-      // Cache mechanism similar to getRecommendedFeeds
+      const sort = req.query.sort || "newest"; 
       const ALL_FEEDS_CACHE_KEY = "all_feeds:";
-      const CACHE_DURATION = 600; // 10 minutes in seconds
+      const CACHE_DURATION = 600; 
 
       const cacheKey = `${ALL_FEEDS_CACHE_KEY}${page}:${limit}:${sort}`;
       const cachedFeeds = await redis.get(cacheKey);
@@ -1116,6 +1116,62 @@ class FeedController {
     } catch (error) {
       console.error("Error fetching all feeds:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  }
+
+  /**
+   * Get all feeds for admin with pagination and sorting
+   * @route GET /feeds/getAllFeedsAdmin
+   */
+  async getAllFeedsForAdmin(req, res) {
+    try {
+      console.log("getAllFeedsForAdmin called");
+      
+      // Extract pagination parameters
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
+      
+      // Safely get sort field and direction
+      let sortField = req.query.sortField || 'date';
+      const sortDirection = req.query.sortDirection === 'asc' ? 1 : -1;
+      
+      // Create sort object
+      const sort = {};
+      sort[sortField] = sortDirection;
+      
+      console.log(`Fetching feeds with page=${page}, limit=${limit}, sortField=${sortField}, sortDirection=${sortDirection}`);
+      
+      // Count total documents - with empty filter {}
+      const total = await Feed.countDocuments({});
+      console.log(`Total feed count: ${total}`);
+      
+      // Query feeds with pagination
+      const feeds = await Feed.find({})
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(); // Convert to plain JS object for better performance
+      
+      console.log(`Retrieved ${feeds.length} feeds`);
+      
+      // Return response
+      return res.status(200).json({
+        success: true,
+        data: feeds,
+        pagination: {
+          total,
+          page,
+          limit,
+          pages: Math.ceil(total / limit)
+        }
+      });
+    } catch (error) {
+      console.error("ERROR in getAllFeedsForAdmin:", error);
+      return res.status(500).json({
+        success: false,
+        error: error.message || "An error occurred while fetching feeds"
+      });
     }
   }
 
