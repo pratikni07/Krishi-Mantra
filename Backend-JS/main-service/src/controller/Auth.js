@@ -602,3 +602,80 @@ exports.signupWithPhone = async (req, res) => {
     });
   }
 };
+
+exports.adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    // Find admin user
+    const admin = await User.findOne({ email, accountType: "admin" }).populate("additionalDetails");
+    
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials or unauthorized access",
+      });
+    }
+
+    // Verify password
+    if (!admin.password) {
+      return res.status(401).json({
+        success: false,
+        message: "Please use the password reset flow to set up your password",
+      });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, admin.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        email: admin.email, 
+        id: admin._id, 
+        accountType: admin.accountType 
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "24h",
+      }
+    );
+
+    // Remove sensitive data
+    admin.password = undefined;
+    admin.token = token;
+
+    // Set cookie options
+    const options = {
+      expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      httpOnly: true,
+    };
+
+    return res.cookie("token", token, options).status(200).json({
+      success: true,
+      token,
+      user: admin,
+      message: "Admin logged in successfully",
+    });
+
+  } catch (error) {
+    console.error("Admin Login Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Login failed. Please try again later.",
+    });
+  }
+};

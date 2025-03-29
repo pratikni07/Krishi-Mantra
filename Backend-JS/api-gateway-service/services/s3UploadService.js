@@ -22,6 +22,7 @@ const validateContentType = (contentType) => {
     "ads",
     "users",
     "videostuts",
+    "marketplace",
     "chat_image", // Add chat content types
     "chat_video",
     "chat_document",

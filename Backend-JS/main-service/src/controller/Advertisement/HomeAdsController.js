@@ -105,7 +105,7 @@ class HomeAdsController {
       const cachedAds = await RedisClient.get("home_ads");
       if (cachedAds) return res.json(JSON.parse(cachedAds));
 
-      const ads = await HomeScreenAds.find();
+      const ads = await HomeSlider.find();
       await RedisClient.setex("home_ads", 3600, JSON.stringify(ads));
       
       res.json(ads);

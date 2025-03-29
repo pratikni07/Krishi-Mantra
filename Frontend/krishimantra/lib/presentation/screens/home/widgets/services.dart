@@ -20,7 +20,7 @@ class _ServicesState extends State<Services> {
   String fertilizersText = 'Fertilizers';
   String krishiAIText = 'Krishi AI';
   String krishiVideosText = 'Krishi Videos';
-  String newsText = 'News';
+  String marketplaceText = 'Marketplace';
   String schemesText = 'Schemes';
 
   List<ServiceItem> get serviceItems => [
@@ -36,7 +36,8 @@ class _ServicesState extends State<Services> {
             'assets/Images/serviceImg/test5.png', krishiAIText, '/krishi-ai'),
         ServiceItem('assets/Images/serviceImg/test6.png', krishiVideosText,
             '/krishi-videos'),
-        ServiceItem('assets/Images/serviceImg/test7.png', newsText, '/news'),
+        ServiceItem('assets/Images/serviceImg/tractor.jpg', marketplaceText,
+            '/marketplace'),
         ServiceItem(
             'assets/Images/serviceImg/test8.png', schemesText, '/schemes'),
       ];
@@ -60,7 +61,7 @@ class _ServicesState extends State<Services> {
       _languageService.translate('Fertilizers'),
       _languageService.translate('Krishi AI'),
       _languageService.translate('Krishi Videos'),
-      _languageService.translate('News'),
+      _languageService.translate('Marketplace'),
       _languageService.translate('Schemes'),
     ]);
 
@@ -71,7 +72,7 @@ class _ServicesState extends State<Services> {
       fertilizersText = translations[3];
       krishiAIText = translations[4];
       krishiVideosText = translations[5];
-      newsText = translations[6];
+      marketplaceText = translations[6];
       schemesText = translations[7];
     });
   }

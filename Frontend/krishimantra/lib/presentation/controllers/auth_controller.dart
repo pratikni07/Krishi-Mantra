@@ -202,7 +202,7 @@ class AuthController extends GetxController {
       return await presignedUrlController.uploadImage(
         imageFile: imageFile,
         contentType: 'profile',
-        userId: user.value?.id,
+        userId: user.value?.id, isVideo: false,
       );
     } catch (e) {
       return null;

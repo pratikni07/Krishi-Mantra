@@ -142,7 +142,7 @@ class MessageController extends GetxController {
       return await presignedUrlController.uploadImage(
         imageFile: file,
         contentType: contentType,
-        userId: userId.value,
+        userId: userId.value, isVideo: false,
       );
     } catch (e) {
       error.value = 'Failed to upload media: ${e.toString()}';

@@ -1,5 +1,3 @@
-// message_model.dart
-import 'package:get/get.dart';
 import 'package:intl/intl.dart'; // Add this import to your pubspec.yaml if not already present
 
 class DeliveredTo {

@@ -23,6 +23,7 @@ const userRoutesOne = require("./routes/UserRoutes");
 const cropRoutes = require("./routes/cropCalendar");
 const schemeRoutes = require("./routes/schemeRoutes");
 const analyticsRoutes = require("./routes/AnalyticsRoutes");
+const marketplaceRoutes = require("./routes/marketplaceRoutes");
 
 // Load environment variables based on NODE_ENV
 require('./config/environment')();
@@ -225,6 +226,7 @@ app.use("/user", userRoutesOne);
 app.use("/crop-calendar", cropRoutes);
 app.use("/schemes", schemeRoutes);
 app.use("/analytics", analyticsRoutes);
+app.use("/marketplace", marketplaceRoutes);
 
 app.use((req, res, next) => {
   logger.info({
