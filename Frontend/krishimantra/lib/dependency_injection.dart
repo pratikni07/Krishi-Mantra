@@ -32,6 +32,9 @@ import 'presentation/controllers/scheme_controller.dart';
 import 'presentation/screens/feed/widgets/feed_card.dart';
 import 'package:krishimantra/data/repositories/presigned_url_repository.dart';
 import 'package:krishimantra/presentation/controllers/presigned_url_controller.dart';
+// Add new imports for marketplace
+import 'package:krishimantra/data/repositories/marketplace_repository.dart';
+import 'package:krishimantra/presentation/controllers/marketplace_controller.dart';
 
 void initDependencies() {
   // Initialize Dio and ApiService first
@@ -60,6 +63,8 @@ void initDependencies() {
   Get.lazyPut(() => PresignedUrlRepository(Get.find<ApiService>()),
       fenix: true);
   Get.lazyPut(() => CropRepository(Get.find<ApiService>()), fenix: true);
+  // Add marketplace repository
+  Get.lazyPut(() => MarketplaceRepository(Get.find<ApiService>()), fenix: true);
 
   // Initialize controllers with fenix: true
   Get.lazyPut(
@@ -131,6 +136,15 @@ void initDependencies() {
 
   Get.lazyPut(
     () => CropController(Get.find<CropRepository>()),
+    fenix: true,
+  );
+
+  // Add marketplace controller
+  Get.lazyPut(
+    () => MarketplaceController(
+      Get.find<MarketplaceRepository>(),
+      Get.find<UserService>(),
+    ),
     fenix: true,
   );
 

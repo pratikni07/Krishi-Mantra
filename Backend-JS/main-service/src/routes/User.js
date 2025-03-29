@@ -9,6 +9,7 @@ const {
   getPendingOTPs,
   markOTPSent,
   signupWithPhone,
+  adminLogin,
 } = require("../controller/Auth");
 
 // const {
@@ -24,6 +25,9 @@ const { auth } = require("../middlewares/auth");
 router.post("/initiate-auth", initiateAuth);
 router.post("/verify-otp", verifyOTP);
 router.post("/signup-with-phone", signupWithPhone);
+
+// Add admin login route
+router.post("/admin/login", adminLogin);
 
 // Admin routes for OTP management
 router.get("/admin/pending-otps", getPendingOTPs);

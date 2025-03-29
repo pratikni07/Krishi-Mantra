@@ -14,6 +14,7 @@ const ALLOWED_CONTENT_TYPES = [
   "ads",
   "users",
   "videostuts",
+  "marketplace",
   "chat_image",
   "chat_video",
   "chat_document",

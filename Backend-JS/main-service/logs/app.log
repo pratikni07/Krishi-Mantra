@@ -770,3 +770,28 @@
 {"level":"info","message":{"headers":{"accept":"application/json, text/plain, */*","accept-encoding":"gzip, deflate, br, zstd","accept-language":"en-US,en;q=0.9","connection":"close","host":"localhost:3002","origin":"http://localhost:5173","referer":"http://localhost:5173/","sec-ch-ua":"\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"134\"","sec-ch-ua-mobile":"?0","sec-ch-ua-platform":"\"macOS\"","sec-fetch-dest":"empty","sec-fetch-mode":"cors","sec-fetch-site":"same-site","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36","x-forwarded-for":"::1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/user/stats/dashboard"},"timestamp":"2025-03-17T15:13:48.539Z"}
 {"level":"info","message":{"headers":{"accept":"application/json, text/plain, */*","accept-encoding":"gzip, deflate, br, zstd","accept-language":"en-US,en;q=0.9","connection":"close","host":"localhost:3002","origin":"http://localhost:5173","referer":"http://localhost:5173/","sec-ch-ua":"\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"134\"","sec-ch-ua-mobile":"?0","sec-ch-ua-platform":"\"macOS\"","sec-fetch-dest":"empty","sec-fetch-mode":"cors","sec-fetch-site":"same-site","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36","x-forwarded-for":"::1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/user/stats/dashboard"},"timestamp":"2025-03-17T15:15:41.904Z"}
 {"level":"info","message":{"headers":{"accept":"application/json, text/plain, */*","accept-encoding":"gzip, deflate, br, zstd","accept-language":"en-US,en;q=0.9","connection":"close","host":"localhost:3002","origin":"http://localhost:5173","referer":"http://localhost:5173/","sec-ch-ua":"\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"134\"","sec-ch-ua-mobile":"?0","sec-ch-ua-platform":"\"macOS\"","sec-fetch-dest":"empty","sec-fetch-mode":"cors","sec-fetch-site":"same-site","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36","x-forwarded-for":"::1","x-forwarded-host":"localhost:3001","x-forwarded-proto":"http"},"method":"GET","path":"/user/stats/dashboard"},"timestamp":"2025-03-17T15:15:41.909Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-18T03:04:41.019Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-18T03:08:53.498Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-18T03:08:57.261Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-18T03:11:18.184Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-18T04:07:33.673Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:17:47.133Z"}
+{"level":"info","message":{"headers":{"accept":"*/*","accept-encoding":"gzip, deflate, br","connection":"keep-alive","cookie":"refreshToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3ZTExMTM3YTI4OGRiOGY4MmY2OGJkNSIsImlhdCI6MTc0Mjg0NzMzMywiZXhwIjoxNzQ1NDM5MzMzfQ.B3eM1fii_LdvNokeo23Em64oCaZu4clbY9eQtx8tCt0","host":"localhost:3002","postman-token":"002239ce-6084-4ad9-b8b3-a6b7ed889b8b","user-agent":"PostmanRuntime/7.43.2"},"method":"GET","path":"/marketplace%60"},"timestamp":"2025-03-25T08:18:48.724Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:24:19.228Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:35:22.187Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:36:08.083Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:36:50.763Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:38:04.051Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:38:22.104Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:38:26.751Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:38:53.249Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:41:43.442Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:45:16.386Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:46:13.684Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:46:51.368Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:46:59.203Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:47:09.404Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:47:30.773Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:48:05.804Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-25T08:48:21.136Z"}
+{"level":"info","message":"Server is running on port 3002","timestamp":"2025-03-29T12:01:28.241Z"}

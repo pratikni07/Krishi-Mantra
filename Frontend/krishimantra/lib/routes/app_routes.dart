@@ -13,11 +13,15 @@ import 'package:krishimantra/presentation/screens/splash/splash_screen.dart';
 import 'package:krishimantra/presentation/screens/video_tutorial/video_list_screen.dart';
 import 'package:krishimantra/presentation/screens/language/LanguageSelectionPage.dart';
 import 'package:krishimantra/presentation/screens/auth/phone_number_screen.dart';
-import 'package:krishimantra/presentation/screens/auth/otp_verification_screen.dart';
-import 'package:krishimantra/presentation/screens/auth/signup_screen.dart';
+// import 'package:krishimantra/presentation/screens/auth/otp_verification_screen.dart';
+// import 'package:krishimantra/presentation/screens/auth/signup_screen.dart';
 
+import '../presentation/screens/marketplace/marketplace_product_detail_screen.dart';
 import '../presentation/screens/products/product_list_screen.dart';
 import '../presentation/screens/schemes/gov_schemes_screen.dart';
+import '../presentation/screens/marketplace/marketplace_screen.dart';
+
+import '../presentation/screens/marketplace/add_product_screen.dart';
 
 class AppRoutes {
   static const String SPLASH = '/splash';
@@ -45,6 +49,11 @@ class AppRoutes {
   static const String NOTIFICATIONS = '/notifications';
   static const String NOTIFICATION_SETTINGS = '/notification-settings';
 
+  // Add marketplace routes
+  static const String MARKETPLACE = '/marketplace';
+  static const String MARKETPLACE_DETAIL = '/marketplace-detail';
+  static const String ADD_MARKETPLACE_PRODUCT = '/add-marketplace-product';
+
   static final routes = [
     GetPage(name: SPLASH, page: () => SplashScreen()),
     GetPage(name: LOGIN, page: () => LoginScreen()),
@@ -69,5 +78,13 @@ class AppRoutes {
     // rather than using named routes
 
     // Add notification routes
+    GetPage(name: MARKETPLACE, page: () => const MarketplaceScreen()),
+    GetPage(
+      name: MARKETPLACE_DETAIL,
+      page: () =>
+          MarketPlaceProductDetailScreen(productId: Get.arguments as String),
+    ),
+    GetPage(
+        name: ADD_MARKETPLACE_PRODUCT, page: () => const AddProductScreen()),
   ];
 }

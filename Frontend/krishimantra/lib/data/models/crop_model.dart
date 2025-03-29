@@ -1,5 +1,3 @@
-// crop_model.dart
-import 'dart:convert';
 import '../services/language_service.dart';
 
 class CropModel {
@@ -35,7 +33,7 @@ class CropModel {
   // Get translated name
   Future<String> getTranslatedName() async {
     if (_translatedName != null) return _translatedName!;
-    
+
     final languageService = await LanguageService.getInstance();
     _translatedName = await languageService.translate(name);
     return _translatedName!;
@@ -44,7 +42,7 @@ class CropModel {
   // Get translated scientific name
   Future<String> getTranslatedScientificName() async {
     if (_translatedScientificName != null) return _translatedScientificName!;
-    
+
     final languageService = await LanguageService.getInstance();
     _translatedScientificName = await languageService.translate(scientificName);
     return _translatedScientificName!;
@@ -53,7 +51,7 @@ class CropModel {
   // Get translated description
   Future<String> getTranslatedDescription() async {
     if (_translatedDescription != null) return _translatedDescription!;
-    
+
     final languageService = await LanguageService.getInstance();
     _translatedDescription = await languageService.translate(description);
     return _translatedDescription!;

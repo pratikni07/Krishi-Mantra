@@ -15,7 +15,12 @@ const UserSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-
+    email:{
+      type:String,
+    },
+    password:{
+      type:String,
+    },
     phoneNo: {
       type: Number,
     },
@@ -25,7 +30,7 @@ const UserSchema = new mongoose.Schema(
     },
     accountType: {
       type: String,
-      enum: ["user", "consultant", "admin"],
+      enum: ["user", "consultant", "admin", "marketplace"],
       default: "user",
     },
     token: {
