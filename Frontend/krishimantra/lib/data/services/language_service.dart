@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:translator/translator.dart';
 
 class LanguageService {
+  // ignore: constant_identifier_names
   static const String LANGUAGE_KEY = 'preferred_language';
   final SharedPreferences _prefs;
   final translator = GoogleTranslator();

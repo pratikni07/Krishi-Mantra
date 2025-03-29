@@ -54,6 +54,7 @@ dependencies:
   visibility_detector: ^0.4.0+2
   get_storage: ^2.1.1
   url_launcher: ^6.2.4
+  expandable_text: ^2.3.0
   smooth_page_indicator: ^1.1.0
   google_fonts: ^6.1.0
   fl_chart: ^0.70.2

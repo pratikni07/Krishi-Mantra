@@ -64,7 +64,10 @@ void initDependencies() {
       fenix: true);
   Get.lazyPut(() => CropRepository(Get.find<ApiService>()), fenix: true);
   // Add marketplace repository
-  Get.lazyPut(() => MarketplaceRepository(Get.find<ApiService>()), fenix: true);
+  Get.lazyPut(
+      () => MarketplaceRepository(
+          Get.find<ApiService>(), Get.find<UserService>()),
+      fenix: true);
 
   // Initialize controllers with fenix: true
   Get.lazyPut(
@@ -143,7 +146,6 @@ void initDependencies() {
   Get.lazyPut(
     () => MarketplaceController(
       Get.find<MarketplaceRepository>(),
-      Get.find<UserService>(),
     ),
     fenix: true,
   );
