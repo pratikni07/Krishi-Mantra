@@ -244,9 +244,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         );
       }
 
+      // Modified calculation for better responsiveness
       final screenWidth = MediaQuery.of(context).size.width;
       final itemWidth = (screenWidth - 48) / 2;
-      final itemHeight = itemWidth * 1.4;
+      // Adjusted aspect ratio to prevent overflow
+      final itemHeight = itemWidth * 1.6; // Increased height ratio
 
       return Expanded(
         child: GridView.builder(
@@ -270,6 +272,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Widget _buildProductCard(dynamic product) {
     final screenWidth = MediaQuery.of(context).size.width;
     final cardWidth = (screenWidth - 48) / 2;
+    final textScaleFactor = MediaQuery.of(context).textScaleFactor;
     
     return Container(
       width: cardWidth,
@@ -278,9 +281,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 4,
-            offset: Offset(0, 2),
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            spreadRadius: 1,
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -294,8 +298,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             },
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // Added to prevent expansion
               children: [
-                // Image section
                 AspectRatio(
                   aspectRatio: 1,
                   child: CachedNetworkImage(
@@ -309,54 +313,50 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     errorWidget: (context, url, error) => Icon(Icons.error),
                   ),
                 ),
-                // Content section
-                Expanded(
+                Flexible(
                   child: Padding(
                     padding: EdgeInsets.all(8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min, // Prevent expansion
                       children: [
-                        // Title
                         Text(
                           product['title'] ?? '',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13 / textScaleFactor,
                             fontWeight: FontWeight.bold,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         SizedBox(height: 4),
-                        // Description
                         Text(
                           product['shortDescription'] ?? '',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11 / textScaleFactor,
                             color: Colors.grey[600],
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        Spacer(),
-                        // Price and Rating
+                        SizedBox(height: 4), // Fixed spacing instead of Spacer
                         Container(
-                          width: cardWidth - 16, // Account for padding
+                          width: double.infinity,
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisSize: MainAxisSize.max,
                             children: [
-                              // Price
                               Flexible(
                                 child: Text(
                                   '₹${_formatPrice(product['priceRange']['min'])} - ₹${_formatPrice(product['priceRange']['max'])}',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11 / textScaleFactor,
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.green,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              // Rating
                               if (product['rating'] != null)
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -364,13 +364,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                     Icon(
                                       Icons.star,
                                       color: Colors.amber,
-                                      size: 14,
+                                      size: 12,
                                     ),
                                     SizedBox(width: 2),
                                     Text(
                                       '${product['rating']}',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11 / textScaleFactor,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
