@@ -39,6 +39,7 @@ dependencies:
   get_storage: ^2.1.1
   geolocator: ^10.1.0
   app_settings: ^5.1.1
+  permission_handler: ^11.3.0
   latlong2: ^0.9.1
   flutter_secure_storage: ^9.0.0
   geocoding: ^2.1.1
@@ -75,6 +76,7 @@ dependencies:
   dio_smart_retry: ^6.0.0
   flutter_inappwebview: ^6.1.5
   flutter_staggered_animations: ^1.1.1
+  photo_view: ^0.15.0
 
 dev_dependencies:
   flutter_test:

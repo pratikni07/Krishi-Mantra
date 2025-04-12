@@ -11,6 +11,7 @@ import '../../controllers/feed_controller.dart';
 import '../../widgets/app_header.dart';
 import 'widgets/feed_card.dart';
 import 'dart:math';
+import '../../../utils/image_utils.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({Key? key}) : super(key: key);
@@ -27,7 +28,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   bool _showTrendingHashtags = true;
   bool _showCreatePost = false;
-  
+
   // Add properties for feed ads
   List<dynamic> _feedAds = [];
   final Random _random = Random();
@@ -100,7 +101,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     // Load more content when reaching 80% of the scroll length for better UX
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent * 0.8) {
-      if (!_feedController.isRecommendedLoading.value && 
+      if (!_feedController.isRecommendedLoading.value &&
           _feedController.hasMoreRecommendedFeeds.value) {
         _feedController.fetchRecommendedFeeds();
       }
@@ -139,9 +140,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   Future<void> _loadFeedAds() async {
     try {
       _feedAds = await _adsController.fetchFeedAds();
+      print('📊 Feed ads loaded: ${_feedAds.length}');
+      if (_feedAds.isNotEmpty) {
+        print('📱 First ad URL: ${_feedAds[0]['content']}');
+      }
       setState(() {});
     } catch (e) {
-      print('Error loading feed ads: $e');
+      print('❌ Error loading feed ads: $e');
     }
   }
 
@@ -252,11 +257,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 SizedBox(
                   height: 20,
                 ),
-                
+
                 // Content Section with white background and rounded corners at top
                 Expanded(
                   child: RefreshIndicator(
-                    onRefresh: () => _feedController.fetchRecommendedFeeds(refresh: true),
+                    onRefresh: () =>
+                        _feedController.fetchRecommendedFeeds(refresh: true),
                     color: AppColors.green,
                     child: Container(
                       decoration: const BoxDecoration(
@@ -268,30 +274,35 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                       ),
                       child: Obx(() {
                         // Show loading state
-                        if (_feedController.isLoading && _feedController.recommendedFeeds.isEmpty) {
+                        if (_feedController.isLoading &&
+                            _feedController.recommendedFeeds.isEmpty) {
                           return const Center(
                             child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppColors.green),
                             ),
                           );
                         }
-                        
+
                         // Show error state
                         if (_feedController.hasError) {
                           return ErrorHandler.getErrorWidget(
-                            errorType: _feedController.errorType ?? ErrorType.unknown,
-                            onRetry: () => _feedController.fetchRecommendedFeeds(refresh: true),
+                            errorType:
+                                _feedController.errorType ?? ErrorType.unknown,
+                            onRetry: () => _feedController
+                                .fetchRecommendedFeeds(refresh: true),
                             showRetry: true,
                           );
                         }
-                        
+
                         // Show empty state
                         if (_feedController.recommendedFeeds.isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.article_outlined, size: 64, color: Colors.grey[400]),
+                                Icon(Icons.article_outlined,
+                                    size: 64, color: Colors.grey[400]),
                                 const SizedBox(height: 16),
                                 Text(
                                   'No posts available',
@@ -302,11 +313,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                                 ),
                                 const SizedBox(height: 24),
                                 ElevatedButton(
-                                  onPressed: () => _feedController.fetchRecommendedFeeds(refresh: true),
+                                  onPressed: () => _feedController
+                                      .fetchRecommendedFeeds(refresh: true),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.green,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
                                   ),
                                   child: const Text('Refresh'),
                                 ),
@@ -314,7 +327,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                             ),
                           );
                         }
-                        
+
                         // Show content
                         return _buildFeedContent();
                       }),
@@ -326,7 +339,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
-      
+
       // Show create post button for authorized users
       floatingActionButton: _showCreatePost
           ? FloatingActionButton(
@@ -342,18 +355,20 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     // Calculate the number of posts to show between ads
     final postsWithAds = <Widget>[];
     final postsPerAd = 4; // Show an ad after every 4 posts
-    
+
     for (var i = 0; i < _feedController.recommendedFeeds.length; i++) {
       // Add feed item
       postsWithAds.add(_buildFeedItem(_feedController.recommendedFeeds[i]));
-      
+
       // Insert an ad after every postsPerAd items if we have ads
-      if (_feedAds.isNotEmpty && (i + 1) % postsPerAd == 0 && i < _feedController.recommendedFeeds.length - 1) {
+      if (_feedAds.isNotEmpty &&
+          (i + 1) % postsPerAd == 0 &&
+          i < _feedController.recommendedFeeds.length - 1) {
         final adIndex = _random.nextInt(_feedAds.length);
         postsWithAds.add(_buildAdCard(_feedAds[adIndex]));
       }
     }
-    
+
     return ListView.builder(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
@@ -389,6 +404,44 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildAdCard(dynamic ad) {
+    // Validate and sanitize the URL
+    final String validatedUrl = ImageUtils.validateUrl(ad['content'] ?? '');
+
+    if (validatedUrl.isEmpty) {
+      print('⚠️ Invalid ad URL: ${ad['content']}');
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        height: 200,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.grey[200],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.image_not_supported, color: Colors.grey, size: 48),
+                SizedBox(height: 8),
+                Text(
+                  ad['title'] ?? 'Advertisement',
+                  style: TextStyle(color: Colors.grey[700]),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -404,16 +457,28 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Image.network(
-          ad['dirURL'] ?? '',
+          validatedUrl,
           height: 200,
           width: double.infinity,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
+            print('❌ Error loading ad image: $error');
             return Container(
               height: 200,
               color: Colors.grey[200],
-              child: const Center(
-                child: Icon(Icons.error_outline, color: Colors.grey),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        color: Colors.grey, size: 48),
+                    SizedBox(height: 8),
+                    Text(
+                      ad['title'] ?? 'Advertisement',
+                      style: TextStyle(color: Colors.grey[700]),
+                    ),
+                  ],
+                ),
               ),
             );
           },

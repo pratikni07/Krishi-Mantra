@@ -12,15 +12,6 @@ const {
   adminLogin,
 } = require("../controller/Auth");
 
-// const {
-//   resetPasswordToken,
-//   resetPassword,
-// } = require("../controllers/ResetPassword")
-
-const { auth } = require("../middlewares/auth");
-
-// Routes for Login, Signup, and Authentication
-
 // New mobile authentication routes
 router.post("/initiate-auth", initiateAuth);
 router.post("/verify-otp", verifyOTP);

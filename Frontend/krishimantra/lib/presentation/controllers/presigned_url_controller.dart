@@ -36,7 +36,8 @@ class PresignedUrlController extends GetxController {
   Future<String?> uploadImage({
     required File imageFile,
     required String contentType,
-    String? userId, required bool isVideo,
+    String? userId,
+    required bool isVideo,
   }) async {
     try {
       isLoading.value = true;

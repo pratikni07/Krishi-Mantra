@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../../data/services/language_service.dart';
 import 'package:krishimantra/core/utils/error_handler.dart';
+import '../../../utils/image_utils.dart';
 
 import '../../controllers/ads_controller.dart';
 import 'widgets/services.dart';
@@ -320,8 +321,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showSplashAd(dynamic splashAd) {
     if (!mounted) return;
 
-    // Debug print to check the splash ad data
-
     // Handle different possible data structures safely
     String imageUrl = '';
     try {
@@ -331,6 +330,9 @@ class _HomeScreenState extends State<HomeScreen> {
         imageUrl = splashAd['dirURL'] ?? '';
       }
     } catch (e) {}
+
+    // Validate the URL
+    imageUrl = ImageUtils.validateUrl(imageUrl);
 
     // Don't show dialog if no valid image URL
     if (imageUrl.isEmpty) {
@@ -724,7 +726,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8.0),
                         child: Image.network(
-                          _homeScreenAds[0]['dirURL'],
+                          ImageUtils.validateUrl(_homeScreenAds[0]['dirURL'] ?? ''),
                           fit: BoxFit.cover,
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;
@@ -738,10 +740,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           },
                           errorBuilder: (context, error, stackTrace) {
+                            print('❌ Error loading home screen ad: $error');
                             return Container(
                               height: isSmallScreen ? 150 : 200,
                               color: Colors.grey[200],
-                              child: Icon(Icons.error, color: Colors.red),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error, color: Colors.red),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Advertisement',
+                                    style: TextStyle(color: Colors.grey[700]),
+                                  ),
+                                ],
+                              ),
                             );
                           },
                         ),

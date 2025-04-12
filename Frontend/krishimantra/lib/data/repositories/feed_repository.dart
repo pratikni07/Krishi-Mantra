@@ -107,6 +107,33 @@ class FeedRepository {
         throw Exception('Invalid response: null data');
       }
       
+      // Check for the "No comments found" response format
+      if (data.containsKey('message') && data.containsKey('comments')) {
+        print('ℹ️ Repository: Using alternate response format (message + comments)');
+        final List<CommentModel> comments = [];
+        
+        // Only try to parse comments if they exist and are not empty
+        if (data['comments'] is List && (data['comments'] as List).isNotEmpty) {
+          comments.addAll(
+            (data['comments'] as List).map((comment) => CommentModel.fromJson(comment)).toList()
+          );
+        }
+        
+        return {
+          'comments': comments,
+          'totalDocs': 0,
+          'limit': limit,
+          'totalPages': 1,
+          'page': page,
+          'pagingCounter': 1,
+          'hasPrevPage': false,
+          'hasNextPage': false,
+          'prevPage': null,
+          'nextPage': null,
+        };
+      }
+      
+      // Original format check for "docs" field
       if (!data.containsKey('docs')) {
         print('⚠️ Repository: Response missing "docs" field: ${data.keys}');
         throw Exception('Invalid response format: missing docs');

@@ -14,6 +14,8 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import '../../widgets/chat_message_bubble.dart';
 import '../../widgets/media_preview_dialog.dart';
+import '../../widgets/loading_message_bubble.dart';
+import '../../../utils/permission_helper.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final dynamic chat;
@@ -308,11 +310,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget _buildMessagesList() {
     return Obx(() {
       final messages = _messageController.messages;
+      final tempMessages = _messageController.tempMessages;
+
       if (_messageController.isLoading.value && messages.isEmpty) {
         return const Center(
           child: CircularProgressIndicator(color: AppColors.green),
         );
       }
+
       final unreadMessageIds = messages
           .where((m) =>
               m.senderId != currentUserId &&
@@ -327,6 +332,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         });
       }
 
+      // Calculate the total item count (messages + temp messages + loading indicator)
+      final itemCount =
+          messages.length + tempMessages.length + (_isLoadingMore ? 1 : 0);
+
       return ListView.builder(
         controller: _scrollController,
         reverse: false,
@@ -334,8 +343,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           top: 16,
           bottom: 8 + MediaQuery.of(context).padding.bottom,
         ),
-        itemCount: messages.length + (_isLoadingMore ? 1 : 0),
+        itemCount: itemCount,
         itemBuilder: (context, index) {
+          // Show loading indicator at the top if loading more messages
           if (_isLoadingMore && index == 0) {
             return const Center(
               child: Padding(
@@ -345,23 +355,35 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             );
           }
 
-          final messageIndex = _isLoadingMore ? index - 1 : index;
-          final message = messages[messageIndex];
-          final showDateHeader = _shouldShowDateHeader(messageIndex, messages);
+          // Adjust index for the loading indicator
+          final adjustedIndex = _isLoadingMore ? index - 1 : index;
 
-          return Column(
-            children: [
-              if (showDateHeader) _buildDateHeader(message.createdAt),
-              ChatMessageBubble(
-                message: message.content,
-                isUser: message.senderId == currentUserId,
-                timestamp: message.createdAt,
-                mediaUrl: message.mediaUrl,
-                mediaType: message.mediaType,
-                mediaMetadata: message.mediaMetadata,
-              ),
-            ],
-          );
+          // Check if we're rendering a message or a temporary message
+          if (adjustedIndex < messages.length) {
+            // Regular message
+            final message = messages[adjustedIndex];
+            final showDateHeader =
+                _shouldShowDateHeader(adjustedIndex, messages);
+
+            return Column(
+              children: [
+                if (showDateHeader) _buildDateHeader(message.createdAt),
+                ChatMessageBubble(
+                  message: message.content,
+                  isUser: message.senderId == currentUserId,
+                  timestamp: message.createdAt,
+                  mediaUrl: message.mediaUrl,
+                  mediaType: message.mediaType,
+                  mediaMetadata: message.mediaMetadata,
+                ),
+              ],
+            );
+          } else {
+            // Temporary message (like loading states)
+            final tempIndex = adjustedIndex - messages.length;
+            final tempKey = tempMessages.keys.elementAt(tempIndex);
+            return tempMessages[tempKey]!;
+          }
         },
       );
     });
@@ -690,6 +712,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   label: 'Gallery',
                   onTap: () async {
                     Navigator.pop(context);
+                    
+                    // Check gallery permission first
+                    final hasPermission = await PermissionHelper.requestGalleryPermission(context);
+                    if (!hasPermission) {
+                      Get.snackbar(
+                        'Permission Required',
+                        'Gallery access is needed to select images',
+                        snackPosition: SnackPosition.BOTTOM,
+                        duration: const Duration(seconds: 3),
+                      );
+                      return;
+                    }
+                    
                     final ImagePicker picker = ImagePicker();
                     final XFile? image = await picker.pickImage(
                       source: ImageSource.gallery,
@@ -705,6 +740,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   label: 'Camera',
                   onTap: () async {
                     Navigator.pop(context);
+                    
+                    // Check camera permission first
+                    final hasPermission = await PermissionHelper.requestCameraPermission(context);
+                    if (!hasPermission) {
+                      Get.snackbar(
+                        'Permission Required',
+                        'Camera access is needed to take photos',
+                        snackPosition: SnackPosition.BOTTOM,
+                        duration: const Duration(seconds: 3),
+                      );
+                      return;
+                    }
+                    
                     final ImagePicker picker = ImagePicker();
                     final XFile? photo = await picker.pickImage(
                       source: ImageSource.camera,
@@ -720,6 +768,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   label: 'Document',
                   onTap: () async {
                     Navigator.pop(context);
+                    
+                    // Check storage permission for documents
+                    final hasPermission = await PermissionHelper.requestGalleryPermission(context);
+                    if (!hasPermission) {
+                      Get.snackbar(
+                        'Permission Required',
+                        'Storage access is needed to select documents',
+                        snackPosition: SnackPosition.BOTTOM,
+                        duration: const Duration(seconds: 3),
+                      );
+                      return;
+                    }
+                    
                     final result = await FilePicker.platform.pickFiles(
                       type: FileType.custom,
                       allowedExtensions: ['pdf', 'doc', 'docx'],
@@ -739,101 +800,152 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _handleImageUpload(File imageFile) async {
-    final TextEditingController captionController = TextEditingController();
+    try {
+      // Show preview dialog
+      final result = await Get.dialog<bool>(
+        MediaPreviewDialog(
+          mediaFile: imageFile,
+          mediaType: 'image',
+          captionController:
+              TextEditingController(), // Empty controller, no caption needed
+          onSend: (file) async {
+            // Create a temporary message ID for the loading bubble
+            final tempId = DateTime.now().millisecondsSinceEpoch.toString();
 
-    // Show preview dialog
-    await Get.dialog(
-      MediaPreviewDialog(
-        mediaFile: imageFile,
-        mediaType: 'image',
-        captionController: captionController,
-        onSend: (file) async {
-          try {
-            // Show loading indicator
-            Get.dialog(
-              const Center(child: CircularProgressIndicator()),
-              barrierDismissible: false,
+            // Show loading in the chat instead of fullscreen
+            final loadingBubble = LoadingMessageBubble(
+              mediaFile: file,
+              mediaType: 'image',
             );
 
-            // Upload image and get URL
-            final mediaUrl = await _messageController.uploadMedia(
-              file,
-              'chat_image',
-            );
+            // Add loading bubble to UI
+            _messageController.addTempMessage(tempId, loadingBubble);
 
-            if (mediaUrl != null) {
-              // Send message with image and caption
-              await _messageController.sendMessage(
-                chatId: widget.chat.id,
-                content: captionController.text.trim(),
-                mediaType: 'image',
-                mediaUrl: mediaUrl,
+            try {
+              // Upload image and get URL
+              final mediaUrl = await _messageController.uploadMedia(
+                file,
+                'chat_image',
+              );
+
+              if (mediaUrl != null) {
+                // Remove temp message
+                _messageController.removeTempMessage(tempId);
+
+                // Send message with image
+                await _messageController.sendMessage(
+                  chatId: widget.chat.id,
+                  content: '', // Empty content since we removed captions
+                  mediaType: 'image',
+                  mediaUrl: mediaUrl,
+                );
+
+                // Scroll to bottom to show the new message
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _scrollToBottom();
+                });
+              }
+            } catch (e) {
+              // Remove temp message on error
+              _messageController.removeTempMessage(tempId);
+
+              Get.snackbar(
+                'Error',
+                'Failed to upload image: ${e.toString()}',
+                snackPosition: SnackPosition.BOTTOM,
               );
             }
-          } catch (e) {
-            Get.snackbar(
-              'Error',
-              'Failed to upload image: ${e.toString()}',
-              snackPosition: SnackPosition.BOTTOM,
-            );
-          } finally {
-            // Hide loading indicator
-            Get.back();
-          }
-        },
-      ),
-    );
+          },
+        ),
+        barrierDismissible: false,
+      );
 
-    captionController.dispose();
+      // If dialog was dismissed without requesting send, don't proceed
+      if (result != true) {
+        return;
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to preview image: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   Future<void> _handleDocumentUpload(File document) async {
-    final TextEditingController captionController = TextEditingController();
+    try {
+      // Show preview dialog
+      final result = await Get.dialog<bool>(
+        MediaPreviewDialog(
+          mediaFile: document,
+          mediaType: 'document',
+          captionController:
+              TextEditingController(), // Empty controller, no caption needed
+          onSend: (file) async {
+            final tempId = DateTime.now().millisecondsSinceEpoch.toString();
 
-    await Get.dialog(
-      MediaPreviewDialog(
-        mediaFile: document,
-        mediaType: 'document',
-        captionController: captionController,
-        onSend: (file) async {
-          try {
-            Get.dialog(
-              const Center(child: CircularProgressIndicator()),
-              barrierDismissible: false,
+            final loadingBubble = LoadingMessageBubble(
+              mediaFile: file,
+              mediaType: 'document',
             );
 
-            final mediaUrl = await _messageController.uploadMedia(
-              file,
-              'chat_document',
-            );
+            _messageController.addTempMessage(tempId, loadingBubble);
 
-            if (mediaUrl != null) {
-              final fileName = file.path.split('/').last;
-              await _messageController.sendMessage(
-                chatId: widget.chat.id,
-                content: captionController.text.trim(),
-                mediaType: 'document',
-                mediaUrl: mediaUrl,
-                mediaMetadata: {
-                  'fileName': fileName,
-                  'fileSize': await file.length(),
-                },
+            try {
+              // Upload document and get URL
+              final mediaUrl = await _messageController.uploadMedia(
+                file,
+                'chat_document',
+              );
+
+              if (mediaUrl != null) {
+                // Remove temp message
+                _messageController.removeTempMessage(tempId);
+
+                final fileName = file.path.split('/').last;
+                await _messageController.sendMessage(
+                  chatId: widget.chat.id,
+                  content: '', // Empty content since we removed captions
+                  mediaType: 'document',
+                  mediaUrl: mediaUrl,
+                  mediaMetadata: {
+                    'fileName': fileName,
+                    'fileSize': await file.length(),
+                  },
+                );
+
+                // Scroll to bottom to show the new message
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _scrollToBottom();
+                });
+              }
+            } catch (e) {
+              // Remove temp message on error
+              _messageController.removeTempMessage(tempId);
+
+              Get.snackbar(
+                'Error',
+                'Failed to upload document: ${e.toString()}',
+                snackPosition: SnackPosition.BOTTOM,
               );
             }
-          } catch (e) {
-            Get.snackbar(
-              'Error',
-              'Failed to upload document: ${e.toString()}',
-              snackPosition: SnackPosition.BOTTOM,
-            );
-          } finally {
-            Get.back();
-          }
-        },
-      ),
-    );
+          },
+        ),
+        barrierDismissible: false,
+      );
 
-    captionController.dispose();
+      // If dialog was dismissed without requesting send, don't proceed
+      if (result != true) {
+        return;
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to preview document: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   Widget _buildAttachmentOption({

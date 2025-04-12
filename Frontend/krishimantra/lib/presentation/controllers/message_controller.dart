@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../data/models/consultant_model.dart';
 import '../../data/models/message_model.dart';
@@ -20,6 +21,9 @@ class MessageController extends GetxController {
   final isLoading = false.obs;
   final error = Rx<String?>(null);
   final currentPage = 1.obs;
+  
+  // Map to store temporary messages with their IDs
+  final tempMessages = <String, Widget>{}.obs;
 
   // User information
   final Rx<String?> userId = Rx<String?>(null);
@@ -32,6 +36,20 @@ class MessageController extends GetxController {
   final consultantError = Rx<String?>(null);
 
   MessageController(this._messageRepository, this._userService);
+
+  // Add a temporary message to the UI
+  void addTempMessage(String id, Widget messageWidget) {
+    tempMessages[id] = messageWidget;
+    tempMessages.refresh();
+  }
+
+  // Remove a temporary message from the UI
+  void removeTempMessage(String id) {
+    if (tempMessages.containsKey(id)) {
+      tempMessages.remove(id);
+      tempMessages.refresh();
+    }
+  }
 
   @override
   void onInit() {
@@ -142,7 +160,8 @@ class MessageController extends GetxController {
       return await presignedUrlController.uploadImage(
         imageFile: file,
         contentType: contentType,
-        userId: userId.value, isVideo: false,
+        userId: userId.value,
+        isVideo: false,
       );
     } catch (e) {
       error.value = 'Failed to upload media: ${e.toString()}';

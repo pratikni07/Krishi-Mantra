@@ -1,10 +1,18 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import '../../utils/permission_helper.dart';
 
 class LocationService {
   static const String LOCATION_CACHE_KEY = 'user_location_cache';
   static const int LOCATION_CACHE_HOURS = 12;
+  
+  BuildContext? _context;
+  
+  void setContext(BuildContext context) {
+    _context = context;
+  }
 
   Future<Position?> getCurrentPosition({bool useCachedLocation = true}) async {
     if (useCachedLocation) {
@@ -15,24 +23,32 @@ class LocationService {
     }
     
     bool serviceEnabled;
-    LocationPermission permission;
-
+    
     // Test if location services are enabled.
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return null;
     }
 
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
+    // Use the new permission helper if context is available
+    if (_context != null) {
+      final hasPermission = await PermissionHelper.requestLocationPermission(_context!);
+      if (!hasPermission) {
         return null;
       }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      return null;
+    } else {
+      // Fallback to old method if context is not available
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return null;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        return null;
+      }
     }
 
     try {
