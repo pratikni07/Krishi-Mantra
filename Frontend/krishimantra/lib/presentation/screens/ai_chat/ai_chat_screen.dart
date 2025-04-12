@@ -1,4 +1,6 @@
 // lib/presentation/screens/ai_chat/ai_chat_screen.dart
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'dart:io';
@@ -74,17 +76,21 @@ class _AIChatScreenState extends State<AIChatScreen> {
         title:
             Obx(() => Text(controller.currentChat.value?.title ?? 'New Chat')),
         backgroundColor: AppColors.green,
-        leading: isLargeScreen
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () {
-                  setState(() {
-                    showSidebar = !showSidebar;
-                  });
-                },
-              ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Get.back(),
+        ),
         actions: [
+          // Show sidebar button on smaller screens
+          if (!isLargeScreen)
+            IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () {
+                setState(() {
+                  showSidebar = !showSidebar;
+                });
+              },
+            ),
           // Show message limit indicator
           Obx(() => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -128,7 +134,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                     return Container(
                       padding: const EdgeInsets.all(16),
                       alignment: Alignment.centerLeft,
-                      child: Row(
+                      child: const Row(
                         children: [
                           SizedBox(
                             width: 20,
@@ -139,8 +145,8 @@ class _AIChatScreenState extends State<AIChatScreen> {
                                   AppColors.green),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          const Text('AI is thinking...'),
+                          SizedBox(width: 8),
+                          Text('AI is thinking...'),
                         ],
                       ),
                     );
@@ -192,6 +198,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
                   color: controller.remainingMessages.value < 2
+                      // ignore: deprecated_member_use
                       ? Colors.orange.withOpacity(0.1)
                       : Colors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -377,7 +384,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
               color: AppColors.green.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(
+            child: const Icon(
               Icons.agriculture,
               size: 40,
               color: AppColors.green,
@@ -437,7 +444,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
         ),
         child: Text(
           text,
-          style: TextStyle(
+          style: const TextStyle(
             color: AppColors.green,
             fontWeight: FontWeight.w500,
           ),

@@ -8,13 +8,23 @@ class ReelRepository {
 
   ReelRepository(this._apiService, this._userService);
 
-  Future<Map<String, dynamic>> getReels({int page = 1, int limit = 10}) async {
-    final userId = await _userService.getUserId();
-    final response = await _apiService.get(
-      "/api/reels/reels",
-      queryParameters: {'page': page, 'limit': limit, 'userId': userId},
-    );
-    return response.data;
+  Future<Map<String, dynamic>> getReels({
+    int page = 1,
+    int limit = 10,
+  }) async {
+    try {
+      final response = await _apiService.get(
+        '/api/reels',
+        queryParameters: {
+          'page': page,
+          'limit': limit,
+        },
+      );
+      
+      return response.data;
+    } catch (error) {
+      rethrow; // ApiService already handles error classification
+    }
   }
 
   Future<List<Map<String, dynamic>>> getTrendingTags() async {

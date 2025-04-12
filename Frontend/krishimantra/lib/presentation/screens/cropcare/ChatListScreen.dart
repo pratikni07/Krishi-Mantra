@@ -12,6 +12,7 @@ import '../../../data/services/LocationService.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart';
+import 'package:krishimantra/core/utils/error_handler.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
@@ -773,21 +774,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 }
 
                 if (_messageController.error.value != null) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _messageController.error.value!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _onRefresh,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
+                  return ErrorHandler.getErrorWidget(
+                    errorType: ErrorType.unknown,
+                    onRetry: _onRefresh,
+                    showRetry: true,
                   );
                 }
 

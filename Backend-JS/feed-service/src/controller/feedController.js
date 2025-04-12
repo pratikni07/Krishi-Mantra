@@ -18,6 +18,72 @@ const RECOMMENDED_FEEDS_CACHE_KEY = "recommended-feeds:";
 const USER_INTEREST_CACHE_KEY = "user-interest:";
 const MAX_RADIUS_KM = 1000;
 
+// Cache constants
+const CACHE_KEYS = {
+  FEED: "feed:",
+  COMMENTS: "comments:",
+  TAG: "tag:",
+  RANDOM_FEEDS: "random-feeds:",
+  RECOMMENDED_FEEDS: "recommended-feeds:",
+  USER_INTEREST: "user-interest:",
+  TRENDING_HASHTAGS: "trending-hashtags"
+};
+
+const CONSTANTS = {
+  MAX_RADIUS_KM: 1000,
+  MAX_CACHE_ITEMS: 500,
+  MAX_COMMENT_DEPTH: 5,
+  LOCATION_GRID_SIZE: 0.1, // 11.1km grid size
+  DEFAULT_PAGE_SIZE: 10,
+  MAX_PAGE_SIZE: 50
+};
+
+// Utility functions
+const utils = {
+  extractTags(content) {
+    const tagRegex = /#(\w+)/g;
+    const matches = content.match(tagRegex);
+    return matches ? matches.map(tag => tag.slice(1).toLowerCase()) : [];
+  },
+
+  getGridCell(latitude, longitude) {
+    const latCell = Math.floor(latitude / CONSTANTS.LOCATION_GRID_SIZE);
+    const lonCell = Math.floor(longitude / CONSTANTS.LOCATION_GRID_SIZE);
+    return `${latCell}:${lonCell}`;
+  },
+
+  async getCachedOrFetch(key, duration, fetchFn) {
+    try {
+      const cached = await redis.get(key);
+      if (cached) return JSON.parse(cached);
+      
+      const data = await fetchFn();
+      await redis.setex(key, duration, JSON.stringify(data));
+      return data;
+    } catch (error) {
+      console.error(`Cache error for key ${key}:`, error);
+      return await fetchFn();
+    }
+  },
+
+  getPaginationParams(query) {
+    const page = Math.max(1, parseInt(query.page) || 1);
+    const limit = Math.min(
+      CONSTANTS.MAX_PAGE_SIZE,
+      Math.max(1, parseInt(query.limit) || CONSTANTS.DEFAULT_PAGE_SIZE)
+    );
+    return { page, limit, skip: (page - 1) * limit };
+  },
+
+  calculateEngagementScore(feed) {
+    return (
+      (feed.views?.count || 0) +
+      ((feed.like?.count || 0) * 3) +
+      ((feed.comment?.count || 0) * 5)
+    );
+  }
+};
+
 function extractTags(content) {
   const tagRegex = /#(\w+)/g;
   const matches = content.match(tagRegex);
@@ -25,8 +91,8 @@ function extractTags(content) {
 }
 
 function getGridCell(latitude, longitude) {
-  const latCell = Math.floor(latitude / LOCATION_GRID_SIZE);
-  const lonCell = Math.floor(longitude / LOCATION_GRID_SIZE);
+  const latCell = Math.floor(latitude / CONSTANTS.LOCATION_GRID_SIZE);
+  const lonCell = Math.floor(longitude / CONSTANTS.LOCATION_GRID_SIZE);
   return `${latCell}:${lonCell}`;
 }
 
@@ -138,165 +204,85 @@ class FeedController {
     return R * c;
   }
 
-  async getLocationBasedFeeds(
-    userLocation,
-    excludeIds,
-    radius,
-    page,
-    limit,
-    skip
-  ) {
+  async getLocationBasedFeeds(userLocation, excludeIds, radius, page, limit, skip) {
     try {
-      const radiusDegrees = radius / 111; // Roughly convert km to degrees
-
-      // Use MongoDB's geospatial queries with optimized matching
-      const feeds = await Feed.aggregate([
-        {
+      const radiusDegrees = radius / 111;
+      const cacheKey = `location-feeds:${userLocation.latitude}:${userLocation.longitude}:${radius}:${page}:${limit}`;
+      
+      return await utils.getCachedOrFetch(cacheKey, CACHE_DURATION.SHORT, async () => {
+        const matchStage = {
           $match: {
             _id: { $nin: excludeIds },
-            // Only include posts that have location data
-            "location.latitude": { $exists: true, $ne: null },
-            "location.longitude": { $exists: true, $ne: null },
-            // First filter by a bounding box (more efficient than calculating distance for all docs)
             "location.latitude": {
+              $exists: true,
+              $ne: null,
               $gte: userLocation.latitude - radiusDegrees,
-              $lte: userLocation.latitude + radiusDegrees,
+              $lte: userLocation.latitude + radiusDegrees
             },
             "location.longitude": {
+              $exists: true,
+              $ne: null,
               $gte: userLocation.longitude - radiusDegrees,
-              $lte: userLocation.longitude + radiusDegrees,
-            },
-          },
-        },
-        {
-          $addFields: {
-            // Calculate more accurate distance using Haversine formula approximation
-            distance: {
-              $sqrt: {
-                $add: [
-                  {
-                    $pow: [
+              $lte: userLocation.longitude + radiusDegrees
+            }
+          }
+        };
+
+        const [feeds, totalFeeds] = await Promise.all([
+          Feed.aggregate([
+            matchStage,
+            {
+              $addFields: {
+                distance: {
+                  $sqrt: {
+                    $add: [
                       {
-                        $multiply: [
-                          {
-                            $subtract: [
-                              "$location.latitude",
-                              userLocation.latitude,
-                            ],
-                          },
-                          111, // km per degree latitude (approximate)
-                        ],
+                        $pow: [
+                          { $multiply: [{ $subtract: ["$location.latitude", userLocation.latitude] }, 111] },
+                          2
+                        ]
                       },
-                      2,
-                    ],
-                  },
-                  {
-                    $pow: [
                       {
-                        $multiply: [
-                          {
-                            $subtract: [
-                              "$location.longitude",
-                              userLocation.longitude,
-                            ],
-                          },
-                          // Adjust for longitude distance variation by latitude
+                        $pow: [
                           {
                             $multiply: [
-                              111,
-                              {
-                                $cos: {
-                                  $multiply: [
-                                    userLocation.latitude,
-                                    3.14159 / 180,
-                                  ],
-                                },
-                              },
-                            ],
+                              { $subtract: ["$location.longitude", userLocation.longitude] },
+                              { $multiply: [111, { $cos: { $multiply: [userLocation.latitude, 3.14159 / 180] } }] }
+                            ]
                           },
-                        ],
-                      },
-                      2,
-                    ],
-                  },
-                ],
-              },
+                          2
+                        ]
+                      }
+                    ]
+                  }
+                },
+                recencyScore: {
+                  $divide: [1, { $add: [1, { $divide: [{ $subtract: [new Date(), "$date"] }, 86400000] }] }]
+                }
+              }
             },
-            // Calculate post freshness (recency factor)
-            recencyScore: {
-              $divide: [
-                1,
-                {
+            { $match: { distance: { $lte: radius } } },
+            {
+              $addFields: {
+                relevanceScore: {
                   $add: [
-                    1,
-                    {
-                      $divide: [
-                        { $subtract: [new Date(), "$date"] },
-                        1000 * 60 * 60 * 24, // Convert ms to days
-                      ],
-                    },
-                  ],
-                },
-              ],
+                    { $multiply: [{ $subtract: [radius, "$distance"] }, 10 / radius] },
+                    { $multiply: ["$recencyScore", 5] },
+                    { $multiply: [{ $log10: { $add: [{ $add: ["$views.count", { $multiply: ["$like.count", 3] }, { $multiply: ["$comment.count", 5] }] }, 1] } }, 2] }
+                  ]
+                }
+              }
             },
-            // Calculate engagement score
-            engagementScore: {
-              $add: [
-                { $ifNull: ["$views.count", 0] },
-                { $multiply: [{ $ifNull: ["$like.count", 0] }, 3] },
-                { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] },
-              ],
-            },
-          },
-        },
-        {
-          $match: {
-            distance: { $lte: radius }, // Filter by actual calculated distance
-          },
-        },
-        {
-          $addFields: {
-            // Combined relevance score weighing distance, recency and engagement
-            relevanceScore: {
-              $add: [
-                // Distance matters most (inverted: closer = higher score)
-                {
-                  $multiply: [
-                    { $subtract: [radius, "$distance"] },
-                    10 / radius,
-                  ],
-                },
-                // Recency is important
-                { $multiply: ["$recencyScore", 5] },
-                // Engagement matters too
-                {
-                  $multiply: [{ $log10: { $add: ["$engagementScore", 1] } }, 2],
-                },
-              ],
-            },
-          },
-        },
-        { $sort: { relevanceScore: -1 } },
-        { $skip: skip },
-        { $limit: limit },
-        ...this.getCommonAggregationPipeline(),
-      ]);
+            { $sort: { relevanceScore: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+            ...this.getCommonAggregationPipeline()
+          ]).allowDiskUse(true).exec(),
+          Feed.countDocuments(matchStage.$match)
+        ]);
 
-      const totalFeeds = await Feed.countDocuments({
-        _id: { $nin: excludeIds },
-        "location.latitude": { $exists: true, $ne: null },
-        "location.longitude": { $exists: true, $ne: null },
-        "location.latitude": {
-          $gte: userLocation.latitude - radiusDegrees,
-          $lte: userLocation.latitude + radiusDegrees,
-        },
-        "location.longitude": {
-          $gte: userLocation.longitude - radiusDegrees,
-          $lte: userLocation.longitude + radiusDegrees,
-        },
+        return { feeds, totalFeeds };
       });
-
-      return { feeds, totalFeeds };
     } catch (error) {
       console.error("Error in getLocationBasedFeeds:", error);
       return { feeds: [], totalFeeds: 0 };
@@ -1046,76 +1032,76 @@ class FeedController {
 
   async getAllFeeds(req, res) {
     try {
-      console.log("getAllFeeds called");
-      const page = Math.max(1, parseInt(req.query.page) || 1);
-      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
-      const skip = (page - 1) * limit;
-      const sort = req.query.sort || "newest"; 
-      const ALL_FEEDS_CACHE_KEY = "all_feeds:";
-      const CACHE_DURATION = 600; 
+      const { userId } = req.params;
+      const { page, limit, skip } = utils.getPaginationParams(req.query);
 
-      const cacheKey = `${ALL_FEEDS_CACHE_KEY}${page}:${limit}:${sort}`;
-      const cachedFeeds = await redis.get(cacheKey);
+      const feedTopics = [
+        'farming_tips', 'crop_disease', 'market_prices',
+        'weather_updates', 'sustainable_farming', 'pest_control',
+        'irrigation', 'organic_farming'
+      ];
 
-      if (cachedFeeds) {
-        return res.json(JSON.parse(cachedFeeds));
-      }
+      // Use cached topics for consistency within time window
+      const cacheKey = `${CACHE_KEYS.FEED}topics:${userId}:${Math.floor(Date.now() / (5 * 60 * 1000))}`;
+      const selectedTopics = await utils.getCachedOrFetch(
+        cacheKey,
+        CACHE_DURATION.SHORT,
+        () => feedTopics.sort(() => 0.5 - Math.random()).slice(0, 3)
+      );
 
-      // Build sort options
-      let sortOptions = {};
-      switch (sort) {
-        case "oldest":
-          sortOptions = { date: 1 };
-          break;
-        case "mostLiked":
-          sortOptions = { "like.count": -1, date: -1 };
-          break;
-        case "mostCommented":
-          sortOptions = { "comment.count": -1, date: -1 };
-          break;
-        case "mostViewed":
-          sortOptions = { "views.count": -1, date: -1 };
-          break;
-        case "newest":
-        default:
-          sortOptions = { date: -1 };
-          break;
-      }
-
-      // Get total count for pagination
-      const totalFeeds = await Feed.countDocuments();
-
-      // Fetch feeds with pagination
-      const feeds = await Feed.aggregate([
-        { $sort: sortOptions },
+      const pipeline = [
+        {
+          $addFields: {
+            topicScore: {
+              $cond: {
+                if: {
+                  $regexMatch: {
+                    input: { $toLower: "$description" },
+                    regex: new RegExp(selectedTopics.join("|"), "i")
+                  }
+                },
+                then: 2,
+                else: 1
+              }
+            }
+          }
+        },
+        { $sort: { topicScore: -1, createdAt: -1 } },
         { $skip: skip },
         { $limit: limit },
-        ...this.getCommonAggregationPipeline(),
+        ...this.getCommonAggregationPipeline()
+      ];
+
+      // Execute queries in parallel
+      const [feeds, totalCount] = await Promise.all([
+        Feed.aggregate(pipeline).allowDiskUse(true).exec(),
+        Feed.countDocuments()
       ]);
 
-      const result = {
-        feeds,
-        recommendationType: "all", // Different from getRecommendedFeeds
-        recommendationStrategy: ["chronological"], // Different strategy
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(totalFeeds / limit),
-          totalFeeds,
-          hasMore: page * limit < totalFeeds,
-        },
-        metadata: {
-          sortBy: sort,
-          timestamp: new Date(),
-        },
-      };
+      const hasMore = totalCount > skip + feeds.length;
+      const nextPage = hasMore ? page + 1 : null;
 
-      // Cache the results
-      await redis.setex(cacheKey, CACHE_DURATION, JSON.stringify(result));
-
-      res.json(result);
+      return res.status(200).json({
+        success: true,
+        message: "Feeds fetched successfully",
+        data: {
+          feeds,
+          pagination: {
+            currentPage: page,
+            nextPage,
+            totalPages: Math.ceil(totalCount / limit),
+            totalFeeds: totalCount,
+            hasMore
+          }
+        }
+      });
     } catch (error) {
-      console.error("Error fetching all feeds:", error);
-      res.status(500).json({ error: "Internal server error" });
+      console.error("Error in getAllFeeds:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        error: error.message
+      });
     }
   }
 
@@ -1178,345 +1164,241 @@ class FeedController {
   async getRecommendedFeeds(req, res) {
     try {
       const { userId } = req.params;
-      const page = Math.max(1, parseInt(req.query.page) || 1);
-      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
-      const skip = (page - 1) * limit;
+      const { page, limit, skip } = utils.getPaginationParams(req.query);
       const shuffle = req.query.shuffle !== "false";
 
-      const cacheKey = `${RECOMMENDED_FEEDS_CACHE_KEY}${userId}:${page}:${limit}:${shuffle}`;
-      const cachedRecommendations = await redis.get(cacheKey);
+      const cacheKey = `${CACHE_KEYS.RECOMMENDED_FEEDS}${userId}:${page}:${limit}:${shuffle}`;
+      
+      const result = await utils.getCachedOrFetch(cacheKey, CACHE_DURATION.SHORT, async () => {
+        const userInterest = await UserInterest.findOne({ userId });
+        const isNewUser = !userInterest || userInterest.recentViews.length < 5;
+        const viewedFeedIds = userInterest?.recentViews?.map(view => new mongoose.Types.ObjectId(view.feedId)) || [];
 
-      if (cachedRecommendations) {
-        return res.json(JSON.parse(cachedRecommendations));
-      }
+        let feeds = [];
+        let totalFeeds = 0;
+        let recommendationType = "";
+        let recommendationStrategy = [];
 
-      // Get user profile with interests and view history
-      const userInterest = await UserInterest.findOne({ userId });
-      const isNewUser = !userInterest || userInterest.recentViews.length < 5;
-
-      const viewedFeedIds =
-        userInterest?.recentViews?.map(
-          (view) => new mongoose.Types.ObjectId(view.feedId)
-        ) || [];
-
-      let feeds = [];
-      let totalFeeds = 0;
-      let recommendationType = "";
-      let recommendationStrategy = [];
-
-      // 1. PERSONALIZED RECOMMENDATIONS (for returning users)
-      if (!isNewUser && userInterest.interests.length > 0) {
-        recommendationType = "personalized";
-        recommendationStrategy.push("interest-based");
-
-        // Calculate weighted interest scores (more recent = higher weight)
-        const weightedInterests = userInterest.interests
-          .map((interest) => ({
-            tag: interest.tag,
-            // Exponential decay based on time since last interaction
-            score:
-              interest.score *
-              Math.exp(
-                -(
-                  (Date.now() - new Date(interest.lastInteraction)) /
-                  (1000 * 60 * 60 * 24 * 14)
-                ) // Two-week half-life
-              ),
-          }))
-          .sort((a, b) => b.score - a.score);
-
-        // Get top user interests (more if high engagement)
-        const maxTags =
-          userInterest.engagementLevel === "high"
-            ? 10
-            : userInterest.engagementLevel === "medium"
-            ? 7
-            : 5;
-        const topTags = weightedInterests.slice(0, maxTags).map((i) => i.tag);
-
-        if (topTags.length > 0) {
-          // Find feeds matching user's top interests, excluding viewed feeds
-          const tagFeeds = await Feed.aggregate([
-            {
-              $match: {
-                _id: { $nin: viewedFeedIds },
-                content: {
-                  $regex: new RegExp(
-                    topTags.map((tag) => `#${tag}`).join("|"),
-                    "i"
-                  ),
-                },
-              },
-            },
-            {
-              $addFields: {
-                // Count how many of user's interests match this feed's tags
-                matchingTags: {
-                  $size: {
-                    $setIntersection: [
-                      topTags,
-                      {
-                        $map: {
-                          input: {
-                            $regexFindAll: {
-                              input: "$content",
-                              regex: /#(\w+)/g,
-                            },
-                          },
-                          as: "tag",
-                          in: {
-                            $toLower: {
-                              $substr: [
-                                { $arrayElemAt: ["$$tag.match", 0] },
-                                1,
-                                -1,
-                              ],
-                            },
-                          },
-                        },
-                      },
-                    ],
-                  },
-                },
-                // Calculate engagement score for ranking
-                engagementScore: {
-                  $add: [
-                    { $ifNull: ["$views.count", 0] },
-                    { $multiply: [{ $ifNull: ["$like.count", 0] }, 3] },
-                    { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] },
-                  ],
-                },
-                // Calculate recency score (newer = higher score)
-                recencyScore: {
-                  $divide: [
-                    1,
-                    {
-                      $add: [
-                        1,
-                        {
-                          $divide: [
-                            { $subtract: [new Date(), "$date"] },
-                            1000 * 60 * 60 * 24, // Convert ms to days
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              },
-            },
-            // Calculate combined relevance score
-            {
-              $addFields: {
-                relevanceScore: {
-                  $add: [
-                    { $multiply: ["$matchingTags", 10] },
-                    { $multiply: ["$engagementScore", 0.1] },
-                    { $multiply: ["$recencyScore", 50] },
-                  ],
-                },
-              },
-            },
-            { $sort: { relevanceScore: -1 } },
-            { $skip: skip },
-            { $limit: limit * 2 }, // Get more than needed for shuffling
-            ...this.getCommonAggregationPipeline(),
-          ]);
-
-          if (tagFeeds.length > 0) {
-            feeds = tagFeeds;
-            totalFeeds = await Feed.countDocuments({
-              _id: { $nin: viewedFeedIds },
-              content: {
-                $regex: new RegExp(
-                  topTags.map((tag) => `#${tag}`).join("|"),
-                  "i"
-                ),
-              },
-            });
-          }
-        }
-      }
-
-      // 2. LOCATION-BASED RECOMMENDATIONS
-      // Try location-based if interest-based didn't return enough results and user has location
-      if (
-        feeds.length < limit &&
-        userInterest?.location?.latitude &&
-        userInterest?.location?.longitude
-      ) {
-        recommendationType = feeds.length > 0 ? "mixed" : "location";
-        recommendationStrategy.push("location-based");
-
-        const { location } = userInterest;
-        const hoursFromLocationUpdate = location.lastUpdated
-          ? Math.abs(
-              (new Date() - new Date(location.lastUpdated)) / (1000 * 60 * 60)
-            )
-          : 72;
-
-        // Start with smaller radius for recent location, larger for older
-        const initialRadius =
-          hoursFromLocationUpdate < 24
-            ? 25
-            : hoursFromLocationUpdate < 72
-            ? 50
-            : 100;
-
-        // Try with increasing radius until we get enough results
-        let radius = initialRadius;
-        let locationFeeds = [];
-        let locationTotalFeeds = 0;
-
-        while (
-          radius <= MAX_RADIUS_KM &&
-          locationFeeds.length < limit - feeds.length
-        ) {
-          // Exclude feeds we've already added from interest-based recommendations
-          const excludeIds = [...viewedFeedIds, ...feeds.map((f) => f._id)];
-
-          const locationResults = await this.getLocationBasedFeeds(
-            location,
-            excludeIds,
-            radius,
-            1, // Start from page 1
-            limit - feeds.length, // Only get what we need
-            0 // No skip for location-based
+        // Interest-based recommendations
+        if (!isNewUser && userInterest.interests.length > 0) {
+          const { interestFeeds, interestTotal } = await this.getInterestBasedFeeds(
+            userInterest, viewedFeedIds, page, limit, skip
           );
-
-          locationFeeds = locationResults.feeds;
-          locationTotalFeeds = locationResults.totalFeeds;
-
-          if (locationFeeds.length > 0) break;
-
-          // Increase radius and try again
-          radius *= 2;
+          feeds = interestFeeds;
+          totalFeeds = interestTotal;
+          recommendationType = "personalized";
+          recommendationStrategy.push("interest-based");
         }
 
-        if (locationFeeds.length > 0) {
+        // Location-based recommendations
+        if (feeds.length < limit && userInterest?.location?.latitude) {
+          const { locationFeeds, locationTotal } = await this.getLocationBasedRecommendations(
+            userInterest, viewedFeedIds, feeds, limit
+          );
           feeds = [...feeds, ...locationFeeds];
-          totalFeeds += locationTotalFeeds;
+          totalFeeds += locationTotal;
+          recommendationType = feeds.length > locationFeeds.length ? "mixed" : "location";
+          recommendationStrategy.push("location-based");
         }
-      }
 
-      // 3. TRENDING/DISCOVERY RECOMMENDATIONS
-      // If we still don't have enough feeds or user is new
-      if (feeds.length < limit || isNewUser) {
-        recommendationType =
-          feeds.length > 0 ? "mixed" : isNewUser ? "new-user" : "trending";
-        recommendationStrategy.push("trending-discovery");
-
-        // Exclude feeds we've already added from previous strategies
-        const excludeIds = [...viewedFeedIds, ...feeds.map((f) => f._id)];
-
-        // For new users, focus more on popular content
-        // For returning users with not enough recommendations, focus on discovery
-        const popularityWeight = isNewUser ? 0.7 : 0.3;
-        const recencyWeight = isNewUser ? 0.3 : 0.5;
-        const randomnessWeight = isNewUser ? 0.0 : 0.2;
-
-        const discoveryFeeds = await Feed.aggregate([
-          {
-            $match: {
-              _id: { $nin: excludeIds },
-            },
-          },
-          {
-            $addFields: {
-              // Calculate engagement score (popularity)
-              popularityScore: {
-                $add: [
-                  { $ifNull: ["$views.count", 0] },
-                  { $multiply: [{ $ifNull: ["$like.count", 0] }, 3] },
-                  { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] },
-                ],
-              },
-              // Calculate recency score
-              recencyScore: {
-                $divide: [
-                  1,
-                  {
-                    $add: [
-                      1,
-                      {
-                        $divide: [
-                          { $subtract: [new Date(), "$date"] },
-                          1000 * 60 * 60 * 24, // Convert ms to days
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-              // Add randomness factor
-              randomFactor: { $rand: {} },
-            },
-          },
-          {
-            $addFields: {
-              // Combined discovery score with weighted components
-              discoveryScore: {
-                $add: [
-                  { $multiply: ["$popularityScore", popularityWeight] },
-                  { $multiply: ["$recencyScore", 100 * recencyWeight] },
-                  { $multiply: ["$randomFactor", 20 * randomnessWeight] },
-                ],
-              },
-            },
-          },
-          { $sort: { discoveryScore: -1 } },
-          { $skip: isNewUser ? 0 : skip }, // No skip for new users to get best content
-          { $limit: isNewUser ? limit : limit - feeds.length },
-          ...this.getCommonAggregationPipeline(),
-        ]);
-
-        const discoveryTotalFeeds = await Feed.countDocuments({
-          _id: { $nin: excludeIds },
-        });
-
-        if (discoveryFeeds.length > 0) {
+        // Discovery/Trending recommendations
+        if (feeds.length < limit || isNewUser) {
+          const { discoveryFeeds, discoveryTotal } = await this.getDiscoveryFeeds(
+            isNewUser, viewedFeedIds, feeds, page, limit, skip
+          );
           feeds = [...feeds, ...discoveryFeeds];
-          totalFeeds += discoveryTotalFeeds;
+          totalFeeds += discoveryTotal;
+          recommendationType = this.determineRecommendationType(feeds.length, discoveryFeeds.length, isNewUser);
+          recommendationStrategy.push("trending-discovery");
         }
-      }
 
-      // Shuffle the feeds if requested (and we have more than needed)
-      if (shuffle && feeds.length > limit) {
-        // Fisher-Yates shuffle algorithm
-        for (let i = feeds.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [feeds[i], feeds[j]] = [feeds[j], feeds[i]];
+        if (shuffle && feeds.length > limit) {
+          feeds = this.shuffleAndTrimFeeds(feeds, limit);
         }
-        // Trim to requested limit
-        feeds = feeds.slice(0, limit);
-      }
 
-      const result = {
-        feeds,
-        recommendationType,
-        recommendationStrategy,
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(totalFeeds / limit),
-          totalFeeds,
-          hasMore: page * limit < totalFeeds,
-        },
-        metadata: {
-          isNewUser,
-          timestamp: new Date(),
-          shuffled: shuffle,
-        },
-      };
-
-      // Cache the results
-      await redis.setex(cacheKey, CACHE_DURATION, JSON.stringify(result));
+        return {
+          feeds,
+          recommendationType,
+          recommendationStrategy,
+          pagination: {
+            currentPage: page,
+            totalPages: Math.ceil(totalFeeds / limit),
+            totalFeeds,
+            hasMore: page * limit < totalFeeds
+          },
+          metadata: {
+            isNewUser,
+            timestamp: new Date(),
+            shuffled: shuffle
+          }
+        };
+      });
 
       res.json(result);
     } catch (error) {
-      console.error("Error fetching recommended feeds:", error);
+      console.error("Error in getRecommendedFeeds:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   }
+
+  // Helper methods for getRecommendedFeeds
+  async getInterestBasedFeeds(userInterest, viewedFeedIds, page, limit, skip) {
+    const weightedInterests = this.calculateWeightedInterests(userInterest.interests);
+    const topTags = this.getTopTags(weightedInterests, userInterest.engagementLevel);
+
+    if (topTags.length === 0) return { interestFeeds: [], interestTotal: 0 };
+
+    const pipeline = [
+      {
+        $match: {
+          _id: { $nin: viewedFeedIds },
+          content: { $regex: new RegExp(topTags.map(tag => `#${tag}`).join("|"), "i") }
+        }
+      },
+      {
+        $addFields: {
+          matchingTags: {
+            $size: {
+              $setIntersection: [
+                topTags,
+                {
+                  $map: {
+                    input: { $regexFindAll: { input: "$content", regex: /#(\w+)/g } },
+                    as: "tag",
+                    in: { $toLower: { $substr: [{ $arrayElemAt: ["$$tag.match", 0] }, 1, -1] } }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        $addFields: {
+          relevanceScore: {
+            $add: [
+              { $multiply: ["$matchingTags", 10] },
+              { $multiply: [{ $add: ["$views.count", { $multiply: ["$like.count", 3] }, { $multiply: ["$comment.count", 5] }] }, 0.1] },
+              { $multiply: [{ $divide: [1, { $add: [1, { $divide: [{ $subtract: [new Date(), "$date"] }, 86400000] }] }] }, 50] }
+            ]
+          }
+        }
+      },
+      { $sort: { relevanceScore: -1 } },
+      { $skip: skip },
+      { $limit: limit * 2 }
+    ];
+
+    const [feeds, total] = await Promise.all([
+      Feed.aggregate([...pipeline, ...this.getCommonAggregationPipeline()]).allowDiskUse(true),
+      Feed.countDocuments(pipeline[0].$match)
+    ]);
+
+    return { interestFeeds: feeds, interestTotal: total };
+  }
+
+  calculateWeightedInterests(interests) {
+    return interests.map(interest => ({
+      tag: interest.tag,
+      score: interest.score * Math.exp(-(Date.now() - new Date(interest.lastInteraction)) / (14 * 86400000))
+    })).sort((a, b) => b.score - a.score);
+  }
+
+  getTopTags(weightedInterests, engagementLevel) {
+    const maxTags = engagementLevel === "high" ? 10 : engagementLevel === "medium" ? 7 : 5;
+    return weightedInterests.slice(0, maxTags).map(i => i.tag);
+  }
+
+  async getLocationBasedRecommendations(userInterest, viewedFeedIds, currentFeeds, limit) {
+    const { location } = userInterest;
+    const hoursFromLocationUpdate = location.lastUpdated
+      ? Math.abs((new Date() - new Date(location.lastUpdated)) / 3600000)
+      : 72;
+
+    const initialRadius = hoursFromLocationUpdate < 24 ? 25 : hoursFromLocationUpdate < 72 ? 50 : 100;
+    let radius = initialRadius;
+    let locationFeeds = [];
+    let locationTotal = 0;
+
+    while (radius <= CONSTANTS.MAX_RADIUS_KM && locationFeeds.length < limit - currentFeeds.length) {
+      const excludeIds = [...viewedFeedIds, ...currentFeeds.map(f => f._id)];
+      const results = await this.getLocationBasedFeeds(location, excludeIds, radius, 1, limit - currentFeeds.length, 0);
+      
+      if (results.feeds.length > 0) {
+        locationFeeds = results.feeds;
+        locationTotal = results.totalFeeds;
+        break;
+      }
+      radius *= 2;
+    }
+
+    return { locationFeeds, locationTotal };
+  }
+
+  async getDiscoveryFeeds(isNewUser, viewedFeedIds, currentFeeds, page, limit, skip) {
+    const popularityWeight = isNewUser ? 0.7 : 0.3;
+    const recencyWeight = isNewUser ? 0.3 : 0.5;
+    const randomnessWeight = isNewUser ? 0.0 : 0.2;
+
+    const pipeline = [
+      {
+        $match: {
+          _id: { $nin: [...viewedFeedIds, ...currentFeeds.map(f => f._id)] }
+        }
+      },
+      {
+        $addFields: {
+          popularityScore: {
+            $add: [
+              "$views.count",
+              { $multiply: ["$like.count", 3] },
+              { $multiply: ["$comment.count", 5] }
+            ]
+          },
+          recencyScore: {
+            $divide: [1, { $add: [1, { $divide: [{ $subtract: [new Date(), "$date"] }, 86400000] }] }]
+          },
+          randomFactor: { $rand: {} }
+        }
+      },
+      {
+        $addFields: {
+          discoveryScore: {
+            $add: [
+              { $multiply: ["$popularityScore", popularityWeight] },
+              { $multiply: ["$recencyScore", 100 * recencyWeight] },
+              { $multiply: ["$randomFactor", 20 * randomnessWeight] }
+            ]
+          }
+        }
+      },
+      { $sort: { discoveryScore: -1 } },
+      { $skip: isNewUser ? 0 : skip },
+      { $limit: isNewUser ? limit : limit - currentFeeds.length }
+    ];
+
+    const [feeds, total] = await Promise.all([
+      Feed.aggregate([...pipeline, ...this.getCommonAggregationPipeline()]).allowDiskUse(true),
+      Feed.countDocuments(pipeline[0].$match)
+    ]);
+
+    return { discoveryFeeds: feeds, discoveryTotal: total };
+  }
+
+  determineRecommendationType(totalFeeds, discoveryFeedsCount, isNewUser) {
+    if (isNewUser) return "new-user";
+    if (totalFeeds === discoveryFeedsCount) return "trending";
+    return "mixed";
+  }
+
+  shuffleAndTrimFeeds(feeds, limit) {
+    for (let i = feeds.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [feeds[i], feeds[j]] = [feeds[j], feeds[i]];
+    }
+    return feeds.slice(0, limit);
+  }
+
   async getTopFeeds(req, res) {
     try {
       const topFeeds = await Feed.aggregate([

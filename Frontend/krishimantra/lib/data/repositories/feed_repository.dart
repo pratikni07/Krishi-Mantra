@@ -86,6 +86,8 @@ class FeedRepository {
   Future<Map<String, dynamic>> getComments(String feedId,
       {int page = 1, int limit = 10}) async {
     try {
+      print('🔍 Repository: Fetching comments for feedId: $feedId, page: $page, limit: $limit');
+      
       final response = await _apiService.get(
         '/api/feed/comments/getComment',
         queryParameters: {
@@ -95,10 +97,31 @@ class FeedRepository {
         },
       );
 
+      print('📊 Repository: Raw API response: ${response.data}');
       final data = ApiHelper.handleResponse(response);
+      print('📄 Repository: Parsed response data: $data');
+      
+      // Verify the response structure
+      if (data == null) {
+        print('⚠️ Repository: Received null data from API');
+        throw Exception('Invalid response: null data');
+      }
+      
+      if (!data.containsKey('docs')) {
+        print('⚠️ Repository: Response missing "docs" field: ${data.keys}');
+        throw Exception('Invalid response format: missing docs');
+      }
+      
+      if (!(data['docs'] is List)) {
+        print('⚠️ Repository: "docs" is not a list: ${data['docs'].runtimeType}');
+        throw Exception('Invalid response format: docs is not a list');
+      }
+      
       final List<CommentModel> comments = (data['docs'] as List)
           .map((comment) => CommentModel.fromJson(comment))
           .toList();
+
+      print('✅ Repository: Successfully parsed ${comments.length} comments');
 
       return {
         'comments': comments,
@@ -113,6 +136,7 @@ class FeedRepository {
         'nextPage': data['nextPage'],
       };
     } catch (e) {
+      print('❌ Repository: Error fetching comments: $e');
       throw ApiHelper.handleError(e);
     }
   }
@@ -150,14 +174,30 @@ class FeedRepository {
       );
 
       final data = ApiHelper.handleResponse(response);
-      final List<FeedModel> feeds = (data['feeds'] as List)
+      
+      // Handle the nested structure: the feeds are inside data.feeds
+      final feedsData = data['data'] != null ? data['data']['feeds'] : data['feeds'];
+      
+      if (feedsData == null) {
+        // Return empty result if no feeds are found
+        return {
+          'feeds': <FeedModel>[],
+          'pagination': {'hasMore': false},
+          'recommendationType': null
+        };
+      }
+      
+      final List<FeedModel> feeds = (feedsData as List)
           .map((feed) => FeedModel.fromJson(feed))
           .toList();
 
+      final pagination = data['data'] != null ? data['data']['pagination'] : data['pagination'];
+      final recommendationType = data['data'] != null ? data['data']['recommendationType'] : data['recommendationType'];
+
       return {
         'feeds': feeds,
-        'pagination': data['pagination'],
-        'recommendationType': data['recommendationType'],
+        'pagination': pagination ?? {'hasMore': false},
+        'recommendationType': recommendationType,
       };
     } catch (e) {
       throw ApiHelper.handleError(e);
@@ -215,14 +255,28 @@ class FeedRepository {
       );
 
       final data = ApiHelper.handleResponse(response);
-      final List<FeedModel> feeds = (data['data']['feeds'] as List)
+      
+      // Check if data exists and handle different response structures
+      final feedsData = data['data'] != null && data['data']['feeds'] != null 
+          ? data['data']['feeds'] 
+          : (data['feeds'] ?? []);
+      
+      final List<FeedModel> feeds = (feedsData as List)
           .map((feed) => FeedModel.fromJson(feed))
           .toList();
 
+      final pagination = data['data'] != null && data['data']['pagination'] != null 
+          ? data['data']['pagination'] 
+          : (data['pagination'] ?? {'hasMore': false});
+          
+      final tag = data['data'] != null && data['data']['tag'] != null 
+          ? data['data']['tag'] 
+          : data['tag'];
+
       return {
         'feeds': feeds,
-        'pagination': data['data']['pagination'],
-        'tag': data['data']['tag'],
+        'pagination': pagination,
+        'tag': tag,
       };
     } catch (e) {
       throw ApiHelper.handleError(e);

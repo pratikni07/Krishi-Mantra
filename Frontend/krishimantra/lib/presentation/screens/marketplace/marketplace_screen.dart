@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishimantra/presentation/controllers/marketplace_controller.dart';
 import 'package:krishimantra/core/constants/colors.dart';
-import 'package:krishimantra/presentation/widgets/app_header.dart';
 import 'package:krishimantra/data/services/language_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:krishimantra/core/utils/error_handler.dart';
 
 import 'add_product_screen.dart';
 import 'marketplace_product_detail_screen.dart';
@@ -74,8 +74,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         backgroundColor: AppColors.green,
-        title: AppHeader(),
-        automaticallyImplyLeading: false,
+        title: Text(
+          marketplaceTitle,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Get.back(),
+        ),
       ),
       body: Column(
         children: [
@@ -222,10 +232,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   
   Widget _buildProductGrid() {
     return Obx(() {
-      if (_controller.isLoading.value) {
+      if (_controller.isLoading) {
         return Expanded(
           child: Center(
             child: CircularProgressIndicator(color: AppColors.green),
+          ),
+        );
+      }
+
+      if (_controller.hasError) {
+        return Expanded(
+          child: ErrorHandler.getErrorWidget(
+            errorType: _controller.errorType ?? ErrorType.unknown,
+            onRetry: () => _controller.fetchMarketplaceProducts(),
+            showRetry: true,
           ),
         );
       }

@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/rendering.dart';
+import '../../../core/utils/error_handler.dart';
 
 class ReelsPage extends StatefulWidget {
   final int? initialIndex;
@@ -39,12 +40,15 @@ class _ReelsPageState extends State<ReelsPage> {
       initialPage: widget.initialIndex ?? 0,
     );
 
+    // Set the default active tag as 'trending'
+    activeTag.value = 'trending';
+
     if (widget.reels != null) {
       // Use provided reels if available
       _reelController.reels.value = widget.reels!;
     } else {
-      // Otherwise fetch new reels
-      _reelController.fetchReels(refresh: true);
+      // Otherwise fetch trending reels by default instead of regular reels
+      _reelController.fetchTrendingReels();
     }
     _reelController.fetchTrendingTags();
   }
@@ -64,47 +68,74 @@ class _ReelsPageState extends State<ReelsPage> {
           // Reels Section (now full screen)
           Obx(
             () {
-              return _reelController.isLoading.value &&
-                      _reelController.reels.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : PageView.builder(
-                      controller: _pageController,
-                      scrollDirection: Axis.vertical,
-                      itemCount: _reelController.reels.length,
-                      onPageChanged: (index) async {
-                        if (index == _reelController.reels.length - 2) {
-                          await _reelController.fetchReels();
-                        }
+              if (_reelController.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              } else if (_reelController.hasError) {
+                // Use our error handler to show an appropriate error screen
+                return ErrorHandler.getErrorWidget(
+                  errorType: _reelController.errorType ?? ErrorType.unknown,
+                  onRetry: () => _reelController.fetchReels(refresh: true),
+                  showRetry: true,
+                );
+              } else if (_reelController.reels.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.videocam_off, size: 48, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No reels available',
+                        style: TextStyle(color: Colors.grey[400]),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: () => _reelController.fetchReels(refresh: true),
+                        child: const Text('Refresh'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              
+              return PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                itemCount: _reelController.reels.length,
+                onPageChanged: (index) async {
+                  if (index == _reelController.reels.length - 2) {
+                    await _reelController.fetchReels();
+                  }
 
-                        final currentContext =
-                            _pageController.position.haveDimensions
-                                ? (_pageController.page?.round() ?? 0)
-                                : 0;
+                  final currentContext =
+                      _pageController.position.haveDimensions
+                          ? (_pageController.page?.round() ?? 0)
+                          : 0;
 
-                        if ((index - currentContext).abs() > 2) {
-                          _ReelVideoCardState._videoCache
-                              .removeWhere((url, controller) {
-                            final shouldRemove = !_reelController.reels
-                                .sublist(
-                                    max(0, index - 2),
-                                    min(_reelController.reels.length,
-                                        index + 3))
-                                .any((reel) => reel.mediaUrl == url);
-                            if (shouldRemove) {
-                              controller.dispose();
-                            }
-                            return shouldRemove;
-                          });
-                        }
-                      },
-                      itemBuilder: (context, index) {
-                        final reel = _reelController.reels[index];
-                        return ReelVideoCard(
-                          reel: reel,
-                          index: index,
-                        );
-                      },
-                    );
+                  if ((index - currentContext).abs() > 2) {
+                    _ReelVideoCardState._videoCache
+                        .removeWhere((url, controller) {
+                      final shouldRemove = !_reelController.reels
+                          .sublist(
+                              max(0, index - 2),
+                              min(_reelController.reels.length,
+                                  index + 3))
+                          .any((reel) => reel.mediaUrl == url);
+                      if (shouldRemove) {
+                        controller.dispose();
+                      }
+                      return shouldRemove;
+                    });
+                  }
+                },
+                itemBuilder: (context, index) {
+                  final reel = _reelController.reels[index];
+                  return ReelVideoCard(
+                    reel: reel,
+                    index: index,
+                  );
+                },
+              );
             },
           ),
 
@@ -165,11 +196,17 @@ class _ReelsPageState extends State<ReelsPage> {
                       child: Obx(() => ElevatedButton(
                             onPressed: () async {
                               activeTag.value = tagName;
-                              _reelController.isLoading.value = true;
-                              final tagReels =
-                                  await _reelController.getReelsByTag(tagName);
-                              _reelController.reels.value = tagReels;
-                              _reelController.isLoading.value = false;
+                              
+                              // Use setLoading and setLoaded instead of directly manipulating isLoading.value
+                              _reelController.setLoading();
+                              try {
+                                final tagReels = await _reelController.getReelsByTag(tagName);
+                                if (_reelController.reels.isNotEmpty) {
+                                  _reelController.reels.value = tagReels;
+                                }
+                              } finally {
+                                _reelController.setLoaded();
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: activeTag.value == tagName

@@ -58,10 +58,14 @@ class CommentsSection extends StatelessWidget {
           Obx(() {
             if (feedController.isLoadingComments.value &&
                 feedController.comments.isNotEmpty) {
-              return const Center(
+              return Center(
                 child: Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: CircularProgressIndicator(),
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Image.asset(
+                    'assets/Images/krishimantraloading.gif',
+                    height: 50,
+                    width: 50,
+                  ),
                 ),
               );
             }

@@ -4,18 +4,19 @@ import 'package:get/get.dart';
 import '../../data/repositories/marketplace_repository.dart';
 import '../../data/services/UserService.dart';
 import 'presigned_url_controller.dart';
+import 'base_controller.dart';
 import 'dart:async';
 
-class MarketplaceController extends GetxController {
+class MarketplaceController extends BaseController {
   final MarketplaceRepository _marketplaceRepository;
   final UserService _userService = Get.find<UserService>();
   final PresignedUrlController _presignedUrlController =
       Get.find<PresignedUrlController>();
 
-  final RxBool isLoading = false.obs;
   final RxList<dynamic> marketplaceProducts = <dynamic>[].obs;
   final Rx<dynamic> selectedProduct = Rx<dynamic>(null);
 
+  final RxBool isCommentsLoading = false.obs;
   final RxBool isLoadingComments = false.obs;
   final RxBool hasMoreComments = true.obs;
   int currentPage = 1;
@@ -65,42 +66,41 @@ class MarketplaceController extends GetxController {
   }
 
   Future<void> fetchProducts() async {
-    try {
-      isLoading.value = true;
-      final response = await _marketplaceRepository.searchProducts();
-      if (response['success'] == true) {
-        products.value = List<Map<String, dynamic>>.from(response['data']);
-      }
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to fetch products: $e');
-    } finally {
-      isLoading.value = false;
-    }
+    await handleAsync<void>(
+      () async {
+        final response = await _marketplaceRepository.searchProducts();
+        if (response['success'] == true) {
+          products.value = List<Map<String, dynamic>>.from(response['data']);
+        } else {
+          throw Exception(response['message'] ?? 'Failed to fetch products');
+        }
+      },
+      showLoading: products.isEmpty,
+    );
   }
 
   Future<void> fetchMarketplaceProducts() async {
-    try {
-      isLoading.value = true;
-      final products = await _marketplaceRepository.getMarketplaceProducts();
-      marketplaceProducts.value = products;
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to fetch marketplace products: $e');
-    } finally {
-      isLoading.value = false;
-    }
+    await handleAsync<void>(
+      () async {
+        final products = await _marketplaceRepository.getMarketplaceProducts();
+        marketplaceProducts.value = products;
+      },
+      showLoading: marketplaceProducts.isEmpty,
+    );
   }
 
   Future<void> fetchProductById(String productId) async {
-    try {
-      isLoading.value = true;
-      final response =
-          await _marketplaceRepository.getProductDetails(productId);
-      productDetails.value = response['data'];
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to fetch product details: $e');
-    } finally {
-      isLoading.value = false;
-    }
+    await handleAsync<void>(
+      () async {
+        final response = await _marketplaceRepository.getProductDetails(productId);
+        if (response['success'] == true) {
+          productDetails.value = response['data'];
+        } else {
+          throw Exception(response['message'] ?? 'Failed to fetch product details');
+        }
+      },
+      showLoading: true,
+    );
   }
 
   Future<bool> isUserAllowedToAddProducts() async {
@@ -118,7 +118,7 @@ class MarketplaceController extends GetxController {
         isVideo: isVideo,
       );
     } catch (e) {
-      Get.snackbar('Error', 'Failed to upload media: $e');
+      setError(e);
       return null;
     }
   }
@@ -128,9 +128,8 @@ class MarketplaceController extends GetxController {
       List<File> imageFiles,
       List<File> videoFiles,
       List<String> youtubeUrls) async {
-    try {
-      isLoading.value = true;
-
+      
+    return await handleAsync<bool>(() async {
       // Get user ID
       final userId = await _userService.getUserId();
       productData['userId'] = userId;
@@ -150,16 +149,14 @@ class MarketplaceController extends GetxController {
       for (var videoFile in videoFiles) {
         final videoUrl = await uploadMediaFile(videoFile, true);
         if (videoUrl != null) {
-          media
-              .add({'type': 'video', 'url': videoUrl, 'isYoutubeVideo': false});
+          media.add({'type': 'video', 'url': videoUrl, 'isYoutubeVideo': false});
         }
       }
 
       // Add YouTube URLs
       for (var youtubeUrl in youtubeUrls) {
         if (youtubeUrl.isNotEmpty) {
-          media.add(
-              {'type': 'video', 'url': youtubeUrl, 'isYoutubeVideo': true});
+          media.add({'type': 'video', 'url': youtubeUrl, 'isYoutubeVideo': true});
         }
       }
 
@@ -168,14 +165,8 @@ class MarketplaceController extends GetxController {
 
       // Send request to API
       await _marketplaceRepository.addMarketplaceProduct(productData);
-      Get.snackbar('Success', 'Product added successfully');
       return true;
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to add product: $e');
-      return false;
-    } finally {
-      isLoading.value = false;
-    }
+    }, showLoading: true) ?? false;
   }
 
   Future<void> fetchComments(String productId, {bool refresh = false}) async {
@@ -186,8 +177,8 @@ class MarketplaceController extends GetxController {
     }
 
     if (!hasMoreComments.value || isLoadingMore) return;
-
-    try {
+    
+    await handleAsync<void>(() async {
       isLoadingMore = true;
       isLoadingComments.value = true;
       
@@ -207,21 +198,20 @@ class MarketplaceController extends GetxController {
         }
         
         currentPage++;
+      } else {
+        throw Exception(response['message'] ?? 'Failed to load comments');
       }
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to load comments: $e');
-    } finally {
+      
       isLoadingMore = false;
       isLoadingComments.value = false;
-    }
+    }, showLoading: comments.isEmpty && !refresh);
   }
 
   Future<void> addComment(String productId, String text) async {
-    try {
+    await handleAsync<void>(() async {
       final userId = await _userService.getUserId();
       if (userId == null) {
-        Get.snackbar('Error', 'Please login to comment');
-        return;
+        throw Exception('Please login to comment');
       }
 
       final response = await _marketplaceRepository.addComment(productId, text);
@@ -237,12 +227,10 @@ class MarketplaceController extends GetxController {
         });
         
         comments.insert(0, newComment);
-        Get.snackbar('Success', 'Comment added successfully');
+      } else {
+        throw Exception(response['message'] ?? 'Failed to add comment');
       }
-    } catch (e, stackTrace) {
-      print('Error adding comment: $e\n$stackTrace');
-      Get.snackbar('Error', 'Failed to add comment. Please try again.');
-    }
+    }, showLoading: true);
   }
 
   Future<void> addReply(String productId, String commentId, String text) async {
@@ -288,34 +276,36 @@ class MarketplaceController extends GetxController {
     String? keyword,
     bool resetFilters = false,
   }) async {
-    try {
-      isLoading.value = true;
-      isSearching.value = true;
+    await handleAsync<void>(
+      () async {
+        isSearching.value = true;
 
-      if (resetFilters) {
-        selectedCategory.value = '';
-        selectedCondition.value = '';
-        minPrice.value = 0.0;
-        maxPrice.value = 1000000.0;
-        selectedTags.clear();
-      }
+        if (resetFilters) {
+          selectedCategory.value = '';
+          selectedCondition.value = '';
+          minPrice.value = 0.0;
+          maxPrice.value = 1000000.0;
+          selectedTags.clear();
+        }
 
-      final response = await _marketplaceRepository.searchProducts(
-        keyword: keyword,
-        category: selectedCategory.value,
-        minPrice: minPrice.value,
-        maxPrice: maxPrice.value,
-        condition: selectedCondition.value,
-        tags: selectedTags,
-      );
+        final response = await _marketplaceRepository.searchProducts(
+          keyword: keyword,
+          category: selectedCategory.value,
+          minPrice: minPrice.value,
+          maxPrice: maxPrice.value,
+          condition: selectedCondition.value,
+          tags: selectedTags,
+        );
 
-      if (response['success'] == true) {
-        marketplaceProducts.value = List<Map<String, dynamic>>.from(response['data']);
-      }
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to search products: $e');
-    } finally {
-      isLoading.value = false;
-    }
+        if (response['success'] == true) {
+          marketplaceProducts.value = List<Map<String, dynamic>>.from(response['data']);
+        } else {
+          throw Exception(response['message'] ?? 'Failed to search products');
+        }
+        
+        isSearching.value = false;
+      },
+      showLoading: true,
+    );
   }
 }

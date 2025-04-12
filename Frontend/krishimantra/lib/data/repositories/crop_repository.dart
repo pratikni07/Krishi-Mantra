@@ -12,12 +12,23 @@ class CropRepository {
   Future<List<CropModel>> getAllCrops() async {
     try {
       final response = await _apiService.get('/api/main/crop-calendar/crops');
-      if (response.data['success'] == true) {
-        final List<dynamic> data = response.data['data'] ?? [];
+      
+      // Handle both array response and object with success property
+      if (response.data is List) {
+        // Direct array response
+        final List<dynamic> data = response.data;
         return data.map((json) => CropModel.fromJson(json)).toList();
+      } else if (response.data is Map) {
+        // Response with success property
+        if (response.data['success'] == true) {
+          final List<dynamic> data = response.data['data'] ?? [];
+          return data.map((json) => CropModel.fromJson(json)).toList();
+        }
+        throw Exception(
+            'Failed to fetch crops: ${response.data['message'] ?? 'Unknown error'}');
       }
-      throw Exception(
-          'Failed to fetch crops: ${response.data['message'] ?? 'Unknown error'}');
+      
+      throw Exception('Unexpected response format');
     } on DioException catch (e) {
       throw Exception('Network error: ${e.message}');
     } catch (e) {
@@ -29,13 +40,21 @@ class CropRepository {
     try {
       final response =
           await _apiService.get('/api/main/crop-calendar/calendar/$cropId/6');
-      if (response.data['success'] == true) {
-        final data = response.data['data'];
-        if (data == null) throw Exception('No crop data found');
-        return CropCalendarModel.fromJson(data);
+          
+      // Handle both formats
+      if (response.data is Map && response.data.containsKey('data')) {
+        // Response with success property
+        if (response.data['success'] == true) {
+          final data = response.data['data'];
+          if (data == null) throw Exception('No crop data found');
+          return CropCalendarModel.fromJson(data);
+        }
+        throw Exception(
+            'Failed to fetch crop calendar: ${response.data['message'] ?? 'Unknown error'}');
+      } else {
+        // Direct response
+        return CropCalendarModel.fromJson(response.data);
       }
-      throw Exception(
-          'Failed to fetch crop calendar: ${response.data['message'] ?? 'Unknown error'}');
     } on DioException catch (e) {
       throw Exception('Network error: ${e.message}');
     } catch (e) {
@@ -59,12 +78,28 @@ class CropRepository {
           'limit': limit,
         },
       );
-      if (response.data['success'] == true) {
-        final List<dynamic> data = response.data['data']['crops'] ?? [];
+      
+      // Handle both formats
+      if (response.data is List) {
+        // Direct array response
+        final List<dynamic> data = response.data;
         return data.map((json) => CropModel.fromJson(json)).toList();
+      } else if (response.data is Map) {
+        // Response with success property
+        if (response.data['success'] == true) {
+          final data = response.data['data'];
+          if (data is Map && data.containsKey('crops')) {
+            final List<dynamic> crops = data['crops'] ?? [];
+            return crops.map((json) => CropModel.fromJson(json)).toList();
+          } else if (data is List) {
+            return data.map((json) => CropModel.fromJson(json)).toList();
+          }
+        }
+        throw Exception(
+            'Failed to search crops: ${response.data['message'] ?? 'Unknown error'}');
       }
-      throw Exception(
-          'Failed to search crops: ${response.data['message'] ?? 'Unknown error'}');
+      
+      throw Exception('Unexpected response format');
     } on DioException catch (e) {
       throw Exception('Network error: ${e.message}');
     } catch (e) {

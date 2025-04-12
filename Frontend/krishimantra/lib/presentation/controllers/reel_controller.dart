@@ -1,14 +1,15 @@
 import 'package:get/get.dart';
 import '../../data/models/reel_model.dart';
 import '../../data/repositories/reel_repository.dart';
+import 'base_controller.dart';
 import 'package:flutter/material.dart';
+import '../../core/utils/error_handler.dart';
 
-class ReelController extends GetxController {
+class ReelController extends BaseController {
   final ReelRepository _reelRepository;
 
   RxList<ReelModel> reels = <ReelModel>[].obs;
   RxList<Map<String, dynamic>> trendingTags = <Map<String, dynamic>>[].obs;
-  RxBool isLoading = false.obs;
   RxInt currentPage = 1.obs;
   RxBool hasMorePages = true.obs;
   RxMap<String, List<Map<String, dynamic>>> reelComments =
@@ -26,41 +27,49 @@ class ReelController extends GetxController {
       return;
     }
 
-    try {
-      isLoading.value = true;
-      final response = await _reelRepository.getReels(
-        page: currentPage.value,
-        limit: 10,
-      );
+    await handleAsync<void>(
+      () async {
+        final response = await _reelRepository.getReels(
+          page: currentPage.value,
+          limit: 10,
+        );
 
-      final List<ReelModel> newReels = (response['data']['data'] as List)
-          .map((reel) => ReelModel.fromJson(reel))
-          .toList();
+        final List<ReelModel> newReels = (response['data']['data'] as List)
+            .map((reel) => ReelModel.fromJson(reel))
+            .toList();
 
-      reels.addAll(newReels);
+        reels.addAll(newReels);
 
-      final pagination = response['data']['pagination'];
-      hasMorePages.value = pagination['hasNextPage'];
-      if (hasMorePages.value) {
-        currentPage.value++;
-      }
-    } catch (e) {
-      // Handle error
-    } finally {
-      isLoading.value = false;
-    }
+        final pagination = response['data']['pagination'];
+        hasMorePages.value = pagination['hasNextPage'];
+        if (hasMorePages.value) {
+          currentPage.value++;
+        }
+      },
+      showLoading: reels.isEmpty, // Only show loading if no reels yet
+      isRefresh: refresh,
+    );
   }
 
   Future<void> fetchTrendingTags() async {
     try {
-      final tags = await _reelRepository.getTrendingTags();
-      trendingTags.value = tags;
-    } catch (e) {}
+      await handleAsync<void>(
+        () async {
+          final tags = await _reelRepository.getTrendingTags();
+          if (tags != null) {
+            trendingTags.value = tags;
+          }
+        },
+        showLoading: false, // Don't show loading for tags
+      );
+    } catch (e) {
+      // Silent error - don't crash the UI if tags can't be loaded
+    }
   }
 
   Future<void> addComment(String reelId, String content,
       {String? parentCommentId}) async {
-    try {
+    return await handleAsync<void>(() async {
       final response = await _reelRepository.addComment(reelId, content,
           parentCommentId: parentCommentId);
 
@@ -105,50 +114,39 @@ class ReelController extends GetxController {
         };
         reelComments.refresh();
       }
-    } catch (e) {
-      rethrow;
-    }
+    });
   }
 
   Future<List<ReelModel>> getReelsByTag(String tagName) async {
-    try {
-      return await _reelRepository.getReelsByTag(tagName);
-    } catch (e) {
-      rethrow;
-    }
+    return await handleAsync<List<ReelModel>>(
+      () => _reelRepository.getReelsByTag(tagName),
+      showLoading: true,
+    ) ?? [];
   }
 
   Future<void> fetchTrendingReels() async {
-    try {
-      isLoading.value = true;
-      final response = await _reelRepository.getTrendingReels();
-      final List<ReelModel> trendingReels = (response['data']['data'] as List)
-          .map((reel) => ReelModel.fromJson(reel))
-          .toList();
-      reels.value = trendingReels;
-    } catch (e) {
-      // Handle error
-    } finally {
-      isLoading.value = false;
-    }
+    await handleAsync<void>(
+      () async {
+        final response = await _reelRepository.getTrendingReels();
+        final List<ReelModel> trendingReels = (response['data']['data'] as List)
+            .map((reel) => ReelModel.fromJson(reel))
+            .toList();
+        reels.value = trendingReels;
+      },
+      showLoading: reels.isEmpty,
+    );
   }
 
   Future<List<Map<String, dynamic>>> fetchComments(String reelId) async {
-    try {
-      // Debug log
-
-      final comments = await _reelRepository.getComments(reelId);
-      // Debug log
-
-      // Update the comments in our state
-      reelComments[reelId] = comments;
-      reelComments.refresh(); // Force UI update
-
-      return comments;
-    } catch (e) {
-      // Debug log
-      return [];
-    }
+    return await handleAsync<List<Map<String, dynamic>>>(
+      () async {
+        final comments = await _reelRepository.getComments(reelId);
+        reelComments[reelId] = comments;
+        reelComments.refresh();
+        return comments;
+      },
+      showLoading: false,
+    ) ?? [];
   }
 
   Future<void> toggleLike(String reelId) async {
@@ -189,16 +187,12 @@ class ReelController extends GetxController {
         // Revert optimistic update on error
         reels[reelIndex] = reel;
         reels.refresh();
-        rethrow;
+        throw e;
       }
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to update like status',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      // Silent fail for likes, don't show error screen
+      // Just log the error or show a minimal indicator
+      setError(e);
     }
   }
 }
