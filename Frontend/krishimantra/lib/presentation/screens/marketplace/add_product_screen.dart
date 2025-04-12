@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:krishimantra/core/constants/colors.dart';
 import 'package:krishimantra/presentation/controllers/marketplace_controller.dart';
 import 'package:krishimantra/data/services/language_service.dart';
+import 'package:krishimantra/core/utils/error_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -188,8 +189,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
         foregroundColor: Colors.white,
       ),
       body: Obx(() {
-        if (_controller.isLoading.value) {
+        if (_controller.isLoading) {
           return Center(child: CircularProgressIndicator(color: AppColors.green));
+        }
+        
+        if (_controller.hasError) {
+          return ErrorHandler.getErrorWidget(
+            errorType: _controller.errorType ?? ErrorType.unknown,
+            onRetry: () => Get.back(),
+            showRetry: true,
+          );
         }
         
         return SingleChildScrollView(

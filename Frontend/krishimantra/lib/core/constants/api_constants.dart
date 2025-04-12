@@ -3,7 +3,7 @@
 class ApiConstants {
   // Base URLs
   static const String BASE_URL = 'http://localhost:3001';
-  static const String IMAGE_BASE_URL = 'https://cdn.yourapp.com';
+  static const String IMAGE_BASE_URL = 'https://cdn.krishimantra.com';
 
   // Authentication endpoints
   // static const String AUTH_BASE_URL = 'http://localhost:3002';
@@ -53,5 +53,5 @@ class ApiConstants {
   static const int receiveTimeout = 30000; // 30 seconds
 
   // Update this to your actual WebSocket server URL
-  static const String socketUrl = 'http://localhost:3004';
+  static const String socketUrl = 'https://socket.krishimantra.com';
 }

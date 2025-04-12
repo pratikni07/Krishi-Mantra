@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:flutter/services.dart';
 import 'package:krishimantra/routes/app_routes.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../data/services/UserService.dart';
 import '../../../data/services/language_service.dart';
 import '../../controllers/ads_controller.dart';
@@ -96,10 +97,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       setState(() => _showTrendingHashtags = true);
     }
 
-    // Load more content when reaching bottom
-    if (_scrollController.position.pixels ==
-        _scrollController.position.maxScrollExtent) {
-      _feedController.fetchRecommendedFeeds();
+    // Load more content when reaching 80% of the scroll length for better UX
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.8) {
+      if (!_feedController.isRecommendedLoading.value && 
+          _feedController.hasMoreRecommendedFeeds.value) {
+        _feedController.fetchRecommendedFeeds();
+      }
     }
   }
 
@@ -248,119 +252,72 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 SizedBox(
                   height: 20,
                 ),
-                // Content Section
+                
+                // Content Section with white background and rounded corners at top
                 Expanded(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(20),
-                        topRight: Radius.circular(20),
+                  child: RefreshIndicator(
+                    onRefresh: () => _feedController.fetchRecommendedFeeds(refresh: true),
+                    color: AppColors.green,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(24),
+                          topRight: Radius.circular(24),
+                        ),
                       ),
-                    ),
-                    child: RefreshIndicator(
-                      onRefresh: () async {
-                        await _feedController.fetchRecommendedFeeds(
-                            refresh: true);
-                        await _loadFeedAds(); // Refresh ads too
-                      },
-                      child: Obx(
-                        () {
-                          final feeds = _feedController.recommendedFeeds;
-                          // Calculate total items including ads after 5th position
-                          int totalItems = feeds.length + 1; // +1 for loading indicator
-                          if (feeds.length > 5 && _feedAds.isNotEmpty) {
-                            // Add potential ad positions after 5th item
-                            int adPositions = (feeds.length - 5) ~/ 3;
-                            totalItems += adPositions;
-                          }
-                          
-                          return ListView.builder(
-                            controller: _scrollController,
-                            itemCount: totalItems,
-                            itemBuilder: (context, index) {
-                              // Check if this is the last item (loading indicator)
-                              if (index == totalItems - 1) {
-                                return Obx(() {
-                                  if (_feedController.isRecommendedLoading.value) {
-                                    return const Center(
-                                      child: Padding(
-                                        padding: EdgeInsets.all(16.0),
-                                        child: CircularProgressIndicator(
-                                          color: AppColors.green,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                });
-                              }
-                              
-                              // Determine if this position should show an ad
-                              // Logic: after 5th item, potentially show an ad every 3 items with some randomness
-                              if (index > 5 && _feedAds.isNotEmpty && (index - 5) % 3 == 0 && _random.nextBool()) {
-                                // Show a random ad
-                                final adIndex = _random.nextInt(_feedAds.length);
-                                final ad = _feedAds[adIndex];
-                                
-                                // Display ad content as image
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: InkWell(
-                                          onTap: () {
-                                            // Handle ad click if needed
-                                            if (ad['dirURL'] != null) {
-                                              // Navigate or handle the ad link
-                                            }
-                                          },
-                                          child: Image.network(
-                                            ad['content'],
-                                            width: double.infinity,
-                                            height: 200,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return Container(
-                                                width: double.infinity,
-                                                height: 200,
-                                                color: Colors.grey[300],
-                                                child: const Icon(Icons.image_not_supported, size: 50),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                      const Divider(),
-                                    ],
-                                  ),
-                                );
-                              }
-                              
-                              // Adjust the feed index to account for ads
-                              int feedIndex = index;
-                              if (index > 5 && _feedAds.isNotEmpty) {
-                                feedIndex = index - ((index - 5) ~/ 3);
-                              }
-                              
-                              // Return regular feed item if within range
-                              if (feedIndex < feeds.length) {
-                                return FeedCard(
-                                  feed: feeds[feedIndex],
-                                  onLike: () => _feedController.likeFeed(
-                                    feeds[feedIndex].id,
-                                  ),
-                                );
-                              }
-                              
-                              return const SizedBox.shrink();
-                            },
+                      child: Obx(() {
+                        // Show loading state
+                        if (_feedController.isLoading && _feedController.recommendedFeeds.isEmpty) {
+                          return const Center(
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
+                            ),
                           );
-                        },
-                      ),
+                        }
+                        
+                        // Show error state
+                        if (_feedController.hasError) {
+                          return ErrorHandler.getErrorWidget(
+                            errorType: _feedController.errorType ?? ErrorType.unknown,
+                            onRetry: () => _feedController.fetchRecommendedFeeds(refresh: true),
+                            showRetry: true,
+                          );
+                        }
+                        
+                        // Show empty state
+                        if (_feedController.recommendedFeeds.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.article_outlined, size: 64, color: Colors.grey[400]),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No posts available',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                ElevatedButton(
+                                  onPressed: () => _feedController.fetchRecommendedFeeds(refresh: true),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  ),
+                                  child: const Text('Refresh'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        
+                        // Show content
+                        return _buildFeedContent();
+                      }),
                     ),
                   ),
                 ),
@@ -369,15 +326,99 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
+      
+      // Show create post button for authorized users
       floatingActionButton: _showCreatePost
           ? FloatingActionButton(
+              onPressed: () => Get.toNamed(AppRoutes.CREATE_POST),
               backgroundColor: AppColors.green,
-              onPressed: () {
-                Get.offAllNamed(AppRoutes.CREATE_POST);
-              },
-              child: const Icon(Icons.add, color: AppColors.white),
+              child: const Icon(Icons.add),
             )
           : null,
+    );
+  }
+
+  Widget _buildFeedContent() {
+    // Calculate the number of posts to show between ads
+    final postsWithAds = <Widget>[];
+    final postsPerAd = 4; // Show an ad after every 4 posts
+    
+    for (var i = 0; i < _feedController.recommendedFeeds.length; i++) {
+      // Add feed item
+      postsWithAds.add(_buildFeedItem(_feedController.recommendedFeeds[i]));
+      
+      // Insert an ad after every postsPerAd items if we have ads
+      if (_feedAds.isNotEmpty && (i + 1) % postsPerAd == 0 && i < _feedController.recommendedFeeds.length - 1) {
+        final adIndex = _random.nextInt(_feedAds.length);
+        postsWithAds.add(_buildAdCard(_feedAds[adIndex]));
+      }
+    }
+    
+    return ListView.builder(
+      controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      itemCount: postsWithAds.length + 1, // +1 for loading indicator
+      itemBuilder: (context, index) {
+        if (index < postsWithAds.length) {
+          return postsWithAds[index];
+        } else {
+          // Loading indicator at the bottom
+          return Obx(() => _feedController.isRecommendedLoading.value
+              ? Container(
+                  height: 100,
+                  padding: const EdgeInsets.all(16),
+                  alignment: Alignment.center,
+                  child: Image.asset(
+                    'assets/Images/krishimantraloading.gif',
+                    height: 50,
+                    width: 50,
+                  ),
+                )
+              : const SizedBox());
+        }
+      },
+    );
+  }
+
+  Widget _buildFeedItem(feed) {
+    return FeedCard(
+      feed: feed,
+      onLike: () => _feedController.likeFeed(feed.id),
+    );
+  }
+
+  Widget _buildAdCard(dynamic ad) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          ad['dirURL'] ?? '',
+          height: 200,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              height: 200,
+              color: Colors.grey[200],
+              child: const Center(
+                child: Icon(Icons.error_outline, color: Colors.grey),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
 import '../../controllers/product_controller.dart';
+import '../../../core/utils/error_handler.dart';
 
 class ProductDetailScreen extends GetView<ProductController> {
   const ProductDetailScreen({Key? key}) : super(key: key);
@@ -15,6 +16,24 @@ class ProductDetailScreen extends GetView<ProductController> {
         backgroundColor: AppColors.green,
       ),
       body: Obx(() {
+        if (controller.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (controller.error.isNotEmpty) {
+          return ErrorHandler.getErrorWidget(
+            errorType: ErrorType.unknown,
+            onRetry: () {
+              if (controller.selectedProduct.value != null) {
+                controller.fetchProductById(controller.selectedProduct.value!.id);
+              } else {
+                Get.back();
+              }
+            },
+            showRetry: true,
+          );
+        }
+
         final product = controller.selectedProduct.value;
         if (product == null) {
           return const Center(child: Text('No product selected'));

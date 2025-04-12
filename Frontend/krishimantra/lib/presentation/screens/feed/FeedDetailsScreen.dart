@@ -13,6 +13,7 @@ import 'widgets/comment_input.dart';
 import '../../../data/models/comment_modal.dart';
 import '../../controllers/feed_controller.dart';
 import '../../widgets/video_player_widget.dart';
+import '../../../core/utils/error_handler.dart';
 
 class FeedDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> feed;
@@ -120,8 +121,9 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels ==
-        _scrollController.position.maxScrollExtent) {
+    // Trigger loading next page when user scrolls to 80% of the list
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.8) {
       final feedId = widget.feed['id'] ?? widget.feed['_id'];
       if (feedId != null &&
           !_feedController.isLoadingComments.value &&
@@ -213,10 +215,7 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
                 if (widget.feed['mediaUrl'] != null)
                   MediaContent(mediaUrl: widget.feed['mediaUrl']),
                 PostActions(feed: widget.feed),
-                CommentsSection(
-                  feedController: _feedController,
-                  onReply: _initiateReply,
-                ),
+                _buildCommentsSection(),
               ],
             ),
           ),
@@ -237,6 +236,32 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
     _commentController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Widget _buildCommentsSection() {
+    return Obx(() {
+      if (_feedController.isLoadingComments.value && _feedController.comments.isEmpty) {
+        return Center(child: CircularProgressIndicator(color: Colors.green));
+      }
+
+      if (_feedController.hasError && _feedController.comments.isEmpty) {
+        return ErrorHandler.getErrorWidget(
+          errorType: _feedController.errorType ?? ErrorType.unknown,
+          onRetry: () {
+            final feedId = widget.feed['id'] ?? widget.feed['_id'];
+            if (feedId != null) {
+              _feedController.getComments(feedId, refresh: true);
+            }
+          },
+          showRetry: true,
+        );
+      }
+
+      return CommentsSection(
+        feedController: _feedController,
+        onReply: _initiateReply,
+      );
+    });
   }
 }
 

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../../../data/models/product_model.dart';
 import '../../controllers/product_controller.dart';
 import 'product_detail_screen.dart';
+import '../../../core/utils/error_handler.dart';
 
 class ProductListScreen extends GetView<ProductController> {
   const ProductListScreen({Key? key}) : super(key: key);
@@ -21,7 +23,11 @@ class ProductListScreen extends GetView<ProductController> {
         }
 
         if (controller.error.isNotEmpty) {
-          return Center(child: Text(controller.error.value));
+          return ErrorHandler.getErrorWidget(
+            errorType: ErrorType.unknown,
+            onRetry: () => controller.fetchAllProducts(),
+            showRetry: true,
+          );
         }
 
         return GridView.builder(

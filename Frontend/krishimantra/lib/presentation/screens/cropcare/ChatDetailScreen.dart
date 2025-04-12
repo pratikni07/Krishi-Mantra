@@ -453,9 +453,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   children: [
                     if (!isMyMessage && widget.chat.type == 'group')
                       _buildSenderName(message),
-                    if (message.content != null)  // Add null check
+                    if (message.content != null) // Add null check
                       Text(
-                        message.content!,  // Use null assertion operator since we checked above
+                        message
+                            .content!, // Use null assertion operator since we checked above
                         style: TextStyle(
                           color: isMyMessage ? Colors.white : Colors.black87,
                         ),
@@ -724,7 +725,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       allowedExtensions: ['pdf', 'doc', 'docx'],
                     );
                     if (result != null) {
-                      await _handleDocumentUpload(File(result.files.single.path!));
+                      await _handleDocumentUpload(
+                          File(result.files.single.path!));
                     }
                   },
                 ),
@@ -738,7 +740,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   Future<void> _handleImageUpload(File imageFile) async {
     final TextEditingController captionController = TextEditingController();
-    
+
     // Show preview dialog
     await Get.dialog(
       MediaPreviewDialog(
@@ -781,13 +783,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         },
       ),
     );
-    
+
     captionController.dispose();
   }
 
   Future<void> _handleDocumentUpload(File document) async {
     final TextEditingController captionController = TextEditingController();
-    
+
     await Get.dialog(
       MediaPreviewDialog(
         mediaFile: document,
@@ -830,7 +832,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         },
       ),
     );
-    
+
     captionController.dispose();
   }
 

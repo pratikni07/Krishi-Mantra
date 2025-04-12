@@ -4,8 +4,14 @@ import 'package:geocoding/geocoding.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:weather_icons/weather_icons.dart';
+import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../../../data/services/LocationService.dart';
+import '../../../data/services/weather_service.dart';
 import '../../../data/services/language_service.dart';
+import '../../../core/utils/error_handler.dart';
+import '../home/widgets/location_dialog.dart';
 
 class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
@@ -29,6 +35,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
   String currentLocation = "Loading...";
   Position? currentPosition;
   bool isLoading = true;
+  bool hasLocationPermission = false;
   late LanguageService _languageService;
 
   // Translatable text
@@ -57,6 +64,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
   String rainChanceText = "Rain Chance";
   String weeklyForecastText = "7-Day Forecast";
   String temperatureVariationText = "Temperature Variation";
+  String allowLocationText = "Allow Location Access";
+  String locationRequiredText = "Location Permission Required";
+  String weatherNeedsLocationText = "Weather forecasts require your location to provide accurate data for your area.";
 
   Map<String, dynamic> weatherData = {
     'temperature': 28,
@@ -84,11 +94,86 @@ class _WeatherScreenState extends State<WeatherScreen> {
     };
   });
 
+  String? error;
+
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    _checkLocationPermission();
     _initializeLanguage();
+  }
+
+  Future<void> _checkLocationPermission() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => hasLocationPermission = false);
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        setState(() => hasLocationPermission = false);
+        return;
+      }
+
+      setState(() => hasLocationPermission = true);
+      _getCurrentLocation();
+    } catch (e) {
+      setState(() => hasLocationPermission = false);
+    }
+  }
+  
+  Future<void> _requestLocationPermission() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showLocationDialog(
+          "Location Service Disabled", 
+          "Please enable location services in your device settings.",
+          false
+        );
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showLocationDialog(
+            "Permission Denied", 
+            "Weather forecasts need location access to show accurate data for your region.",
+            false
+          );
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _showLocationDialog(
+          "Permission Permanently Denied", 
+          "Please enable location access in app settings.",
+          true
+        );
+        return;
+      }
+
+      setState(() => hasLocationPermission = true);
+      _getCurrentLocation();
+    } catch (e) {
+      setState(() => hasLocationPermission = false);
+    }
+  }
+  
+  void _showLocationDialog(String title, String message, bool showSettingsButton) {
+    showDialog(
+      context: context,
+      builder: (context) => LocationDialog(
+        title: title,
+        message: message,
+        showSettingsButton: showSettingsButton,
+      ),
+    );
   }
 
   Future<void> _initializeLanguage() async {
@@ -123,6 +208,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
       _languageService.translate('Rain Chance'),
       _languageService.translate('7-Day Forecast'),
       _languageService.translate('Temperature Variation'),
+      _languageService.translate('Allow Location Access'),
+      _languageService.translate('Location Permission Required'),
+      _languageService.translate('Weather forecasts require your location to provide accurate data for your area.'),
     ]);
 
     setState(() {
@@ -149,24 +237,18 @@ class _WeatherScreenState extends State<WeatherScreen> {
       rainChanceText = translations[20];
       weeklyForecastText = translations[21];
       temperatureVariationText = translations[22];
+      allowLocationText = translations[23];
+      locationRequiredText = translations[24];
+      weatherNeedsLocationText = translations[25];
     });
   }
 
   Future<void> _getCurrentLocation() async {
+    if (!hasLocationPermission) return;
+    
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          return;
-        }
-      }
-
+      setState(() => isLoading = true);
+      
       Position position = await Geolocator.getCurrentPosition();
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
@@ -180,6 +262,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
       });
     } catch (e) {
       print(e);
+      setState(() {
+        error = e.toString();
+        isLoading = false;
+      });
     }
   }
 
@@ -207,7 +293,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               setState(() {
                 isLoading = true;
               });
-              _getCurrentLocation();
+              hasLocationPermission ? _getCurrentLocation() : _requestLocationPermission();
             },
           ),
         ],
@@ -224,27 +310,43 @@ class _WeatherScreenState extends State<WeatherScreen> {
           ),
         ),
         child: SafeArea(
-          child: isLoading
-              ? Center(
-                  child: CircularProgressIndicator(
-                    color: customColors['primary'],
-                  ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(),
-                      _buildCurrentWeather(),
-                      _buildFarmingAdvice(),
-                      _buildWeatherDetails(),
-                      _buildHourlyForecast(),
-                      _buildWeeklyForecast(),
-                      _buildTemperatureGraph(),
-                    ],
-                  ),
-                ),
+          child: !hasLocationPermission
+              ? _buildLocationPermissionRequest()
+              : isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: customColors['primary'],
+                      ),
+                    )
+                  : error != null
+                      ? ErrorHandler.getErrorWidget(
+                          errorType: error!.contains('location') 
+                              ? ErrorType.network 
+                              : ErrorType.unknown,
+                          onRetry: () {
+                            setState(() {
+                              isLoading = true;
+                              error = null;
+                            });
+                            _getCurrentLocation();
+                          },
+                          showRetry: true,
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildHeader(),
+                              _buildCurrentWeather(),
+                              _buildFarmingAdvice(),
+                              _buildWeatherDetails(),
+                              _buildHourlyForecast(),
+                              _buildWeeklyForecast(),
+                              _buildTemperatureGraph(),
+                            ],
+                          ),
+                        ),
         ),
       ),
     );
@@ -793,6 +895,58 @@ class _WeatherScreenState extends State<WeatherScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLocationPermissionRequest() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'assets/Images/krishimantralocation.png',
+              height: 180,
+              width: 180,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              locationRequiredText,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: customColors['textDark'],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              weatherNeedsLocationText,
+              style: TextStyle(
+                fontSize: 16,
+                color: customColors['textLight'],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _requestLocationPermission,
+              icon: const Icon(Icons.location_on),
+              label: Text(allowLocationText),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

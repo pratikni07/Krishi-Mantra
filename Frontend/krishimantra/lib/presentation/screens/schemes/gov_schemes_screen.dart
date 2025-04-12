@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/models/scheme_model.dart';
 import '../../controllers/scheme_controller.dart';
+import '../../../core/utils/error_handler.dart';
 
 
 class GovSchemesScreen extends GetView<SchemeController> {
@@ -93,22 +94,10 @@ class GovSchemesScreen extends GetView<SchemeController> {
   }
 
   Widget _buildErrorWidget() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Error: ${controller.error.value}',
-            style: const TextStyle(color: Colors.red),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () => controller.fetchAllSchemes(refresh: true),
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
+    return ErrorHandler.getErrorWidget(
+      errorType: ErrorType.unknown, // Since we don't have direct access to errorType
+      onRetry: () => controller.fetchAllSchemes(refresh: true),
+      showRetry: true,
     );
   }
 

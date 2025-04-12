@@ -4,6 +4,8 @@ import '../../weather/WeatherScreen.dart';
 import 'weather_item.dart';
 import 'package:get/get.dart';
 import '../../../../data/services/language_service.dart';
+import 'package:geolocator/geolocator.dart';
+import '../widgets/location_dialog.dart';
 
 class WeatherSection extends StatefulWidget {
   final double statusBarHeight;
@@ -11,6 +13,8 @@ class WeatherSection extends StatefulWidget {
   final double temperature;
   final int humidity;
   final int cloudiness;
+  final bool hasLocationPermission;
+  final VoidCallback onRequestLocation;
 
   const WeatherSection({
     Key? key,
@@ -19,6 +23,8 @@ class WeatherSection extends StatefulWidget {
     required this.temperature,
     required this.humidity,
     required this.cloudiness,
+    this.hasLocationPermission = true,
+    required this.onRequestLocation,
   }) : super(key: key);
 
   @override
@@ -30,6 +36,7 @@ class _WeatherSectionState extends State<WeatherSection> {
   String temperatureText = "Temperature";
   String humidityText = "Humidity";
   String cloudsText = "Clouds";
+  String allowLocationText = "Allow Location";
   bool _initialized = false;
 
   @override
@@ -45,6 +52,7 @@ class _WeatherSectionState extends State<WeatherSection> {
       languageService.translate('Temperature'),
       languageService.translate('Humidity'),
       languageService.translate('Clouds'),
+      languageService.translate('Allow Location'),
     ]);
     
     if (mounted) {
@@ -52,6 +60,7 @@ class _WeatherSectionState extends State<WeatherSection> {
         temperatureText = translations[0];
         humidityText = translations[1];
         cloudsText = translations[2];
+        allowLocationText = translations[3];
         _initialized = true;
       });
     }
@@ -59,6 +68,51 @@ class _WeatherSectionState extends State<WeatherSection> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.hasLocationPermission) {
+      return Container(
+        padding: EdgeInsets.only(top: widget.statusBarHeight + 60),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/Images/krishimantralocation.png',
+                  height: 40,
+                  width: 40,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Weather data requires location',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: widget.onRequestLocation,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.green,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: Text(
+                allowLocationText,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
     return Container(
       padding: EdgeInsets.only(top: widget.statusBarHeight + 60),
       child: Row(

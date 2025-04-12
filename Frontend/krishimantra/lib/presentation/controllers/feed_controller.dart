@@ -3,15 +3,14 @@ import '../../data/models/comment_modal.dart';
 import '../../data/repositories/feed_repository.dart';
 import '../../data/models/feed_model.dart';
 import '../../data/services/UserService.dart';
+import 'base_controller.dart';
 
-class FeedController extends GetxController {
+class FeedController extends BaseController {
   final FeedRepository _feedRepository;
   final UserService _userService;
 
   final RxList<FeedModel> feeds = <FeedModel>[].obs;
   final RxList<CommentModel> comments = <CommentModel>[].obs;
-  final RxBool isLoading = false.obs;
-  final RxBool isLoadingComments = false.obs;
   final RxInt currentPage = 1.obs;
   final RxInt commentCurrentPage = 1.obs;
   final RxBool hasMore = true.obs;
@@ -30,7 +29,8 @@ class FeedController extends GetxController {
 
   final RxList<FeedModel> topFeeds = <FeedModel>[].obs;
   final RxBool isLoadingTopFeeds = false.obs;
-
+  final RxBool isLoadingComments = false.obs;
+  
   final RxList<Map<String, dynamic>> trendingHashtags =
       <Map<String, dynamic>>[].obs;
   final RxBool isLoadingHashtags = false.obs;
@@ -97,27 +97,51 @@ class FeedController extends GetxController {
       }
 
       if (!hasMoreComments.value) return;
+      
       isLoadingComments.value = true;
-
-      final result = await _feedRepository.getComments(
-        feedId,
-        page: commentCurrentPage.value,
-        limit: limit,
+      print('⭐️ Starting to fetch comments for feed: $feedId, page: ${commentCurrentPage.value}');
+      
+      await handleAsync<void>(
+        () async {
+          try {
+            final result = await _feedRepository.getComments(
+              feedId,
+              page: commentCurrentPage.value,
+              limit: limit,
+            );
+            
+            print('📄 Received comment response: $result');
+            
+            // Parse the comments from the result
+            if (result.containsKey('comments') && result['comments'] is List) {
+              final newComments = result['comments'] as List<CommentModel>;
+              print('✅ Found ${newComments.length} comments');
+              comments.addAll(newComments);
+            } else {
+              print('⚠️ No comments found in result or invalid format');
+            }
+            
+            totalComments.value = result['totalDocs'] as int? ?? 0;
+            hasMoreComments.value = result['hasNextPage'] as bool? ?? false;
+            
+            print('📊 Total comments: ${totalComments.value}, hasMore: ${hasMoreComments.value}');
+            
+            if (hasMoreComments.value) {
+              commentCurrentPage.value++;
+            }
+          } catch (e) {
+            print('🚨 Inner error processing comments: $e');
+            rethrow;
+          }
+        },
+        showLoading: false,
       );
-
-      comments.addAll(result['comments'] as List<CommentModel>);
-      totalComments.value = result['totalDocs'] as int;
-
-      hasMoreComments.value = result['hasNextPage'] as bool;
-      if (hasMoreComments.value) commentCurrentPage.value++;
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      print('❌ Error loading comments: $e');
+      // Error is already handled by the handleAsync method
     } finally {
       isLoadingComments.value = false;
+      print('🏁 Finished loading comments attempt');
     }
   }
 
@@ -126,38 +150,28 @@ class FeedController extends GetxController {
     String content, {
     String? parentCommentId,
   }) async {
-    try {
-      final userData = await _userService.getUser();
-      if (userData == null) throw Exception('User not found');
+    return await handleAsync<void>(
+      () async {
+        final userData = await _userService.getUser();
+        if (userData == null) throw Exception('User not found');
 
-      final Map<String, dynamic> commentData = {
-        'userId': userData.id,
-        'userName': userData.firstName + " " + userData.lastName,
-        'profilePhoto': userData.image,
-        'content': content.trim(),
-      };
-      if (parentCommentId != null && parentCommentId.isNotEmpty) {
-        commentData['parentCommentId'] = parentCommentId;
-      }
+        final Map<String, dynamic> commentData = {
+          'userId': userData.id,
+          'userName': userData.firstName + " " + userData.lastName,
+          'profilePhoto': userData.image,
+          'content': content.trim(),
+        };
+        if (parentCommentId != null && parentCommentId.isNotEmpty) {
+          commentData['parentCommentId'] = parentCommentId;
+        }
 
-      final result = await _feedRepository.addComment(feedId, commentData);
+        await _feedRepository.addComment(feedId, commentData);
 
-      // Update the comments list and total count
-      await getComments(feedId, refresh: true);
-
-      // Show success message
-      Get.snackbar(
-        'Success',
-        parentCommentId == null ? 'Comment added' : 'Reply added',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to add comment: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    }
+        // Update the comments list and total count
+        await getComments(feedId, refresh: true);
+      },
+      showLoading: true,
+    );
   }
 
   Future<void> likeFeed(String feedId) async {
@@ -165,14 +179,14 @@ class FeedController extends GetxController {
       final userData = await _userService.getUser();
       if (userData == null) throw Exception('User not found');
 
-      final index = feeds.indexWhere((feed) => feed.id == feedId);
+      final index = recommendedFeeds.indexWhere((feed) => feed.id == feedId);
       if (index == -1) return;
 
-      final feed = feeds[index];
+      final feed = recommendedFeeds[index];
 
       // Optimistically update UI
       feed.toggleLike();
-      feeds[index] = feed.copyWith();
+      recommendedFeeds[index] = feed.copyWith();
 
       final likeData = {
         'userId': userData.id,
@@ -185,42 +199,37 @@ class FeedController extends GetxController {
       if (!success) {
         // Revert if the API call failed
         feed.toggleLike();
-        feeds[index] = feed.copyWith();
+        recommendedFeeds[index] = feed.copyWith();
         throw Exception('Failed to like post');
       }
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      // Silent fail for likes, don't show error screen
+      // Just log the error or show a minimal indicator
+      setError(e);
     }
   }
 
   Future<void> createFeed(String description, String content,
       {Map<String, dynamic>? location}) async {
-    try {
-      final userData = await _userService.getUser();
-      if (userData == null) throw Exception('User not found');
+    return await handleAsync<void>(
+      () async {
+        final userData = await _userService.getUser();
+        if (userData == null) throw Exception('User not found');
 
-      final feedData = {
-        'userId': userData.id,
-        'userName': userData.name,
-        'profilePhoto': userData.image,
-        'description': description,
-        'content': content,
-        if (location != null) 'location': location,
-      };
+        final feedData = {
+          'userId': userData.id,
+          'userName': userData.name,
+          'profilePhoto': userData.image,
+          'description': description,
+          'content': content,
+          if (location != null) 'location': location,
+        };
 
-      final newFeed = await _feedRepository.createFeed(feedData);
-      feeds.insert(0, newFeed);
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    }
+        final newFeed = await _feedRepository.createFeed(feedData);
+        feeds.insert(0, newFeed);
+      },
+      showLoading: true,
+    );
   }
 
   Future<void> fetchRecommendedFeeds({bool refresh = false}) async {
@@ -231,34 +240,38 @@ class FeedController extends GetxController {
         recommendedFeeds.clear();
       }
 
-      // Get user data and check if it exists
-      final userData = await _userService.getUser();
-      if (userData == null) throw Exception('User not found');
-
       if (!hasMoreRecommendedFeeds.value) return;
       isRecommendedLoading.value = true;
 
-      final result = await _feedRepository.getRecommendedFeeds(
-        userData.id, // Changed to positional parameter
-        page: recommendedCurrentPage.value,
-        limit: limit,
+      await handleAsync<void>(
+        () async {
+          // Get user data and check if it exists
+          final userData = await _userService.getUser();
+          if (userData == null) throw Exception('User not found');
+
+          final result = await _feedRepository.getRecommendedFeeds(
+            userData.id,
+            page: recommendedCurrentPage.value,
+            limit: limit,
+          );
+
+          // Safely handle the feeds list which might be null
+          final feedsList = result['feeds'];
+          if (feedsList != null) {
+            final newFeeds = (feedsList as List<FeedModel>);
+            recommendedFeeds.addAll(newFeeds);
+          }
+
+          // Update pagination
+          final pagination = result['pagination'];
+          hasMoreRecommendedFeeds.value = pagination['hasMore'] ?? false;
+          if (hasMoreRecommendedFeeds.value) recommendedCurrentPage.value++;
+        },
+        showLoading: recommendedFeeds.isEmpty,
+        isRefresh: refresh,
       );
-
-      final newFeeds = (result['feeds'] as List<FeedModel>);
-      recommendedFeeds.addAll(newFeeds);
-
-      final pagination = result['pagination'];
-      hasMoreRecommendedFeeds.value = pagination['hasMore'] ?? false;
-      if (hasMoreRecommendedFeeds.value) recommendedCurrentPage.value++;
-
-      // Optional: You can store the recommendation type if needed
-      final recommendationType = result['recommendationType'];
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      // Error is already handled by handleAsync
     } finally {
       isRecommendedLoading.value = false;
     }
@@ -275,25 +288,18 @@ class FeedController extends GetxController {
   Future<void> fetchTopFeeds() async {
     try {
       isLoadingTopFeeds.value = true;
-      final userData = await _userService.getUser();
-
-      final feeds = await _feedRepository.getTopFeeds();
-
-      // Check if posts are liked by current user
-      if (userData != null) {
-        for (var feed in feeds) {
-          final likesList = feed.like['users'] as List? ?? [];
-          feed.isLiked = likesList.contains(userData.id);
-        }
-      }
-
-      topFeeds.value = feeds;
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to fetch top feeds: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
+      await handleAsync<void>(
+        () async {
+          final userData = await _userService.getUser();
+          if (userData == null) throw Exception('User not found');
+          
+          final result = await _feedRepository.getTopFeeds();
+          topFeeds.value = result;
+        },
+        showLoading: false,
       );
+    } catch (e) {
+      // Error handled silently for home screen components
     } finally {
       isLoadingTopFeeds.value = false;
     }
@@ -301,17 +307,17 @@ class FeedController extends GetxController {
 
   Future<void> fetchTrendingHashtags() async {
     try {
-      isLoadingHashtags.value = true;
-      final hashtags = await _feedRepository.getTrendingHashtags();
-      trendingHashtags.value = hashtags;
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to fetch trending hashtags: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
+      await handleAsync<void>(
+        () async {
+          final tags = await _feedRepository.getTrendingHashtags();
+          if (tags != null) {
+            trendingHashtags.value = tags;
+          }
+        },
+        showLoading: false,
       );
-    } finally {
-      isLoadingHashtags.value = false;
+    } catch (e) {
+      // Silent error - don't crash the UI if tags can't be loaded
     }
   }
 
@@ -333,22 +339,27 @@ class FeedController extends GetxController {
         limit: limit,
       );
 
-      final newFeeds = (result['feeds'] as List<FeedModel>);
+      // Safely handle data that might be null
+      final feedsList = result['feeds'];
+      if (feedsList != null) {
+        final newFeeds = (feedsList as List<FeedModel>);
 
-      // Get current user ID to check if posts are liked
-      final userData = await _userService.getUser();
-      if (userData != null) {
-        for (var feed in newFeeds) {
-          final likesList = feed.like['users'] as List? ?? [];
-          feed.isLiked = likesList.contains(userData.id);
+        // Get current user ID to check if posts are liked
+        final userData = await _userService.getUser();
+        if (userData != null) {
+          for (var feed in newFeeds) {
+            // Instead of trying to access like['users'] which might not exist,
+            // just use the isLiked property already provided or default to false
+            // No need to set isLiked based on like['users'] because it's not reliable in this API
+          }
         }
+
+        recommendedFeeds.addAll(newFeeds);
+
+        final pagination = result['pagination'];
+        hasMoreRecommendedFeeds.value = pagination['hasMore'] ?? false;
+        if (hasMoreRecommendedFeeds.value) recommendedCurrentPage.value++;
       }
-
-      recommendedFeeds.addAll(newFeeds);
-
-      final pagination = result['pagination'];
-      hasMoreRecommendedFeeds.value = pagination['hasMore'] ?? false;
-      if (hasMoreRecommendedFeeds.value) recommendedCurrentPage.value++;
     } catch (e) {
       Get.snackbar(
         'Error',

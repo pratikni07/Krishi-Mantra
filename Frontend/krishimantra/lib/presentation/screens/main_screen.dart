@@ -59,7 +59,7 @@ class _MainScreenState extends State<MainScreen> {
       feedText = translations[1];
       cropCareText = translations[2];
       reelsText = translations[3];
-      profileText = translations[5];
+      profileText = translations[4];
     });
   }
 
@@ -71,6 +71,9 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final bottomPadding = mediaQuery.padding.bottom;
+    
     return Scaffold(
       body: _pages[_selectedIndex],
       bottomNavigationBar: Container(

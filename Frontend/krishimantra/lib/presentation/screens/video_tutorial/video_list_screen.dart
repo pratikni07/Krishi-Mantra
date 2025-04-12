@@ -11,6 +11,7 @@ import 'package:timeago/timeago.dart' as timeago;
 import '../../../core/constants/colors.dart';
 import 'package:video_player/video_player.dart';
 import '../../../data/services/language_service.dart';
+import 'package:krishimantra/core/utils/error_handler.dart';
 
 class VideoListScreen extends GetView<VideoTutorialController> {
   final ReelController _reelController = Get.find<ReelController>();
@@ -53,40 +54,10 @@ class VideoListScreen extends GetView<VideoTutorialController> {
       body: Obx(
         () {
           if (controller.hasError.value) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 48,
-                    color: Colors.red,
-                  ),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      controller.errorMessage.value,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => controller.fetchVideos(refresh: true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.green,
-                    ),
-                    child: const Text(
-                      'Retry',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
+            return ErrorHandler.getErrorWidget(
+              errorType: ErrorType.unknown,
+              onRetry: () => controller.fetchVideos(refresh: true),
+              showRetry: true,
             );
           }
 
@@ -157,7 +128,7 @@ class VideoListScreen extends GetView<VideoTutorialController> {
   }
 
   Widget _buildReelSection() {
-    if (_reelController.isLoading.value && _reelController.reels.isEmpty) {
+    if (_reelController.isLoading && _reelController.reels.isEmpty) {
       return const SizedBox.shrink();
     }
 

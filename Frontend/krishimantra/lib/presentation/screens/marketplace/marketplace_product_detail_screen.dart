@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_constructors
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishimantra/core/constants/colors.dart';
@@ -11,6 +13,7 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:expandable_text/expandable_text.dart';
+import 'package:krishimantra/core/utils/error_handler.dart';
 
 class MarketPlaceProductDetailScreen extends StatefulWidget {
   final String productId;
@@ -193,7 +196,8 @@ class _MarketPlaceProductDetailScreenState
       floatingActionButton: Container(
         margin: EdgeInsets.only(bottom: 16),
         child: FloatingActionButton.extended(
-          onPressed: () => launch("tel:${_controller.productDetails['sellerInfo']['contactNumber']}"),
+          onPressed: () => launch(
+              "tel:${_controller.productDetails['sellerInfo']['contactNumber']}"),
           backgroundColor: AppColors.green,
           icon: Icon(Icons.phone, color: Colors.white),
           label: Text(
@@ -207,8 +211,16 @@ class _MarketPlaceProductDetailScreenState
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       body: Obx(() {
-        if (_controller.isLoading.value) {
+        if (_controller.isLoading) {
           return Center(child: CircularProgressIndicator());
+        }
+
+        if (_controller.hasError) {
+          return ErrorHandler.getErrorWidget(
+            errorType: _controller.errorType ?? ErrorType.unknown,
+            onRetry: () => _controller.fetchProductById(widget.productId),
+            showRetry: true,
+          );
         }
 
         final product = _controller.productDetails.value;
@@ -232,7 +244,8 @@ class _MarketPlaceProductDetailScreenState
                   children: [
                     Text(
                       product['title'] ?? '',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 8),
                     Text(
@@ -254,14 +267,16 @@ class _MarketPlaceProductDetailScreenState
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: (product['tags'] as List).map((tag) => Text(
-                      '#$tag',
-                      style: TextStyle(
-                        color: AppColors.green,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    )).toList(),
+                    children: (product['tags'] as List)
+                        .map((tag) => Text(
+                              '#$tag',
+                              style: TextStyle(
+                                color: AppColors.green,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ))
+                        .toList(),
                   ),
                 ),
 
@@ -282,7 +297,8 @@ class _MarketPlaceProductDetailScreenState
 
               // Divider before Description
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 16.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 32.0, vertical: 16.0),
                 child: Divider(thickness: 1, color: Colors.grey[300]),
               ),
 
@@ -294,7 +310,8 @@ class _MarketPlaceProductDetailScreenState
                   children: [
                     Text(
                       'Description',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 8),
                     ExpandableText(
@@ -319,14 +336,16 @@ class _MarketPlaceProductDetailScreenState
                   children: [
                     Text(
                       'Seller Information',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 16),
                     Row(
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundImage: NetworkImage(product['sellerInfo']['profilePhoto']),
+                          backgroundImage: NetworkImage(
+                              product['sellerInfo']['profilePhoto']),
                           onBackgroundImageError: (_, __) {},
                         ),
                         SizedBox(width: 16),
@@ -336,7 +355,8 @@ class _MarketPlaceProductDetailScreenState
                             children: [
                               Text(
                                 product['sellerInfo']['userName'],
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold),
                               ),
                               SizedBox(height: 4),
                               Text(
@@ -347,10 +367,12 @@ class _MarketPlaceProductDetailScreenState
                           ),
                         ),
                         TextButton(
-                          onPressed: () => launch("tel:${product['sellerInfo']['contactNumber']}"),
+                          onPressed: () => launch(
+                              "tel:${product['sellerInfo']['contactNumber']}"),
                           style: TextButton.styleFrom(
                             backgroundColor: AppColors.green,
-                            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
                             ),
@@ -379,7 +401,8 @@ class _MarketPlaceProductDetailScreenState
                   children: [
                     Text(
                       'Comments',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 16),
                     // Enhanced comment input
@@ -397,17 +420,20 @@ class _MarketPlaceProductDetailScreenState
                                 hintText: 'Write a comment...',
                                 hintStyle: TextStyle(color: Colors.grey[500]),
                                 border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 12),
                               ),
                             ),
                           ),
                           Container(
                             margin: EdgeInsets.only(right: 4),
                             child: IconButton(
-                              icon: Icon(Icons.send_rounded, color: AppColors.green),
+                              icon: Icon(Icons.send_rounded,
+                                  color: AppColors.green),
                               onPressed: () async {
                                 if (_commentController.text.isNotEmpty) {
-                                  await _controller.addComment(widget.productId, _commentController.text);
+                                  await _controller.addComment(widget.productId,
+                                      _commentController.text);
                                   _commentController.clear();
                                 }
                               },
@@ -422,14 +448,25 @@ class _MarketPlaceProductDetailScreenState
 
               // Comments List
               Obx(() {
-                if (_controller.isLoadingComments.value && _controller.comments.isEmpty) {
-                  return Center(child: CircularProgressIndicator(color: AppColors.green));
+                if (_controller.isLoadingComments.value &&
+                    _controller.comments.isEmpty) {
+                  return Center(
+                      child: CircularProgressIndicator(color: AppColors.green));
+                }
+
+                if (_controller.hasError && _controller.comments.isEmpty) {
+                  return ErrorHandler.getErrorWidget(
+                    errorType: _controller.errorType ?? ErrorType.unknown,
+                    onRetry: () => _controller.fetchComments(widget.productId, refresh: true),
+                    showRetry: true,
+                  );
                 }
 
                 return ListView.builder(
                   shrinkWrap: true,
                   physics: NeverScrollableScrollPhysics(),
-                  itemCount: _controller.comments.length + (_controller.hasMoreComments.value ? 1 : 0),
+                  itemCount: _controller.comments.length +
+                      (_controller.hasMoreComments.value ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == _controller.comments.length) {
                       return Padding(
@@ -494,7 +531,8 @@ class _MarketPlaceProductDetailScreenState
             children: [
               CircleAvatar(
                 radius: 16,
-                backgroundImage: NetworkImage(comment['userProfilePhoto'] ?? ''),
+                backgroundImage:
+                    NetworkImage(comment['userProfilePhoto'] ?? ''),
                 onBackgroundImageError: (_, __) {},
               ),
               SizedBox(width: 8),
@@ -525,7 +563,8 @@ class _MarketPlaceProductDetailScreenState
                       child: Row(
                         children: [
                           Text(
-                            timeago.format(DateTime.parse(comment['createdAt'])),
+                            timeago
+                                .format(DateTime.parse(comment['createdAt'])),
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 12,
@@ -533,7 +572,8 @@ class _MarketPlaceProductDetailScreenState
                           ),
                           SizedBox(width: 16),
                           GestureDetector(
-                            onTap: () => _showReplyInput(context, comment['_id']),
+                            onTap: () =>
+                                _showReplyInput(context, comment['_id']),
                             child: Text(
                               'Reply',
                               style: TextStyle(
@@ -626,7 +666,7 @@ class _MarketPlaceProductDetailScreenState
 
   void _showReplyInput(BuildContext context, String commentId) {
     final replyController = TextEditingController();
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -668,13 +708,15 @@ class _MarketPlaceProductDetailScreenState
                           hintText: 'Write a reply...',
                           hintStyle: TextStyle(color: Colors.grey[500]),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 12),
                         ),
                         keyboardType: TextInputType.text,
                         textInputAction: TextInputAction.done,
                         onSubmitted: (value) async {
                           if (value.isNotEmpty) {
-                            await _controller.addReply(widget.productId, commentId, value);
+                            await _controller.addReply(
+                                widget.productId, commentId, value);
                             Navigator.pop(context);
                           }
                         },
