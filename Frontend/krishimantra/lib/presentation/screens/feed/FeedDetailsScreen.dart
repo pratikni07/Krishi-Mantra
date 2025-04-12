@@ -14,6 +14,7 @@ import '../../../data/models/comment_modal.dart';
 import '../../controllers/feed_controller.dart';
 import '../../widgets/video_player_widget.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../utils/image_utils.dart';
 
 class FeedDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> feed;
@@ -244,7 +245,18 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
         return Center(child: CircularProgressIndicator(color: Colors.green));
       }
 
+      // Only show error screen for actual errors, not for the "no comments" case
       if (_feedController.hasError && _feedController.comments.isEmpty) {
+        // Check if the error is specifically about invalid response format with missing docs
+        // which is likely happening when there are no comments
+        if (_feedController.errorMessage.contains('Invalid response format: missing docs')) {
+          // Return the CommentsSection which will show "No comments yet" 
+          return CommentsSection(
+            feedController: _feedController,
+            onReply: _initiateReply,
+          );
+        }
+        
         return ErrorHandler.getErrorWidget(
           errorType: _feedController.errorType ?? ErrorType.unknown,
           onRetry: () {
@@ -272,10 +284,10 @@ class MediaContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (mediaUrl == null ||
-        mediaUrl!.isEmpty ||
-        mediaUrl == "file:///" ||
-        !Uri.parse(mediaUrl!).isAbsolute) {
+    // Validate the URL first
+    final String validatedUrl = ImageUtils.validateUrl(mediaUrl);
+    
+    if (validatedUrl.isEmpty) {
       return Container(
         width: double.infinity,
         height: 200,
@@ -291,24 +303,24 @@ class MediaContent extends StatelessWidget {
     }
 
     // Check if the URL is a video
-    bool isVideo = mediaUrl!.toLowerCase().endsWith('.mp4') ||
-        mediaUrl!.toLowerCase().endsWith('.mov') ||
-        mediaUrl!.toLowerCase().endsWith('.avi') ||
-        mediaUrl!
-            .contains('commondatastorage.googleapis.com/gtv-videos-bucket');
+    bool isVideo = validatedUrl.toLowerCase().endsWith('.mp4') ||
+        validatedUrl.toLowerCase().endsWith('.mov') ||
+        validatedUrl.toLowerCase().endsWith('.avi') ||
+        validatedUrl.contains('commondatastorage.googleapis.com/gtv-videos-bucket');
 
     if (isVideo) {
       return VideoPlayerWidget(
-        videoUrl: mediaUrl!,
+        videoUrl: validatedUrl,
         autoPlay: false,
       );
     } else {
       // For images
       return Image.network(
-        mediaUrl!,
+        validatedUrl,
         width: double.infinity,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
+          print('❌ Error loading post image: $error');
           return Container(
             width: double.infinity,
             height: 200,

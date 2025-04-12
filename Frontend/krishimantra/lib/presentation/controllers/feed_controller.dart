@@ -112,6 +112,11 @@ class FeedController extends BaseController {
             
             print('📄 Received comment response: $result');
             
+            // Clear any previous errors since we got a successful response
+            if (hasError) {
+              setLoaded();
+            }
+            
             // Parse the comments from the result
             if (result.containsKey('comments') && result['comments'] is List) {
               final newComments = result['comments'] as List<CommentModel>;

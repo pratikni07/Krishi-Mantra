@@ -25,6 +25,7 @@ class MediaPreviewDialog extends StatefulWidget {
 class _MediaPreviewDialogState extends State<MediaPreviewDialog> {
   VideoPlayerController? _videoController;
   bool _isPlaying = false;
+  bool _isSending = false;
 
   @override
   void initState() {
@@ -48,9 +49,17 @@ class _MediaPreviewDialogState extends State<MediaPreviewDialog> {
 
   Widget _buildMediaPreview() {
     if (widget.mediaType == 'image') {
-      return Image.file(
-        widget.mediaFile,
-        fit: BoxFit.contain,
+      return GestureDetector(
+        onTap: () {
+          // Allow pinch zoom on image
+        },
+        child: Hero(
+          tag: 'preview-image',
+          child: Image.file(
+            widget.mediaFile,
+            fit: BoxFit.contain,
+          ),
+        ),
       );
     } else if (widget.mediaType == 'video') {
       if (_videoController?.value.isInitialized ?? false) {
@@ -79,8 +88,28 @@ class _MediaPreviewDialogState extends State<MediaPreviewDialog> {
           ],
         );
       } else {
-        return const Center(child: CircularProgressIndicator());
+        return const Center(child: CircularProgressIndicator(color: AppColors.green));
       }
+    } else if (widget.mediaType == 'document') {
+      // Show document icon with filename
+      final fileName = widget.mediaFile.path.split('/').last;
+      return Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.insert_drive_file, size: 72, color: AppColors.green),
+            const SizedBox(height: 16),
+            Text(
+              fileName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      );
     }
     return const SizedBox.shrink();
   }
@@ -89,56 +118,90 @@ class _MediaPreviewDialogState extends State<MediaPreviewDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(16),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Header with close button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Preview',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Get.back(result: false),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Media Preview
             Container(
               constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.5,
+                maxHeight: MediaQuery.of(context).size.height * 0.6,
               ),
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
+                  top: Radius.circular(0),
                 ),
                 child: _buildMediaPreview(),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                controller: widget.captionController,
-                decoration: const InputDecoration(
-                  hintText: 'Add a caption...',
-                  border: OutlineInputBorder(),
+            
+            // Actions
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.black12, width: 1),
                 ),
-                maxLines: 3,
-                minLines: 1,
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: () => Get.back(),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      Get.back();
-                      widget.onSend(widget.mediaFile);
-                    },
+                  ElevatedButton.icon(
+                    onPressed: _isSending 
+                      ? null 
+                      : () {
+                        setState(() {
+                          _isSending = true;
+                        });
+                        // Close dialog first, but return true to indicate the send operation should proceed
+                        Navigator.of(context).pop(true);
+                        // Then call the send function
+                        widget.onSend(widget.mediaFile);
+                      },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
-                    child: const Text('Send'),
+                    icon: _isSending 
+                      ? Container(
+                          width: 20, 
+                          height: 20, 
+                          child: const CircularProgressIndicator(
+                            color: Colors.white, 
+                            strokeWidth: 2,
+                          )
+                        )
+                      : const Icon(Icons.send),
+                    label: Text(_isSending ? 'Sending...' : 'Send'),
                   ),
                 ],
               ),

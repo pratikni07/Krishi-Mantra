@@ -8,6 +8,7 @@ import '../../../../data/models/feed_model.dart';
 import '../FeedDetailsScreen.dart';
 import 'package:chewie/chewie.dart';
 import 'package:video_player/video_player.dart';
+import 'package:krishimantra/utils/image_utils.dart';
 
 // Create a global controller to manage active videos
 class VideoController extends GetxController {
@@ -335,8 +336,11 @@ class _FeedCardState extends State<FeedCard> {
   }
 
   Widget _buildMediaContent(String url) {
-    // Add URL validation to prevent errors with empty or invalid URLs
-    if (url.isEmpty || url == "file:///" || !Uri.parse(url).isAbsolute) {
+    // Use our new URL validation utility
+    final String validatedUrl = ImageUtils.validateUrl(url);
+    
+    // If URL is invalid, show placeholder
+    if (validatedUrl.isEmpty) {
       return Container(
         width: double.infinity,
         height: 200,
@@ -352,17 +356,17 @@ class _FeedCardState extends State<FeedCard> {
     }
 
     // Check if the URL is a video based on common video extensions or domains
-    bool isVideo = url.toLowerCase().endsWith('.mp4') ||
-        url.toLowerCase().endsWith('.mov') ||
-        url.toLowerCase().endsWith('.avi') ||
-        url.contains('commondatastorage.googleapis.com/gtv-videos-bucket');
+    bool isVideo = validatedUrl.toLowerCase().endsWith('.mp4') ||
+        validatedUrl.toLowerCase().endsWith('.mov') ||
+        validatedUrl.toLowerCase().endsWith('.avi') ||
+        validatedUrl.contains('commondatastorage.googleapis.com/gtv-videos-bucket');
 
     if (isVideo) {
       if (!_isVideoPlaying) {
         // Show thumbnail with play button when video is not playing
         return GestureDetector(
           onTap: () {
-            _initializeAndPlayVideo(url);
+            _initializeAndPlayVideo(validatedUrl);
           },
           child: Stack(
             alignment: Alignment.center,
@@ -414,10 +418,11 @@ class _FeedCardState extends State<FeedCard> {
     } else {
       // For images, use the existing image display with error handling
       return Image.network(
-        url,
+        validatedUrl,
         width: double.infinity,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
+          print('❌ Error loading feed image: $error');
           return Container(
             width: double.infinity,
             height: 200,

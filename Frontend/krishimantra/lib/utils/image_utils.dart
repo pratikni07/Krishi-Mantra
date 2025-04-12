@@ -77,4 +77,33 @@ class ImageUtils {
       return false;
     }
   }
+  
+  // Validates and fixes URLs if needed
+  static String validateUrl(String? url) {
+    if (url == null || url.isEmpty) {
+      return '';
+    }
+    
+    // Check if the URL starts with '/' and doesn't have a scheme
+    if (url.startsWith('/') && !url.startsWith('//')) {
+      // This is likely a relative URL path like "/modern-farming" missing the domain
+      // Return empty string instead of invalid URL
+      return '';
+    }
+    
+    try {
+      final uri = Uri.parse(url);
+      if (!uri.isAbsolute) {
+        return '';
+      }
+      
+      if (uri.scheme != 'http' && uri.scheme != 'https') {
+        return '';
+      }
+      
+      return url;
+    } catch (e) {
+      return '';
+    }
+  }
 }

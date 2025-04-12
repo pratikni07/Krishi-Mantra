@@ -53,5 +53,5 @@ class ApiConstants {
   static const int receiveTimeout = 30000; // 30 seconds
 
   // Update this to your actual WebSocket server URL
-  static const String socketUrl = 'https://socket.krishimantra.com';
+  static const String socketUrl = 'http://192.168.1.111:3004';
 }

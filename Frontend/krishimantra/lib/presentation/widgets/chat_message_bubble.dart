@@ -2,7 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:get/get.dart';
 import '../../core/constants/colors.dart';
+import 'image_viewer_screen.dart';
 
 class ChatMessageBubble extends StatelessWidget {
   final String? message;
@@ -27,62 +29,69 @@ class ChatMessageBubble extends StatelessWidget {
 
     switch (mediaType) {
       case 'image':
+        final heroTag = 'image-${mediaUrl!.hashCode}';
         return GestureDetector(
           onTap: () {
-            // Add image preview functionality here if needed
+            Get.to(() => ImageViewerScreen(
+                  imageUrl: mediaUrl!,
+                  heroTag: heroTag,
+                ));
           },
-          child: Container(
-            constraints: const BoxConstraints(
-              maxHeight: 200,
-              maxWidth: 280, // Slightly reduced for better appearance
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                mediaUrl!,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    width: 200,
-                    height: 150,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
-                        color: AppColors.green,
+          child: Hero(
+            tag: heroTag,
+            child: Container(
+              constraints: const BoxConstraints(
+                maxHeight: 200,
+                maxWidth: 280, // Slightly reduced for better appearance
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  mediaUrl!,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      width: 200,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  print('Error loading image: $error');
-                  return Container(
-                    width: 200,
-                    height: 150,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 40, color: Colors.grey),
-                        SizedBox(height: 8),
-                        Text(
-                          'Failed to load image',
-                          style: TextStyle(color: Colors.grey),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                          color: AppColors.green,
                         ),
-                      ],
-                    ),
-                  );
-                },
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    print('Error loading image: $error');
+                    return Container(
+                      width: 200,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline, size: 40, color: Colors.grey),
+                          SizedBox(height: 8),
+                          Text(
+                            'Failed to load image',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
