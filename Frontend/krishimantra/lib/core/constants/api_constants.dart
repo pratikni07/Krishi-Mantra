@@ -2,7 +2,7 @@
 
 class ApiConstants {
   // Base URLs
-  static const String BASE_URL = 'http://localhost:3001';
+  static const String BASE_URL = 'http://192.168.1.111:3001';
   static const String IMAGE_BASE_URL = 'https://cdn.krishimantra.com';
 
   // Authentication endpoints
