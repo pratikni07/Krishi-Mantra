@@ -4,6 +4,7 @@ import '../../controllers/company_controller.dart';
 import 'widgets/company_header.dart';
 import 'widgets/contact_info.dart';
 import '../../../data/services/language_service.dart';
+import '../../../core/constants/colors.dart';
 
 // import 'widgets/;
 import 'widgets/reviews_section.dart';
@@ -58,8 +59,8 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.grey[800],
+        backgroundColor: AppColors.green,
+        foregroundColor: Colors.white,
         title: Text(
           companyDetailsText,
           style: const TextStyle(fontWeight: FontWeight.bold),
