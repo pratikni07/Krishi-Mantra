@@ -50,7 +50,14 @@ class _ContactInfoState extends State<ContactInfo> {
   }
 
   Future<void> _launchURL(String url) async {
-    final uri = Uri.parse(url);
+    final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _launchPhone(String phone) async {
+    final uri = Uri.parse('tel:$phone');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
@@ -159,7 +166,16 @@ class _ContactInfoState extends State<ContactInfo> {
               _buildInfoRow(
                 Icons.phone,
                 phoneText,
-                Text(widget.company.phone!),
+                InkWell(
+                  onTap: () => _launchPhone(widget.company.phone!),
+                  child: Text(
+                    widget.company.phone!,
+                    style: TextStyle(
+                      color: Colors.blue,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
               ),
               SizedBox(height: 12),
             ],
@@ -167,13 +183,16 @@ class _ContactInfoState extends State<ContactInfo> {
               _buildInfoRow(
                 Icons.language,
                 websiteText,
-                Text(
-                  widget.company.website!,
-                  style: TextStyle(
-                    color: Colors.blue,
-                    decoration: TextDecoration.underline,
+                InkWell(
+                  onTap: () => _launchURL(widget.company.website!),
+                  child: Text(
+                    widget.company.website!,
+                    style: TextStyle(
+                      color: Colors.blue,
+                      decoration: TextDecoration.underline,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

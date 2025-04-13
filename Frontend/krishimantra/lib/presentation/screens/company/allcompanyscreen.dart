@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'company_details_screen.dart';
 import 'widgets/company_card.dart';
 import '../../controllers/company_controller.dart';
+import '../../../core/constants/colors.dart';
 
 
 class CompanyListScreen extends GetView<CompanyController> {
@@ -15,7 +16,7 @@ class CompanyListScreen extends GetView<CompanyController> {
           'Fertilizer Companies',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.green[700],
+        backgroundColor: AppColors.green,
         actions: [
           IconButton(
             icon: Icon(Icons.refresh, color: Colors.white),
