@@ -13,6 +13,7 @@ import 'package:krishimantra/presentation/screens/splash/splash_screen.dart';
 import 'package:krishimantra/presentation/screens/video_tutorial/video_list_screen.dart';
 import 'package:krishimantra/presentation/screens/language/LanguageSelectionPage.dart';
 import 'package:krishimantra/presentation/screens/auth/phone_number_screen.dart';
+import 'package:krishimantra/presentation/screens/settings/settings_screen.dart';
 // import 'package:krishimantra/presentation/screens/auth/otp_verification_screen.dart';
 // import 'package:krishimantra/presentation/screens/auth/signup_screen.dart';
 
@@ -38,6 +39,7 @@ class AppRoutes {
   static const String KRISHI_VIDEOS = '/krishi-videos';
   static const String NEWS = '/news';
   static const String SCHEMES = '/schemes';
+  static const String SETTINGS = '/settings';
 
   // New authentication routes
   static const String LANGUAGE_SELECTION = '/language';
@@ -69,6 +71,7 @@ class AppRoutes {
     GetPage(name: KRISHI_VIDEOS, page: () => VideoListScreen()),
     // GetPage(name: NEWS, page: () => NewsScreen()),
     GetPage(name: SCHEMES, page: () => GovSchemesScreen()),
+    GetPage(name: SETTINGS, page: () => const SettingsScreen()),
 
     // New authentication routes
     GetPage(

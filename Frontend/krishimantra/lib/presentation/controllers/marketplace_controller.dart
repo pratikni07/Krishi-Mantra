@@ -34,7 +34,9 @@ class MarketplaceController extends BaseController {
   final RxDouble minPrice = 0.0.obs;
   final RxDouble maxPrice = 1000000.0.obs;
   final RxList<String> selectedTags = <String>[].obs;
-  
+
+  RxString searchTerm = ''.obs;
+
   Timer? _debounce;
 
   final RxList<Map<String, dynamic>> products = <Map<String, dynamic>>[].obs;
@@ -58,7 +60,8 @@ class MarketplaceController extends BaseController {
   }
 
   void _scrollListener() async {
-    if (scrollController.position.pixels == scrollController.position.maxScrollExtent) {
+    if (scrollController.position.pixels ==
+        scrollController.position.maxScrollExtent) {
       if (!isLoadingMore && hasMoreComments.value) {
         await fetchComments(productDetails['_id'], refresh: false);
       }
@@ -79,7 +82,7 @@ class MarketplaceController extends BaseController {
     );
   }
 
-  Future<void> fetchMarketplaceProducts() async {
+  Future<void> fetchMarketplaceProducts({bool forceRefresh = false}) async {
     await handleAsync<void>(
       () async {
         final products = await _marketplaceRepository.getMarketplaceProducts();
@@ -92,11 +95,13 @@ class MarketplaceController extends BaseController {
   Future<void> fetchProductById(String productId) async {
     await handleAsync<void>(
       () async {
-        final response = await _marketplaceRepository.getProductDetails(productId);
+        final response =
+            await _marketplaceRepository.getProductDetails(productId);
         if (response['success'] == true) {
           productDetails.value = response['data'];
         } else {
-          throw Exception(response['message'] ?? 'Failed to fetch product details');
+          throw Exception(
+              response['message'] ?? 'Failed to fetch product details');
         }
       },
       showLoading: true,
@@ -128,45 +133,47 @@ class MarketplaceController extends BaseController {
       List<File> imageFiles,
       List<File> videoFiles,
       List<String> youtubeUrls) async {
-      
     return await handleAsync<bool>(() async {
-      // Get user ID
-      final userId = await _userService.getUserId();
-      productData['userId'] = userId;
+          // Get user ID
+          final userId = await _userService.getUserId();
+          productData['userId'] = userId;
 
-      // Upload images and videos
-      List<Map<String, dynamic>> media = [];
+          // Upload images and videos
+          List<Map<String, dynamic>> media = [];
 
-      // Upload images
-      for (var imageFile in imageFiles) {
-        final imageUrl = await uploadMediaFile(imageFile, false);
-        if (imageUrl != null) {
-          media.add({'type': 'image', 'url': imageUrl});
-        }
-      }
+          // Upload images
+          for (var imageFile in imageFiles) {
+            final imageUrl = await uploadMediaFile(imageFile, false);
+            if (imageUrl != null) {
+              media.add({'type': 'image', 'url': imageUrl});
+            }
+          }
 
-      // Upload videos
-      for (var videoFile in videoFiles) {
-        final videoUrl = await uploadMediaFile(videoFile, true);
-        if (videoUrl != null) {
-          media.add({'type': 'video', 'url': videoUrl, 'isYoutubeVideo': false});
-        }
-      }
+          // Upload videos
+          for (var videoFile in videoFiles) {
+            final videoUrl = await uploadMediaFile(videoFile, true);
+            if (videoUrl != null) {
+              media.add(
+                  {'type': 'video', 'url': videoUrl, 'isYoutubeVideo': false});
+            }
+          }
 
-      // Add YouTube URLs
-      for (var youtubeUrl in youtubeUrls) {
-        if (youtubeUrl.isNotEmpty) {
-          media.add({'type': 'video', 'url': youtubeUrl, 'isYoutubeVideo': true});
-        }
-      }
+          // Add YouTube URLs
+          for (var youtubeUrl in youtubeUrls) {
+            if (youtubeUrl.isNotEmpty) {
+              media.add(
+                  {'type': 'video', 'url': youtubeUrl, 'isYoutubeVideo': true});
+            }
+          }
 
-      // Add media to product data
-      productData['media'] = media;
+          // Add media to product data
+          productData['media'] = media;
 
-      // Send request to API
-      await _marketplaceRepository.addMarketplaceProduct(productData);
-      return true;
-    }, showLoading: true) ?? false;
+          // Send request to API
+          await _marketplaceRepository.addMarketplaceProduct(productData);
+          return true;
+        }, showLoading: true) ??
+        false;
   }
 
   Future<void> fetchComments(String productId, {bool refresh = false}) async {
@@ -177,31 +184,32 @@ class MarketplaceController extends BaseController {
     }
 
     if (!hasMoreComments.value || isLoadingMore) return;
-    
+
     await handleAsync<void>(() async {
       isLoadingMore = true;
       isLoadingComments.value = true;
-      
-      final response = await _marketplaceRepository.getComments(productId, currentPage);
-      
+
+      final response =
+          await _marketplaceRepository.getComments(productId, currentPage);
+
       if (response['success'] == true) {
         final pagination = response['pagination'];
         hasMoreComments.value = pagination['hasNextPage'] ?? false;
-        
-        final List<Map<String, dynamic>> commentsList = 
-          List<Map<String, dynamic>>.from(response['data'] ?? []);
-        
+
+        final List<Map<String, dynamic>> commentsList =
+            List<Map<String, dynamic>>.from(response['data'] ?? []);
+
         if (refresh) {
           comments.value = commentsList;
         } else {
           comments.addAll(commentsList);
         }
-        
+
         currentPage++;
       } else {
         throw Exception(response['message'] ?? 'Failed to load comments');
       }
-      
+
       isLoadingMore = false;
       isLoadingComments.value = false;
     }, showLoading: comments.isEmpty && !refresh);
@@ -215,17 +223,18 @@ class MarketplaceController extends BaseController {
       }
 
       final response = await _marketplaceRepository.addComment(productId, text);
-      
+
       if (response['success'] == true && response['data'] != null) {
-        final Map<String, dynamic> newComment = Map<String, dynamic>.from(response['data']);
-        
+        final Map<String, dynamic> newComment =
+            Map<String, dynamic>.from(response['data']);
+
         newComment.addAll({
           '_id': newComment['_id'] ?? DateTime.now().toString(),
           'createdAt': DateTime.now().toIso8601String(),
           'updatedAt': DateTime.now().toIso8601String(),
           'replies': newComment['replies'] ?? [],
         });
-        
+
         comments.insert(0, newComment);
       } else {
         throw Exception(response['message'] ?? 'Failed to add comment');
@@ -241,8 +250,9 @@ class MarketplaceController extends BaseController {
         return;
       }
 
-      final response = await _marketplaceRepository.addReply(productId, commentId, text);
-      
+      final response =
+          await _marketplaceRepository.addReply(productId, commentId, text);
+
       if (response['success'] == true && response['data'] != null) {
         final newReply = {
           ...response['data'],
@@ -252,8 +262,10 @@ class MarketplaceController extends BaseController {
 
         final commentIndex = comments.indexWhere((c) => c['_id'] == commentId);
         if (commentIndex != -1) {
-          final updatedComment = Map<String, dynamic>.from(comments[commentIndex]);
-          final replies = List<Map<String, dynamic>>.from(updatedComment['replies'] ?? []);
+          final updatedComment =
+              Map<String, dynamic>.from(comments[commentIndex]);
+          final replies =
+              List<Map<String, dynamic>>.from(updatedComment['replies'] ?? []);
           replies.add(Map<String, dynamic>.from(newReply));
           updatedComment['replies'] = replies;
           comments[commentIndex] = updatedComment;
@@ -289,7 +301,7 @@ class MarketplaceController extends BaseController {
         }
 
         final response = await _marketplaceRepository.searchProducts(
-          keyword: keyword,
+          keyword: keyword ?? searchTerm.value,
           category: selectedCategory.value,
           minPrice: minPrice.value,
           maxPrice: maxPrice.value,
@@ -298,11 +310,12 @@ class MarketplaceController extends BaseController {
         );
 
         if (response['success'] == true) {
-          marketplaceProducts.value = List<Map<String, dynamic>>.from(response['data']);
+          marketplaceProducts.value =
+              List<Map<String, dynamic>>.from(response['data']);
         } else {
           throw Exception(response['message'] ?? 'Failed to search products');
         }
-        
+
         isSearching.value = false;
       },
       showLoading: true,

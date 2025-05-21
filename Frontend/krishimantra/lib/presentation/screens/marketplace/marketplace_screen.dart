@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishimantra/presentation/controllers/marketplace_controller.dart';
 import 'package:krishimantra/core/constants/colors.dart';
-import 'package:krishimantra/data/services/language_service.dart';
+import 'package:krishimantra/core/utils/language_helper.dart';
+import 'package:krishimantra/core/utils/error_with_translation.dart';
+import 'package:krishimantra/presentation/widgets/error_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import 'package:krishimantra/core/utils/error_handler.dart';
 
 import 'add_product_screen.dart';
 import 'marketplace_product_detail_screen.dart';
-
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({Key? key}) : super(key: key);
@@ -19,63 +19,83 @@ class MarketplaceScreen extends StatefulWidget {
   _MarketplaceScreenState createState() => _MarketplaceScreenState();
 }
 
-class _MarketplaceScreenState extends State<MarketplaceScreen> {
+class _MarketplaceScreenState extends State<MarketplaceScreen>
+    with TranslationMixin {
   final MarketplaceController _controller = Get.find<MarketplaceController>();
   final TextEditingController _searchController = TextEditingController();
-  late LanguageService _languageService;
-  String marketplaceTitle = "Marketplace";
-  String searchHint = "Search products...";
   bool _canAddProducts = false;
-  
+
   final double a8 = 8.0; // Spacing constant
-  Map<String, int> _currentImageIndices = {}; // Track current image index for each product
-  
+  Map<String, int> _currentImageIndices =
+      {}; // Track current image index for each product
+
   // Add new variables for search and filters
   bool _showFilters = false;
   RangeValues _priceRange = RangeValues(0, 1000000);
-  
+
+  // Translation keys
+  static const String KEY_MARKETPLACE = 'marketplace';
+  static const String KEY_SEARCH_HINT = 'search_products';
+  static const String KEY_PRICE_RANGE = 'price_range';
+  static const String KEY_CATEGORIES = 'categories';
+  static const String KEY_CLEAR_FILTERS = 'clear_filters';
+  static const String KEY_APPLY_FILTERS = 'apply_filters';
+  static const String KEY_NO_PRODUCTS = 'no_products';
+  static const String KEY_LOADING = 'loading_products';
+  static const String KEY_ERROR = 'error_loading_products';
+  static const String KEY_TRY_AGAIN = 'try_again';
+
   @override
   void initState() {
     super.initState();
-    _controller.fetchMarketplaceProducts();
-    _initializeLanguage();
+    _registerTranslations();
+    _loadMarketplaceData();
     _checkUserPermissions();
   }
-  
-  Future<void> _initializeLanguage() async {
-    _languageService = await LanguageService.getInstance();
-    await _updateTranslations();
+
+  void _registerTranslations() {
+    registerTranslation(KEY_MARKETPLACE, 'Marketplace');
+    registerTranslation(KEY_SEARCH_HINT, 'Search products...');
+    registerTranslation(KEY_PRICE_RANGE, 'Price Range');
+    registerTranslation(KEY_CATEGORIES, 'Categories');
+    registerTranslation(KEY_CLEAR_FILTERS, 'Clear Filters');
+    registerTranslation(KEY_APPLY_FILTERS, 'Apply Filters');
+    registerTranslation(
+        KEY_NO_PRODUCTS, 'No products found. Try different search criteria.');
+    registerTranslation(KEY_LOADING, 'Loading products...');
+    registerTranslation(KEY_ERROR, 'Error loading products');
+    registerTranslation(KEY_TRY_AGAIN, 'Try Again');
   }
-  
-  Future<void> _updateTranslations() async {
-    final translations = await Future.wait([
-      _languageService.translate('Marketplace'),
-      _languageService.translate('Search products...'),
-    ]);
-    
-    setState(() {
-      marketplaceTitle = translations[0];
-      searchHint = translations[1];
-    });
+
+  Future<void> _loadMarketplaceData() async {
+    try {
+      await _controller.fetchMarketplaceProducts();
+    } catch (e) {
+      // Error is handled in the controller and displayed in the UI
+      await TranslatedErrorHandler.showError(e, context: context);
+    }
   }
-  
+
   Future<void> _checkUserPermissions() async {
-    final canAdd = await _controller.isUserAllowedToAddProducts();
-    setState(() {
-      _canAddProducts = canAdd;
-    });
+    try {
+      final canAdd = await _controller.isUserAllowedToAddProducts();
+      setState(() {
+        _canAddProducts = canAdd;
+      });
+    } catch (e) {
+      // Just log the error but don't show to user as this is not critical
+      debugPrint('Error checking permissions: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    updateController(); // Check and update products if empty
-    
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         backgroundColor: AppColors.green,
         title: Text(
-          marketplaceTitle,
+          getTranslation(KEY_MARKETPLACE),
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -93,18 +113,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           _buildProductGrid(),
         ],
       ),
-      floatingActionButton: _canAddProducts 
+      floatingActionButton: _canAddProducts
           ? FloatingActionButton(
               onPressed: () {
                 Get.to(() => AddProductScreen());
               },
               backgroundColor: AppColors.green,
-              child: Icon(Icons.add, color: Colors.white),
+              child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
     );
   }
-  
+
   Widget _buildSearchBar() {
     return Container(
       color: AppColors.green,
@@ -120,15 +140,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
                   blurRadius: 5,
-                  offset: Offset(0, 2),
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Center( // Center the TextField
+            child: Center(
+              // Center the TextField
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: searchHint,
+                  hintText: getTranslation(KEY_SEARCH_HINT),
                   hintStyle: TextStyle(
                     color: Colors.grey[600],
                     fontSize: 16,
@@ -136,17 +157,24 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   prefixIcon: Icon(Icons.search, color: AppColors.green),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _showFilters ? Icons.filter_list : Icons.filter_list_outlined,
+                      _showFilters
+                          ? Icons.filter_list
+                          : Icons.filter_list_outlined,
                       color: AppColors.green,
                     ),
-                    onPressed: () => setState(() => _showFilters = !_showFilters),
+                    onPressed: () =>
+                        setState(() => _showFilters = !_showFilters),
                   ),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                   alignLabelWithHint: true, // Align hint text
                 ),
-                textAlignVertical: TextAlignVertical.center, // Center text vertically
-                onChanged: _controller.onSearchChanged,
+                textAlignVertical:
+                    TextAlignVertical.center, // Center text vertically
+                onChanged: (value) {
+                  _controller.searchTerm.value = value;
+                  _controller.searchProducts();
+                },
               ),
             ),
           ),
@@ -155,11 +183,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       ),
     );
   }
-  
+
   Widget _buildFilters() {
     return Container(
-      margin: EdgeInsets.only(top: 16),
-      padding: EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -167,7 +195,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
-            offset: Offset(0, 3),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -175,8 +203,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Price Range',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            getTranslation(KEY_PRICE_RANGE),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           RangeSlider(
             values: _priceRange,
@@ -185,8 +213,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             divisions: 100,
             activeColor: AppColors.green,
             labels: RangeLabels(
-              '₹${_priceRange.start.round()}',
-              '₹${_priceRange.end.round()}',
+              '₹${_formatPrice(_priceRange.start)}',
+              '₹${_formatPrice(_priceRange.end)}',
             ),
             onChanged: (values) {
               setState(() => _priceRange = values);
@@ -195,16 +223,47 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               _controller.searchProducts();
             },
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
+          Text(
+            getTranslation(KEY_CATEGORIES),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
+            children: _buildCategoryChips(),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              _filterChip('New', 'new'),
-              _filterChip('Used', 'used'),
-              _filterChip('Tools', 'tools'),
-              _filterChip('Seeds', 'seeds'),
-              _filterChip('Fertilizers', 'fertilizers'),
+              OutlinedButton(
+                onPressed: _clearFilters,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.green,
+                  side: BorderSide(color: AppColors.green),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                child: Text(getTranslation(KEY_CLEAR_FILTERS)),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () {
+                  _controller.searchProducts();
+                  setState(() => _showFilters = false);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                child: Text(getTranslation(KEY_APPLY_FILTERS)),
+              ),
             ],
           ),
         ],
@@ -212,222 +271,276 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  Widget _filterChip(String label, String value) {
-    final isSelected = _controller.selectedTags.contains(value);
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      selectedColor: AppColors.green.withOpacity(0.2),
-      checkmarkColor: AppColors.green,
-      onSelected: (selected) {
-        if (selected) {
-          _controller.selectedTags.add(value);
-        } else {
-          _controller.selectedTags.remove(value);
-        }
-        _controller.searchProducts();
-      },
-    );
+  String _formatPrice(double price) {
+    // Format price with commas (e.g., 1,000,000)
+    if (price == null) return '0';
+    return price.toStringAsFixed(0).replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
   }
-  
-  Widget _buildProductGrid() {
-    return Obx(() {
-      if (_controller.isLoading) {
-        return Expanded(
-          child: Center(
-            child: CircularProgressIndicator(color: AppColors.green),
-          ),
-        );
-      }
 
-      if (_controller.hasError) {
-        return Expanded(
-          child: ErrorHandler.getErrorWidget(
-            errorType: _controller.errorType ?? ErrorType.unknown,
-            onRetry: () => _controller.fetchMarketplaceProducts(),
-            showRetry: true,
-          ),
-        );
-      }
+  void _clearFilters() {
+    setState(() {
+      _priceRange = const RangeValues(0, 1000000);
+      _controller.minPrice.value = 0;
+      _controller.maxPrice.value = 1000000;
+      _controller.selectedCategory.value = '';
+      _searchController.clear();
+      _controller.searchTerm.value = '';
+    });
+    _controller.searchProducts();
+  }
 
-      if (_controller.marketplaceProducts.isEmpty) {
-        return Expanded(
-          child: Center(
-            child: Text(
-              'No products found',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
+  List<Widget> _buildCategoryChips() {
+    final categories = [
+      'Farm Equipment',
+      'Seeds',
+      'Fertilizers',
+      'Pesticides',
+      'Irrigation',
+      'Harvesting Tools',
+      'Storage',
+      'Livestock',
+    ];
+
+    return categories.map((category) {
+      final isSelected = _controller.selectedCategory.value == category;
+
+      return GestureDetector(
+        onTap: () {
+          setState(() {
+            if (isSelected) {
+              _controller.selectedCategory.value = '';
+            } else {
+              _controller.selectedCategory.value = category;
+            }
+          });
+        },
+        child: Chip(
+          label: Text(
+            category,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.black87,
+              fontSize: 12,
             ),
           ),
-        );
-      }
-
-      // Modified calculation for better responsiveness
-      final screenWidth = MediaQuery.of(context).size.width;
-      final itemWidth = (screenWidth - 48) / 2;
-      // Adjusted aspect ratio to prevent overflow
-      final itemHeight = itemWidth * 1.6; // Increased height ratio
-
-      return Expanded(
-        child: GridView.builder(
-          padding: EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: itemWidth / itemHeight,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: _controller.marketplaceProducts.length,
-          itemBuilder: (context, index) {
-            final product = _controller.marketplaceProducts[index];
-            return _buildProductCard(product);
-          },
+          backgroundColor: isSelected ? AppColors.green : Colors.grey[200],
+          padding: const EdgeInsets.symmetric(horizontal: 8),
         ),
       );
-    });
+    }).toList();
   }
 
-  Widget _buildProductCard(dynamic product) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = (screenWidth - 48) / 2;
-    final textScaleFactor = MediaQuery.of(context).textScaleFactor;
-    
-    return Container(
-      width: cardWidth,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 10,
-            spreadRadius: 1,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Material(
-          color: Colors.white,
-          child: InkWell(
-            onTap: () {
-              Get.toNamed('/marketplace-detail', arguments: product['_id']);
-            },
+  Widget _buildProductGrid() {
+    return Expanded(
+      child: Obx(() {
+        if (_controller.isLoading) {
+          return Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min, // Added to prevent expansion
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                AspectRatio(
-                  aspectRatio: 1,
-                  child: CachedNetworkImage(
-                    imageUrl: (product['images'] as List).isNotEmpty 
-                        ? product['images'][0] 
-                        : 'placeholder_url',
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Center(
-                      child: CircularProgressIndicator(color: AppColors.green),
-                    ),
-                    errorWidget: (context, url, error) => Icon(Icons.error),
-                  ),
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
                 ),
-                Flexible(
-                  child: Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min, // Prevent expansion
-                      children: [
-                        Text(
-                          product['title'] ?? '',
-                          style: TextStyle(
-                            fontSize: 13 / textScaleFactor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          product['shortDescription'] ?? '',
-                          style: TextStyle(
-                            fontSize: 11 / textScaleFactor,
-                            color: Colors.grey[600],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: 4), // Fixed spacing instead of Spacer
-                        Container(
-                          width: double.infinity,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  '₹${_formatPrice(product['priceRange']['min'])} - ₹${_formatPrice(product['priceRange']['max'])}',
-                                  style: TextStyle(
-                                    fontSize: 11 / textScaleFactor,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.green,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (product['rating'] != null)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.star,
-                                      color: Colors.amber,
-                                      size: 12,
-                                    ),
-                                    SizedBox(width: 2),
-                                    Text(
-                                      '${product['rating']}',
-                                      style: TextStyle(
-                                        fontSize: 11 / textScaleFactor,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                const SizedBox(height: 16),
+                Text(
+                  getTranslation(KEY_LOADING),
+                  style: TextStyle(color: Colors.grey[700]),
                 ),
               ],
             ),
+          );
+        }
+
+        if (_controller.errorMessage.isNotEmpty) {
+          return ErrorWidgets.genericError(
+            onRetry: _loadMarketplaceData,
+            message: getTranslation(KEY_ERROR),
+          );
+        }
+
+        final products = _controller.marketplaceProducts;
+
+        if (products.isEmpty) {
+          return ErrorWidgets.emptyState(
+            message: getTranslation(KEY_NO_PRODUCTS),
+            icon: Icons.search_off,
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            await _controller.fetchMarketplaceProducts(forceRefresh: true);
+          },
+          color: AppColors.green,
+          child: GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.75,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+            ),
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              final product = products[index];
+              final productId = product['_id'].toString();
+              if (!_currentImageIndices.containsKey(productId)) {
+                _currentImageIndices[productId] = 0;
+              }
+
+              return _buildProductCard(product, index);
+            },
           ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildProductCard(Map<String, dynamic> product, int index) {
+    final productId = product['_id'].toString();
+    final media = List<Map<String, dynamic>>.from(product['media'] ?? []);
+    final images = media.where((m) => m['type'] == 'image').toList();
+    final currentIndex = _currentImageIndices[productId] ?? 0;
+
+    // Safely get image URL
+    String imageUrl = '';
+    if (images.isNotEmpty && currentIndex < images.length) {
+      imageUrl = images[currentIndex]['url'] ?? '';
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Get.to(() => MarketPlaceProductDetailScreen(
+            productId: product['_id'].toString()));
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 5,
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
+                child: Stack(
+                  children: [
+                    // Product image with carousel functionality
+                    if (images.length > 1)
+                      CarouselSlider(
+                        options: CarouselOptions(
+                          aspectRatio: 1, // Square aspect ratio
+                          viewportFraction: 1.0,
+                          enableInfiniteScroll: false,
+                          onPageChanged: (pageIndex, _) {
+                            setState(() {
+                              _currentImageIndices[productId] = pageIndex;
+                            });
+                          },
+                        ),
+                        items: images.map((imageData) {
+                          final url = imageData['url'] ?? '';
+                          return _buildProductImage(url);
+                        }).toList(),
+                      )
+                    else
+                      _buildProductImage(imageUrl),
+
+                    // Only show indicator if more than one image
+                    if (images.length > 1)
+                      Positioned(
+                        bottom: 8,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: SmoothPageIndicator(
+                            controller:
+                                PageController(initialPage: currentIndex),
+                            count: images.length,
+                            effect: WormEffect(
+                              dotHeight: 6,
+                              dotWidth: 6,
+                              spacing: 4,
+                              activeDotColor: AppColors.green,
+                              dotColor: Colors.white.withOpacity(0.5),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Product info
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (product['title'] ?? 'Unknown Product').toString(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "₹${product['minPrice'] ?? 0} - ₹${product['maxPrice'] ?? 0}",
+                      style: TextStyle(
+                        color: AppColors.green,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-  
-  String _formatPrice(dynamic price) {
-    if (price == null) return '0';
-    return price.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},'
+
+  Widget _buildProductImage(String imageUrl) {
+    return Container(
+      color: Colors.grey[200],
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        placeholder: (context, url) => Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
+          ),
+        ),
+        errorWidget: (context, url, error) => const Center(
+          child: Icon(Icons.image_not_supported, color: Colors.grey),
+        ),
+      ),
     );
   }
-  
-  void updateController() {
-    if (_controller.marketplaceProducts.isEmpty) {
-      _controller.fetchMarketplaceProducts();
-    }
-  }
-  
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
-} 
+}

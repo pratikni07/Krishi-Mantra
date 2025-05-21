@@ -1,0 +1,20 @@
+
+> api-service@1.0.0 dev
+> NODE_ENV=development nodemon src/index.js
+
+[33m[nodemon] 3.1.7[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node src/index.js`[39m
+Using environment: development, loaded from: /Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/.env.development
+Server running on port 3033
+Redis client connected
+Mongoose connected to database
+MongoDB Connected
+[2025-04-22T17:58:37.232Z] [INFO] Starting auto post scheduler...
+[2025-04-22T17:58:37.233Z] [INFO] Using base URL: http://localhost:3033
+[2025-04-22T17:58:37.236Z] [INFO] Auto post scheduler initialized - will post every 2 minutes
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+Using environment: development, loaded from: /Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/.env.development

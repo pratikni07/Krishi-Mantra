@@ -5,13 +5,29 @@ const fs = require("fs");
 class AIService {
   constructor() {
     this.groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey: process.env.GROQ_API_KEY || "",
     });
-    this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    this.geminiApiKeys = process.env.GEMINI_API_KEY
+      ? process.env.GEMINI_API_KEY.split(",").map((key) => key.trim())
+      : [];
 
-    // Initialize model configurations
-    this.groqPrimaryModel = "mixtral-8x7b-32768";
-    this.groqFallbackModel = "llama2-70b-4096";
+    this.currentGeminiKeyIndex = 0;
+    this.geminiFailureCount = 0;
+    this.geminiCircuitOpen = false;
+    this.geminiLastFailure = null;
+    this.geminiResetTimeout = null;
+
+    this.initializeGeminiClient();
+
+    // Set health check interval
+    this.healthCheckInterval = setInterval(
+      () => this.checkGeminiHealth(),
+      5 * 60 * 1000
+    ); // Check every 5 minutes
+
+    // Initialize model configurations with latest available models
+    this.groqPrimaryModel = "llama3-70b-8192"; // Top tier model
+    this.groqFallbackModel = "llama3-8b-8192"; // Lightweight fallback
     this.geminiModel = "gemini-1.5-pro-vision-latest";
 
     this.rateLimitConfig = {
@@ -22,148 +38,530 @@ class AIService {
     };
   }
 
-  async processImageForCropDisease(
-    imageBuffer,
-    preferredLanguage,
-    location,
-    weather,
-    context = {}
-  ) {
+  initializeGeminiClient() {
     try {
-      const model = this.gemini.getGenerativeModel({
-        model: this.geminiModel,
+      if (this.geminiApiKeys.length === 0) {
+        console.error("No Gemini API keys available");
+        return;
+      }
+
+      const currentKey = this.geminiApiKeys[this.currentGeminiKeyIndex];
+      console.log(
+        `Initializing Gemini client with API key index: ${this.currentGeminiKeyIndex}`
+      );
+
+      this.googleGenAI = new GoogleGenerativeAI(currentKey);
+
+      // Updated model name from gemini-pro-vision to gemini-1.5-pro-vision
+      this.geminiModel = this.googleGenAI.getGenerativeModel({
+        model: "gemini-1.5-pro-vision",
         generationConfig: {
-          temperature: 0.7,
-          topK: 32,
-          topP: 1,
-          maxOutputTokens: 2048,
+          temperature: 0.4,
+          topP: 0.95,
+          topK: 40,
         },
       });
 
-      const contextPrompt = context.currentTopic
-        ? `Previous context: ${context.currentTopic}
-           Previously identified issues: ${
-             context.identifiedIssues?.join(", ") || "None"
-           }
-           Previous solutions suggested: ${
-             context.suggestedSolutions?.join(", ") || "None"
-           }\n\n`
-        : "";
+      console.log("Gemini model initialized successfully");
 
-      const prompt = {
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `${contextPrompt}As an agricultural expert, analyze this crop image and provide:
-1. Disease identification (if any)
-2. Detailed explanation of the condition
-3. Treatment recommendations
-4. Preventive measures
+      // Reset failure tracking on successful initialization
+      this.geminiFailureCount = 0;
+      this.geminiCircuitOpen = false;
+    } catch (error) {
+      console.error("Failed to initialize Gemini client:", error);
+      this.rotateGeminiApiKey();
+    }
+  }
 
-Consider the following environmental factors:
-- Location: ${location.lat}, ${location.lon}
-- Temperature: ${weather.temperature}°C
-- Humidity: ${weather.humidity}%
+  rotateGeminiApiKey() {
+    if (this.geminiApiKeys.length <= 1) {
+      console.warn("Only one Gemini API key available, cannot rotate");
+      return false;
+    }
 
-Please structure your response clearly with headings and bullet points.
-Provide the response in ${preferredLanguage}.`,
-              },
-              {
-                inlineData: {
-                  mimeType: "image/jpeg",
-                  data: imageBuffer.toString("base64"),
-                },
-              },
-            ],
-          },
-        ],
-        tools: [
-          {
-            functionDeclarations: [
-              {
-                name: "analyzeCropDisease",
-                description:
-                  "Analyze crop diseases and provide recommendations",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    disease: {
-                      type: "string",
-                      description: "Name of the identified disease",
-                    },
-                    severity: {
-                      type: "string",
-                      description: "Severity level of the disease",
-                    },
-                    treatments: {
-                      type: "array",
-                      items: { type: "string" },
-                      description: "List of recommended treatments",
-                    },
-                    prevention: {
-                      type: "array",
-                      items: { type: "string" },
-                      description: "List of preventive measures",
-                    },
-                  },
-                  required: ["disease", "severity", "treatments", "prevention"],
-                },
-              },
-            ],
-          },
-        ],
-      };
+    const oldIndex = this.currentGeminiKeyIndex;
+    this.currentGeminiKeyIndex =
+      (this.currentGeminiKeyIndex + 1) % this.geminiApiKeys.length;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
+    console.log(
+      `Rotating Gemini API key from index ${oldIndex} to ${this.currentGeminiKeyIndex}`
+    );
+    this.initializeGeminiClient();
+    return true;
+  }
 
-      if (!response.text()) {
-        throw new Error("No response generated from the model");
+  async resetGeminiClient(retryCount = 0, maxRetries = 3) {
+    // Clear any pending reset timeout
+    if (this.geminiResetTimeout) {
+      clearTimeout(this.geminiResetTimeout);
+      this.geminiResetTimeout = null;
+    }
+
+    console.log(
+      `Attempting to reset Gemini client (attempt ${
+        retryCount + 1
+      }/${maxRetries})`
+    );
+
+    // Try rotating to a different key first
+    const keyRotated = this.rotateGeminiApiKey();
+
+    // If we couldn't rotate (only one key), reinitialize with the same key
+    if (!keyRotated) {
+      this.initializeGeminiClient();
+    }
+
+    // Test the connection with a simple request
+    try {
+      // Simple test prompt to verify connection
+      const testPrompt = "Hello, this is a connection test.";
+      const testResult = await this.geminiModel.generateContent(testPrompt);
+
+      if (testResult) {
+        console.log("Gemini client reset successful, connection verified");
+        // Reset failure count on successful connection
+        this.geminiFailureCount = 0;
+        this.geminiCircuitOpen = false;
+        return true;
+      }
+    } catch (error) {
+      console.error(
+        `Gemini client connection test failed after reset (attempt ${
+          retryCount + 1
+        }/${maxRetries}):`,
+        error.message
+      );
+
+      // If we still have retries left, try again with exponential backoff
+      if (retryCount < maxRetries - 1) {
+        const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s, etc.
+        console.log(`Will retry Gemini client reset in ${delay}ms...`);
+
+        // Schedule next retry with backoff
+        this.geminiResetTimeout = setTimeout(() => {
+          this.resetGeminiClient(retryCount + 1, maxRetries).catch((err) =>
+            console.error("Error in delayed Gemini client reset:", err)
+          );
+        }, delay);
+
+        return false;
       }
 
-      return response.text();
-    } catch (error) {
-      console.error("Error in image processing:", error);
+      // If we've exhausted retries, open the circuit
+      this.geminiCircuitOpen = true;
+      this.geminiLastFailure = new Date();
+      console.error(
+        "Gemini client reset failed after maximum retries, circuit breaker opened"
+      );
+      return false;
+    }
+  }
 
-      // Try with fallback Groq model for text analysis if image processing fails
-      try {
-        const fallbackPrompt = `Based on the environmental conditions:
-        - Location: ${location.lat}, ${location.lon}
-        - Temperature: ${weather.temperature}°C
-        - Humidity: ${weather.humidity}%
-        
-        Provide general crop disease prevention advice and best practices for these conditions.
-        Include information about common diseases in this climate and their prevention.
-        
-        Please provide the response in ${preferredLanguage}.`;
+  async checkGeminiHealth() {
+    console.log("Running Gemini health check...");
 
-        const fallbackResponse = await this.groq.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an agricultural expert providing advice about crop diseases and prevention.",
-            },
-            {
-              role: "user",
-              content: fallbackPrompt,
-            },
-          ],
-          model: this.groqPrimaryModel,
-          temperature: 0.7,
-          max_tokens: 2048,
-        });
-
-        return `Note: Image analysis failed. Providing general advice based on environmental conditions:\n\n${fallbackResponse.choices[0]?.message?.content}`;
-      } catch (fallbackError) {
-        console.error("Fallback response failed:", fallbackError);
-        throw new Error(
-          "Failed to process crop image and generate fallback response"
+    // If circuit is open, check if we should try to close it
+    if (this.geminiCircuitOpen) {
+      const circuitOpenDuration = Date.now() - this.geminiLastFailure;
+      // Wait at least 2 minutes before trying to close circuit
+      if (circuitOpenDuration > 2 * 60 * 1000) {
+        console.log(
+          "Attempting to close Gemini circuit breaker after timeout period"
         );
+        await this.resetGeminiClient();
+      }
+      return;
+    }
+
+    // Otherwise, perform a routine health check
+    try {
+      // Make sure we have a properly initialized client
+      if (
+        !this.geminiModel ||
+        typeof this.geminiModel.generateContent !== "function"
+      ) {
+        console.error(
+          "Health check failed: Gemini model not properly initialized"
+        );
+        // Try to re-initialize the client
+        this.initializeGeminiClient();
+        this.geminiFailureCount++;
+        return;
+      }
+
+      const testPrompt = [{ text: "Health check" }];
+      const testResult = await this.geminiModel.generateContent(testPrompt);
+
+      if (testResult && testResult.response) {
+        console.log("Gemini connection health check passed");
+        // Reset failure counters on success
+        this.geminiFailureCount = 0;
+      } else {
+        throw new Error("Health check returned empty response");
+      }
+    } catch (error) {
+      console.error("Gemini connection health check failed:", error.message);
+      this.geminiFailureCount++;
+
+      // If we have consecutive failures, reset the client
+      if (this.geminiFailureCount >= 2) {
+        console.log(
+          "Multiple consecutive health check failures, resetting Gemini client"
+        );
+        await this.resetGeminiClient();
       }
     }
+  }
+
+  handleConnectionError(error) {
+    // Increment failure count
+    this.geminiFailureCount++;
+
+    // Check if it's a retriable connection error
+    const isConnectionReset =
+      error.code === "ECONNRESET" ||
+      error.message?.includes("ECONNRESET") ||
+      error.message?.includes("socket hang up") ||
+      error.message?.includes("connection reset");
+
+    const isTimeout =
+      error.message?.includes("timeout") ||
+      error.message?.includes("timed out");
+
+    // Log detailed error information
+    console.error("AI service connection error:", {
+      message: error.message,
+      code: error.code,
+      isConnectionReset,
+      isTimeout,
+      failureCount: this.geminiFailureCount,
+      stack: error.stack?.split("\n")[0],
+    });
+
+    // If we have too many failures or a non-retriable error, open the circuit
+    if (this.geminiFailureCount >= 5 || (!isConnectionReset && !isTimeout)) {
+      this.geminiCircuitOpen = true;
+      this.geminiLastFailure = new Date();
+      console.error(
+        "Opening circuit breaker due to multiple failures or non-retriable error"
+      );
+
+      // Set timeout to try closing circuit after cooling period
+      setTimeout(() => {
+        this.resetGeminiClient().catch((err) =>
+          console.error("Error in timed circuit reset:", err)
+        );
+      }, 2 * 60 * 1000); // 2 minute cooling period
+    }
+
+    // Return whether this error is retriable
+    return {
+      isRetriable: isConnectionReset || isTimeout,
+      isConnectionReset,
+      isTimeout,
+    };
+  }
+
+  async processImageForCropDisease(base64Image, chatId, messageText = "") {
+    // If circuit is open, check if we should try to close it
+    if (this.geminiCircuitOpen) {
+      const circuitOpenDuration = Date.now() - this.geminiLastFailure;
+      if (circuitOpenDuration < 1 * 60 * 1000) {
+        // 1 minute cooling period
+        throw new Error(
+          "AI service temporarily unavailable due to connection issues. Please try again later."
+        );
+      } else {
+        // Try to close the circuit if cooling period has passed
+        await this.resetGeminiClient();
+        if (this.geminiCircuitOpen) {
+          throw new Error(
+            "AI service connection could not be established. Please try again later."
+          );
+        }
+      }
+    }
+
+    let retryCount = 0;
+    const maxRetries = Math.min(this.geminiApiKeys.length * 2, 6);
+    let lastError = null;
+
+    // Use a loop for retry logic
+    while (retryCount <= maxRetries) {
+      try {
+        if (retryCount > 0) {
+          // Add increasing delay between retries with jitter
+          const baseDelay = Math.pow(2, retryCount - 1) * 500; // 500ms, 1s, 2s, 4s...
+          const jitter = Math.floor(Math.random() * 500); // Add up to 500ms of random jitter
+          const delay = baseDelay + jitter;
+
+          console.log(
+            `Retry #${retryCount} for image processing in ${delay}ms`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        // Create a timeout promise
+        const timeoutDuration = 30000; // 30 seconds
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(
+            () => reject(new Error("Request timed out after 30 seconds")),
+            timeoutDuration
+          );
+        });
+
+        // Prepare image data
+        const imageData = {
+          inlineData: {
+            data: base64Image,
+            mimeType: "image/jpeg",
+          },
+        };
+
+        // Prepare prompt with additional context
+        const prompt = [
+          {
+            text: `I need you to analyze this crop image and provide detailed information. ${
+              messageText ? 'The user says: "' + messageText + '"' : ""
+            } 
+            
+Please identify:
+1. The crop in the image
+2. Any diseases, pests, or nutritional deficiencies visible
+3. Detailed explanation of the identified issues
+4. Recommended treatment options with specific product names when available
+5. Preventive measures for future management
+
+Include environmental factors that might affect the diagnosis.
+Format your response clearly with headings and bullet points for easy reading.`,
+          },
+          imageData,
+        ];
+
+        // Race between model request and timeout
+        const modelResponsePromise = this.geminiModel.generateContent(prompt);
+        const result = await Promise.race([
+          modelResponsePromise,
+          timeoutPromise,
+        ]);
+
+        if (!result?.response?.text()) {
+          throw new Error("Empty response from Gemini API");
+        }
+
+        // Reset failure count on success
+        this.geminiFailureCount = 0;
+
+        // Return successful response
+        return result.response.text();
+      } catch (error) {
+        lastError = error;
+        console.error(
+          `Error in image processing (attempt ${retryCount + 1}/${
+            maxRetries + 1
+          }):`,
+          error.message
+        );
+
+        // Check if error is related to quota or rate limit
+        if (
+          error.message?.includes("quota") ||
+          error.message?.includes("rate limit") ||
+          error.message?.includes("429")
+        ) {
+          console.log("Quota or rate limit error detected, rotating API key");
+          const didRotate = this.rotateGeminiApiKey();
+          if (!didRotate) {
+            // If we couldn't rotate because we only have one key, wait longer
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+          retryCount++;
+          continue;
+        }
+
+        // Handle connection errors
+        const { isRetriable, isConnectionReset } =
+          this.handleConnectionError(error);
+
+        if (isRetriable) {
+          if (isConnectionReset) {
+            // For connection reset, explicitly reset the client
+            console.log(
+              "Connection reset error detected, resetting Gemini client before retry"
+            );
+            await this.resetGeminiClient();
+
+            // Add a cooldown period before retry
+            const cooldownTime = Math.pow(2, retryCount) * 1000;
+            await new Promise((resolve) => setTimeout(resolve, cooldownTime));
+          }
+
+          retryCount++;
+          continue;
+        }
+
+        // Non-retriable error, break the loop
+        break;
+      }
+    }
+
+    // If we've exhausted all retries
+    console.error("Image processing failed after maximum retries");
+    throw (
+      lastError || new Error("Failed to process image after multiple attempts")
+    );
+  }
+
+  async processMultipleImages(images, chatId, messageText = "") {
+    // If circuit is open, check if we should try to close it
+    if (this.geminiCircuitOpen) {
+      const circuitOpenDuration = Date.now() - this.geminiLastFailure;
+      if (circuitOpenDuration < 1 * 60 * 1000) {
+        // 1 minute cooling period
+        throw new Error(
+          "AI service temporarily unavailable due to connection issues. Please try again later."
+        );
+      } else {
+        // Try to close the circuit if cooling period has passed
+        await this.resetGeminiClient();
+        if (this.geminiCircuitOpen) {
+          throw new Error(
+            "AI service connection could not be established. Please try again later."
+          );
+        }
+      }
+    }
+
+    let retryCount = 0;
+    const maxRetries = Math.min(this.geminiApiKeys.length * 2, 6);
+    let lastError = null;
+
+    // Use a loop for retry logic
+    while (retryCount <= maxRetries) {
+      try {
+        if (retryCount > 0) {
+          // Add increasing delay between retries with jitter
+          const baseDelay = Math.pow(2, retryCount - 1) * 500; // 500ms, 1s, 2s, 4s...
+          const jitter = Math.floor(Math.random() * 500); // Add up to 500ms of random jitter
+          const delay = baseDelay + jitter;
+
+          console.log(
+            `Retry #${retryCount} for multiple images processing in ${delay}ms`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        // Create a timeout promise
+        const timeoutDuration = 45000; // 45 seconds for multiple images
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(
+            () => reject(new Error("Request timed out after 45 seconds")),
+            timeoutDuration
+          );
+        });
+
+        // Prepare image data
+        const imagePrompts = images.map((base64Image) => ({
+          inlineData: {
+            data: base64Image,
+            mimeType: "image/jpeg",
+          },
+        }));
+
+        // Prepare prompt with additional context
+        const prompt = [
+          {
+            text: `I need you to analyze these crop images and provide detailed information. ${
+              messageText ? 'The user says: "' + messageText + '"' : ""
+            } 
+            
+Please identify:
+1. The crops in the images
+2. Any diseases, pests, or nutritional deficiencies visible
+3. Detailed explanation of the identified issues
+4. Recommended treatment options with specific product names when available
+5. Preventive measures for future management
+
+Include environmental factors that might affect the diagnosis.
+Format your response clearly with headings and bullet points for easy reading.
+
+If there are multiple images, please analyze each one separately with clear sections for each image.`,
+          },
+          ...imagePrompts,
+        ];
+
+        // Race between model request and timeout
+        const modelResponsePromise = this.geminiModel.generateContent(prompt);
+        const result = await Promise.race([
+          modelResponsePromise,
+          timeoutPromise,
+        ]);
+
+        if (!result?.response?.text()) {
+          throw new Error("Empty response from Gemini API");
+        }
+
+        // Reset failure count on success
+        this.geminiFailureCount = 0;
+
+        // Return successful response
+        return result.response.text();
+      } catch (error) {
+        lastError = error;
+        console.error(
+          `Error in multiple images processing (attempt ${retryCount + 1}/${
+            maxRetries + 1
+          }):`,
+          error.message
+        );
+
+        // Check if error is related to quota or rate limit
+        if (
+          error.message?.includes("quota") ||
+          error.message?.includes("rate limit") ||
+          error.message?.includes("429")
+        ) {
+          console.log("Quota or rate limit error detected, rotating API key");
+          const didRotate = this.rotateGeminiApiKey();
+          if (!didRotate) {
+            // If we couldn't rotate because we only have one key, wait longer
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+          retryCount++;
+          continue;
+        }
+
+        // Handle connection errors
+        const { isRetriable, isConnectionReset } =
+          this.handleConnectionError(error);
+
+        if (isRetriable) {
+          if (isConnectionReset) {
+            // For connection reset, explicitly reset the client
+            console.log(
+              "Connection reset error detected, resetting Gemini client before retry"
+            );
+            await this.resetGeminiClient();
+
+            // Add a cooldown period before retry
+            const cooldownTime = Math.pow(2, retryCount) * 1000;
+            await new Promise((resolve) => setTimeout(resolve, cooldownTime));
+          }
+
+          retryCount++;
+          continue;
+        }
+
+        // Non-retriable error, break the loop
+        break;
+      }
+    }
+
+    // If we've exhausted all retries
+    console.error("Multiple images processing failed after maximum retries");
+    throw (
+      lastError || new Error("Failed to process images after multiple attempts")
+    );
   }
 
   async getChatResponse(
@@ -180,28 +578,29 @@ Provide the response in ${preferredLanguage}.`,
       try {
         // Extract key information from previous messages for context
         const previousContext = this._extractContextFromMessages(messages);
-        const conversationContext = messages
-          .map(
-            (msg) =>
-              `${msg.role === "user" ? "Human" : "Assistant"}: ${msg.content}`
-          )
-          .join("\n");
 
-        const systemPrompt = `You are an agricultural expert AI assistant. You must maintain conversation context and provide responses that directly relate to the ongoing discussion about farming and crops.
+        // Create a condensed conversation history that focuses on agriculture topics
+        const condensedHistory = this._createCondensedHistory(messages);
 
-Current conversation context:
-${conversationContext}
+        const systemPrompt = `You are an agricultural expert AI assistant specialized in farming, crops, plant diseases, and agricultural practices. You must maintain conversation context and provide responses that directly relate to the ongoing discussion.
 
-Previous context summary:
-${context.currentTopic ? `Current topic: ${context.currentTopic}` : ""}
+Previous conversation summary:
+${condensedHistory}
+
+Current context:
+${
+  context.currentTopic
+    ? `- Current topic: ${context.currentTopic}`
+    : "- No specific topic yet"
+}
 ${
   context.identifiedIssues?.length
-    ? `Identified issues: ${context.identifiedIssues.join(", ")}`
+    ? `- Identified issues: ${context.identifiedIssues.join(", ")}`
     : ""
 }
 ${
   context.suggestedSolutions?.length
-    ? `Suggested solutions: ${context.suggestedSolutions.join(", ")}`
+    ? `- Suggested solutions: ${context.suggestedSolutions.join(", ")}`
     : ""
 }
 
@@ -211,35 +610,32 @@ Environmental context:
 - Humidity: ${weather.humidity}%
 
 Important instructions:
-1. ALWAYS read and consider the previous messages in the conversation
-2. Provide responses that directly address the user's current question while maintaining context
-3. If discussing a problem mentioned earlier (like plant diseases), refer back to it
-4. Use consistent formatting:
-   - Use ** for bold text
-   - Use * for bullet points
-   - Use numbered lists for steps
-5. Structure your responses with clear sections
-6. Stay focused on the current agricultural topic being discussed
+1. ALWAYS reference previous messages and maintain continuity in your responses
+2. Provide detailed, actionable agricultural advice
+3. If the user mentions specific crops or issues, focus your advice on those
+4. Structure responses with clear sections and bullet points
+5. Include scientific explanations and practical solutions
+6. Refer back to previously identified issues if relevant to the current question
 
-Focus areas:
+Focus on agricultural topics:
+- Crop cultivation techniques and best practices
 - Disease identification and treatment
 - Pest management
 - Plant health diagnosis
-- Treatment recommendations
-- Preventive measures
+- Soil management and improvement strategies
+- Irrigation and water management
+- Sustainable and organic farming methods
+- Seasonal farming advice
 
-Provide your response in ${preferredLanguage}.`;
+Respond in ${preferredLanguage}.`;
 
         const cleanedMessages = [
           {
             role: "system",
             content: systemPrompt,
           },
-          // Include all messages for context
-          ...messages.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
+          // Include all messages for context, but limit total token count
+          ...this._getLimitedMessages(messages, 15),
         ];
 
         const completion = await this.groq.chat.completions.create({
@@ -279,11 +675,130 @@ Provide your response in ${preferredLanguage}.`;
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           }
+        } else if (
+          error.status === 400 &&
+          error.error?.error?.code === "model_decommissioned"
+        ) {
+          console.error("Model error:", error.error?.error?.message);
+
+          // Try with fallback model
+          console.log(`Trying fallback model: ${this.groqFallbackModel}`);
+          try {
+            const systemPrompt = `You are an agricultural expert AI assistant. Provide helpful farming advice.`;
+
+            const completion = await this.groq.chat.completions.create({
+              messages: [
+                { role: "system", content: systemPrompt },
+                {
+                  role: "user",
+                  content: messages[messages.length - 1].content,
+                },
+              ],
+              model: this.groqFallbackModel,
+              temperature: 0.7,
+              max_tokens: 2048,
+            });
+
+            const response = completion.choices[0]?.message?.content;
+            return {
+              response,
+              context: context,
+            };
+          } catch (fallbackError) {
+            console.error("Fallback model also failed:", fallbackError);
+            throw new Error(
+              "All available models failed to generate a response"
+            );
+          }
         }
         throw error;
       }
     }
     throw new Error("Max retries exceeded for rate limit");
+  }
+
+  _getLimitedMessages(messages, maxMessages = 15) {
+    // If messages are fewer than the max, return all
+    if (messages.length <= maxMessages) {
+      return messages;
+    }
+
+    // Otherwise get the most recent messages, but always include the first system message if present
+    const recentMessages = messages.slice(-maxMessages);
+
+    // If first message was a system message and got cut off, add it back
+    if (
+      messages.length > maxMessages &&
+      messages[0].role === "system" &&
+      recentMessages[0].role !== "system"
+    ) {
+      return [messages[0], ...recentMessages];
+    }
+
+    return recentMessages;
+  }
+
+  _createCondensedHistory(messages) {
+    // Skip if there are fewer than 3 messages
+    if (messages.length < 3) {
+      return "New conversation about agriculture.";
+    }
+
+    // Create a simplified history, focusing on agricultural topics
+    let condensed = [];
+
+    messages.forEach((msg, index) => {
+      // Skip system messages
+      if (msg.role === "system") return;
+
+      const content = msg.content.toLowerCase();
+
+      // Check if message contains agricultural keywords
+      const isAgriRelated = this._isAgricultureRelated(content);
+
+      if (isAgriRelated || index >= messages.length - 3) {
+        const shortContent =
+          msg.content.length > 100
+            ? msg.content.substring(0, 100) + "..."
+            : msg.content;
+
+        condensed.push(
+          `${msg.role === "user" ? "Human" : "Assistant"}: ${shortContent}`
+        );
+      }
+    });
+
+    // Only keep the last 5 interactions for brevity
+    if (condensed.length > 5) {
+      condensed = condensed.slice(-5);
+    }
+
+    return condensed.join("\n");
+  }
+
+  _isAgricultureRelated(text) {
+    const keywords = [
+      "crop",
+      "farm",
+      "plant",
+      "soil",
+      "harvest",
+      "seed",
+      "fertilizer",
+      "pesticide",
+      "irrigation",
+      "disease",
+      "pest",
+      "weed",
+      "organic",
+      "agriculture",
+      "yield",
+      "growth",
+      "nutrient",
+      "moisture",
+    ];
+
+    return keywords.some((word) => text.includes(word));
   }
 
   _extractContextFromMessages(messages) {

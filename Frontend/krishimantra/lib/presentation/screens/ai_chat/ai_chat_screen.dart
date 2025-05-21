@@ -13,6 +13,8 @@ import '../../controllers/ai_chat_controller.dart';
 import '../../widgets/chat_message_bubble.dart';
 import '../../../data/models/ai_chat.dart';
 import '../../../data/models/ai_chat_message.dart';
+import '../../../data/services/api_service.dart';
+import '../../widgets/error_widgets.dart';
 
 class AIChatScreen extends StatefulWidget {
   const AIChatScreen({Key? key}) : super(key: key);
@@ -155,7 +157,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 }),
 
                 // Input area
-                _buildInputArea(),
+                _buildInputBox(),
               ],
             ),
           ),
@@ -373,57 +375,63 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.green.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.agriculture,
-              size: 40,
-              color: AppColors.green,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            "Farmer's AI Assistant",
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Text(
-              "Ask farming questions, get crop advice, or upload images of plants for disease analysis.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.center,
+    return SingleChildScrollView(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildSuggestionChip("What crops grow best in clay soil?"),
-              _buildSuggestionChip("How to prevent tomato blight?"),
-              _buildSuggestionChip("Best practices for organic farming"),
-              _buildSuggestionChip("When to harvest wheat?"),
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.green.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.agriculture,
+                  size: 40,
+                  color: AppColors.green,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                "Farmer's AI Assistant",
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                child: Text(
+                  "Ask farming questions, get crop advice, or upload images of plants for disease analysis.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: [
+                  _buildSuggestionChip("What crops grow best in clay soil?"),
+                  _buildSuggestionChip("How to prevent tomato blight?"),
+                  _buildSuggestionChip("Best practices for organic farming"),
+                  _buildSuggestionChip("When to harvest wheat?"),
+                ],
+              ),
+              const SizedBox(height: 16),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -453,145 +461,456 @@ class _AIChatScreenState extends State<AIChatScreen> {
     );
   }
 
-  Widget _buildInputArea() {
-    return Obx(() => Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                spreadRadius: 1,
-                blurRadius: 3,
-                offset: const Offset(0, -1),
-              ),
-            ],
-            border: Border(
-              top: BorderSide(color: Colors.grey[200]!),
-            ),
+  Widget _buildInputBox() {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
           ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.camera_alt),
-                onPressed: controller.remainingMessages.value > 0
-                    ? _pickImage
-                    : () => _showLimitReachedDialog(),
-                color: controller.remainingMessages.value > 0
-                    ? AppColors.green
-                    : Colors.grey,
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Selected images preview
+          Obx(() {
+            if (controller.selectedImages.isEmpty)
+              return const SizedBox.shrink();
+
+            return Container(
+              height: 90,
+              margin: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${controller.selectedImages.length} ${controller.selectedImages.length == 1 ? 'image' : 'images'} selected',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => controller.selectedImages.clear(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Expanded(
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: controller.selectedImages.length,
+                      itemBuilder: (context, index) {
+                        return Container(
+                          width: 70,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.grey.shade300,
+                              width: 1,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.file(
+                                  controller.selectedImages[index],
+                                  fit: BoxFit.cover,
+                                ),
+                                Positioned(
+                                  top: 2,
+                                  right: 2,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      final updatedList = [
+                                        ...controller.selectedImages
+                                      ];
+                                      updatedList.removeAt(index);
+                                      controller.selectedImages.value =
+                                          updatedList;
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.5),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 12,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
+            );
+          }),
+
+          // Error widget for network issues during upload
+          Obx(() {
+            if (!controller.hasNetworkError.value) {
+              return const SizedBox.shrink();
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.red, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Server Connection Error',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'The message service is currently unavailable. This might be due to server maintenance or high traffic.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => controller.selectedImages.clear(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.all(4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => controller.retryLastFailedRequest(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.all(4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          backgroundColor: AppColors.green.withOpacity(0.1),
+                        ),
+                        child: Text(
+                          'Retry',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+
+          // Input area with message field and buttons
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Image/Camera picker button
+              InkWell(
+                onTap: () {
+                  _showImageSourceOptions(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey.shade100,
+                  ),
+                  child: const Icon(Icons.photo_library,
+                      color: Colors.grey, size: 22),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Message text field
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.grey[300]!),
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: TextField(
                     controller: messageController,
-                    decoration: InputDecoration(
-                      hintText: controller.remainingMessages.value > 0
-                          ? 'Message Farmer AI...'
-                          : 'Daily message limit reached',
+                    minLines: 1,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      hintText: 'Type a message',
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                     ),
-                    enabled: controller.remainingMessages.value > 0,
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) {
+                      // Force UI update for send button
+                      setState(() {});
+                    },
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Material(
-                color: messageController.text.trim().isNotEmpty &&
-                        controller.remainingMessages.value > 0
-                    ? AppColors.green
-                    : Colors.grey[300],
-                borderRadius: BorderRadius.circular(50),
-                child: InkWell(
-                  onTap: messageController.text.trim().isNotEmpty &&
-                          controller.remainingMessages.value > 0
-                      ? _sendMessage
-                      : null,
-                  borderRadius: BorderRadius.circular(50),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    child: Icon(
-                      Icons.send,
-                      color: messageController.text.trim().isNotEmpty &&
-                              controller.remainingMessages.value > 0
-                          ? Colors.white
-                          : Colors.grey[500],
-                      size: 20,
-                    ),
+              const SizedBox(width: 10),
+
+              // Send button
+              InkWell(
+                onTap: controller.isAnalyzing.value
+                    ? null
+                    : () async {
+                        // Handle image upload + optional text
+                        if (controller.selectedImages.isNotEmpty) {
+                          try {
+                            await controller.processSelectedImages(
+                                messageController.text.trim().isNotEmpty
+                                    ? messageController.text.trim()
+                                    : null);
+                            messageController.clear();
+                          } catch (e) {
+                            _handleImageProcessingError(e);
+                          }
+                          return;
+                        }
+
+                        // Handle text-only message
+                        if (messageController.text.trim().isNotEmpty) {
+                          try {
+                            await controller
+                                .sendMessage(messageController.text.trim());
+                          } catch (e) {
+                            // Handle any message sending errors
+                            Get.snackbar(
+                              'Error',
+                              'Failed to send message. Please try again.',
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: Colors.red,
+                              colorText: Colors.white,
+                            );
+                          }
+                        }
+
+                        // Clear the text field after sending
+                        messageController.clear();
+                      },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: controller.isAnalyzing.value
+                        ? Colors.grey
+                        : AppColors.green,
                   ),
+                  child: controller.isAnalyzing.value
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Icon(
+                          controller.selectedImages.isNotEmpty ||
+                                  messageController.text.isNotEmpty
+                              ? Icons.send
+                              : Icons.mic,
+                          color: Colors.white,
+                          size: 22,
+                        ),
                 ),
               ),
             ],
           ),
-        ));
-  }
 
-  Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 80,
-      maxWidth: 1200,
-      maxHeight: 1200,
-    );
+          // Rate limit warning
+          Obx(() {
+            if (controller.isRateLimited.value) {
+              final remaining = controller.rateLimitReset.value -
+                  (DateTime.now().millisecondsSinceEpoch ~/ 1000);
+              if (remaining > 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Rate limited. Try again in ${remaining}s',
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                );
+              }
+            }
 
-    if (image != null) {
-      await controller.analyzeCropImage(File(image.path));
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom();
-      });
-    }
-  }
+            if (controller.remainingMessages.value <= 0) {
+              return const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Daily message limit reached. Try again tomorrow.',
+                  style: TextStyle(color: Colors.orange, fontSize: 12),
+                ),
+              );
+            }
 
-  void _sendMessage() async {
-    final message = messageController.text.trim();
-    if (message.isEmpty) return;
-
-    messageController.clear(); // Clear immediately for better UX
-
-    try {
-      await controller.sendMessage(message);
-
-      // Scroll to bottom after sending message
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom();
-      });
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to send message',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-    }
-  }
-
-  void _showLimitReachedDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Daily Message Limit Reached'),
-        content: const Text(
-          'You have used all your free daily messages. Please wait until tomorrow for your limit to reset.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
+            return const SizedBox.shrink();
+          }),
         ],
+      ),
+    );
+  }
+
+  // Show image source options - camera or gallery
+  void _showImageSourceOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select Image Source',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Camera Option
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      controller.pickMultipleImages(fromCamera: true);
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.camera_alt,
+                            color: AppColors.green,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Camera',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Gallery Option
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      controller.pickMultipleImages(fromCamera: false);
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.photo_library,
+                            color: AppColors.green,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Gallery',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'You can select up to ${controller.maxImageCount.value} images at once',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -700,5 +1019,148 @@ class _AIChatScreenState extends State<AIChatScreen> {
         ],
       ),
     );
+  }
+
+  // Add a method to handle displaying error messages with retry option
+  void _showErrorWithRetry(String title, String message, VoidCallback onRetry) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title, style: const TextStyle(color: Colors.red)),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onRetry();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.green),
+            child: const Text('Retry', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget to display when an image upload error occurs
+  Widget _buildNetworkErrorWidget({required VoidCallback onRetry}) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 24),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Network Error',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Failed to connect to server. Please check your internet connection and try again.',
+            style: TextStyle(fontSize: 14),
+          ),
+          SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  controller.selectedImages.clear();
+                  setState(() {});
+                },
+                child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+              ),
+              SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: onRetry,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text('Retry', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Update the _handleImageProcessingError method
+  void _handleImageProcessingError(dynamic error) {
+    setState(() {
+      controller.isAnalyzing.value = false;
+      controller.selectedImages.clear();
+    });
+
+    // Use our new error handling for better user experience
+    if (error is ConnectionResetException ||
+        error is ServiceUnavailableException ||
+        error is RequestTimeoutException) {
+      // Use snackbar instead of dialog for network errors
+      // This is less intrusive and consistent with our overall approach
+      showNetworkErrorSnackbar(error);
+
+      // Update the network error state for UI display
+      controller.hasNetworkError.value = true;
+    } else {
+      // For other errors, use a snackbar
+      showNetworkErrorSnackbar(error);
+    }
+  }
+
+  // Update the _sendMessage method to better handle connection errors
+  Future<void> _sendMessage() async {
+    if (controller.isAnalyzing.value) return;
+
+    final message = messageController.text.trim();
+
+    if (message.isEmpty && controller.selectedImages.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      controller.isAnalyzing.value = true;
+    });
+
+    try {
+      // ... existing code for message sending ...
+    } catch (error) {
+      // Handle general errors for text messages
+      _handleImageProcessingError(error);
+    }
+  }
+
+  // Update the _analyzeImage method to better handle connection errors
+  Future<void> _analyzeImage(bool isMultiple) async {
+    try {
+      // ... existing code for image analysis ...
+    } catch (error) {
+      _handleImageProcessingError(error);
+    }
   }
 }

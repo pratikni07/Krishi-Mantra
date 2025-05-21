@@ -1,0 +1,122 @@
+[
+  {
+    "description": "How to identify healthy soil for farming #HealthySoil #FarmingTips",
+    "mediaUrl": "https://example.com/videos/soil-health-test.mp4",
+    "location": {
+      "latitude": 28.6139,
+      "longitude": 77.209
+    }
+  },
+  {
+    "description": "Efficient water management techniques for crops #WaterConservation #SustainableFarming",
+    "mediaUrl": "https://example.com/videos/water-management.mp4",
+    "location": {
+      "latitude": 19.076,
+      "longitude": 72.8777
+    }
+  },
+  {
+    "description": "Step-by-step guide to natural pest control #OrganicFarming #PestControl",
+    "mediaUrl": "https://example.com/videos/natural-pest-control.mp4",
+    "location": {
+      "latitude": 12.9716,
+      "longitude": 77.5946
+    }
+  },
+  {
+    "description": "Implementing crop rotation correctly #CropRotation #SoilHealth",
+    "mediaUrl": "https://example.com/videos/crop-rotation-guide.mp4",
+    "location": {
+      "latitude": 26.8467,
+      "longitude": 80.9462
+    }
+  },
+  {
+    "description": "Modern tractors and their features #ModernFarming #AgriTech",
+    "mediaUrl": "https://example.com/videos/modern-tractors.mp4",
+    "location": {
+      "latitude": 17.385,
+      "longitude": 78.4867
+    }
+  },
+  {
+    "description": "How to make low-cost compost at home #Composting #OrganicFarming",
+    "mediaUrl": "https://example.com/videos/homemade-compost.mp4",
+    "location": {
+      "latitude": 30.901,
+      "longitude": 75.8573
+    }
+  },
+  {
+    "description": "Preparing soil for winter crops #WinterFarming #SoilPreparation",
+    "mediaUrl": "https://example.com/videos/winter-soil-prep.mp4",
+    "location": {
+      "latitude": 23.0225,
+      "longitude": 72.5714
+    }
+  },
+  {
+    "description": "Seed selection tips for higher yield #SeedSelection #HighYield",
+    "mediaUrl": "https://example.com/videos/seed-selection.mp4",
+    "location": {
+      "latitude": 13.0827,
+      "longitude": 80.2707
+    }
+  },
+  {
+    "description": "How to test soil pH with household items #SoilpH #DIYFarming",
+    "mediaUrl": "https://example.com/videos/soil-ph-test.mp4",
+    "location": {
+      "latitude": 22.5726,
+      "longitude": 88.3639
+    }
+  },
+  {
+    "description": "Proper irrigation techniques for vegetables #Irrigation #VegetableFarming",
+    "mediaUrl": "https://example.com/videos/vegetable-irrigation.mp4",
+    "location": {
+      "latitude": 18.5204,
+      "longitude": 73.8567
+    }
+  },
+  {
+    "description": "Plant spacing guide for maximum yield #PlantSpacing #FarmEfficiency",
+    "mediaUrl": "https://example.com/videos/plant-spacing.mp4",
+    "location": {
+      "latitude": 11.0168,
+      "longitude": 76.9558
+    }
+  },
+  {
+    "description": "Beginner's guide to hydroponic farming #Hydroponics #ModernFarming",
+    "mediaUrl": "https://example.com/videos/hydroponics-basics.mp4",
+    "location": {
+      "latitude": 20.2961,
+      "longitude": 85.8245
+    }
+  },
+  {
+    "description": "How to identify common plant diseases #PlantDiseases #CropHealth",
+    "mediaUrl": "https://example.com/videos/plant-diseases.mp4",
+    "location": {
+      "latitude": 27.1767,
+      "longitude": 78.0081
+    }
+  },
+  {
+    "description": "Setting up drip irrigation for fruit trees #DripIrrigation #FruitFarming",
+    "mediaUrl": "https://example.com/videos/drip-for-trees.mp4",
+    "location": {
+      "latitude": 15.4989,
+      "longitude": 73.8278
+    }
+  },
+  {
+    "description": "Organic ways to improve soil fertility #SoilFertility #OrganicFarming",
+    "mediaUrl": "https://example.com/videos/soil-fertility.mp4",
+    "location": {
+      "latitude": 24.5854,
+      "longitude": 73.7125
+    }
+  }
+]

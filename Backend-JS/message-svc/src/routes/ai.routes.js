@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const AIController = require("../controllers/ai.controller");
 const createRateLimiter = require("../middleware/rate-limit.middleware");
+const multer = require("multer");
 
 // Create specific rate limiters for different endpoints
 const messageLimiter = createRateLimiter({
@@ -30,9 +31,34 @@ const defaultLimiter = createRateLimiter({
   max: 100, // 100 requests per 15 minutes
 });
 
+// Configure multer for memory storage (for image processing)
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: process.env.MAX_FILE_SIZE || 10 * 1024 * 1024, // 10MB limit
+  },
+});
+
 // Apply rate limiters to routes
 router.post("/chat", messageLimiter, AIController.sendMessage);
-router.post("/analyze-image", imageLimiter, AIController.analyzeCropImage);
+
+// Single image upload route
+router.post(
+  "/analyze-image",
+  imageLimiter,
+  upload.single("image"), // Field name must be "image"
+  AIController.analyzeCropImage
+);
+
+// Multiple image upload route
+router.post(
+  "/analyze-multi-images",
+  imageLimiter,
+  upload.array("images", 5), // Field name must be "images", max 5 files
+  AIController.analyzeMultipleImages
+);
+
 router.get("/history", defaultLimiter, AIController.getChatHistory);
 router.get("/chat/:chatId", defaultLimiter, AIController.getChatById);
 router.patch(

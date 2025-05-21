@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:get/get.dart';
 
 import '../../../data/services/language_service.dart';
+import '../../../core/utils/translation_manager.dart';
 import '../../../routes/app_routes.dart';
+import '../../../core/utils/language_helper.dart';
 
 // LanguageData class remains the same
 class LanguageData {
@@ -27,13 +29,15 @@ class LanguageSelectionScreen extends StatefulWidget {
 }
 
 class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, TranslationMixin {
   late AnimationController _earthController;
-  late LanguageService _languageService;
-  String _chooseLanguageText = 'Choose Your Language';
-  String _selectPreferredText = 'Select the language you prefer';
-  String _continueButtonText = 'Continue';
-  String _selectLanguageText = 'Select a language';
+  String? selectedLanguage;
+
+  // Translation keys
+  static const String KEY_CHOOSE_LANGUAGE = 'choose_language';
+  static const String KEY_SELECT_PREFERRED = 'select_preferred';
+  static const String KEY_CONTINUE = 'continue_button';
+  static const String KEY_SELECT_LANGUAGE = 'select_language';
 
   final List<LanguageData> languages = [
     LanguageData(
@@ -68,8 +72,6 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
     ),
   ];
 
-  String? selectedLanguage;
-
   @override
   void initState() {
     super.initState();
@@ -78,32 +80,22 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
       vsync: this,
     )..repeat();
     _initializeLanguage();
+    _registerTranslations();
+  }
+
+  void _registerTranslations() {
+    registerTranslation(KEY_CHOOSE_LANGUAGE, 'Choose Your Language');
+    registerTranslation(KEY_SELECT_PREFERRED, 'Select the language you prefer');
+    registerTranslation(KEY_CONTINUE, 'Continue');
+    registerTranslation(KEY_SELECT_LANGUAGE, 'Select a language');
   }
 
   Future<void> _initializeLanguage() async {
-    _languageService = await LanguageService.getInstance();
+    final languageService = await LanguageService.getInstance();
     setState(() {
-      selectedLanguage = _languageService.getLanguage();
+      selectedLanguage = languageService.getLanguage();
     });
-    await _updateTranslations();
-  }
-
-  Future<void> _updateTranslations() async {
-    if (selectedLanguage == null) return;
-
-    final translations = await Future.wait([
-      _languageService.translate('Choose Your Language'),
-      _languageService.translate('Select the language you prefer'),
-      _languageService.translate('Continue'),
-      _languageService.translate('Select a language'),
-    ]);
-
-    setState(() {
-      _chooseLanguageText = translations[0];
-      _selectPreferredText = translations[1];
-      _continueButtonText = translations[2];
-      _selectLanguageText = translations[3];
-    });
+    // The TranslationMixin will handle initialization
   }
 
   @override
@@ -150,7 +142,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            _chooseLanguageText,
+            getTranslation(KEY_CHOOSE_LANGUAGE),
             style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -159,7 +151,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
           ),
           const SizedBox(height: 4),
           Text(
-            _selectPreferredText,
+            getTranslation(KEY_SELECT_PREFERRED),
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[600],
@@ -291,7 +283,11 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
               ? () async {
                   final languageService = await LanguageService.getInstance();
                   await languageService.saveLanguage(selectedLanguage!);
-                  await _updateTranslations();
+
+                  // Use the translation manager to notify other screens
+                  await TranslationManager.instance
+                      .changeLanguage(selectedLanguage!);
+
                   if (mounted) {
                     Get.offAllNamed(AppRoutes.PHONE_NUMBER);
                   }
@@ -308,8 +304,8 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
           ),
           child: Text(
             selectedLanguage != null
-                ? _continueButtonText
-                : _selectLanguageText,
+                ? getTranslation(KEY_CONTINUE)
+                : getTranslation(KEY_SELECT_LANGUAGE),
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -324,6 +320,8 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
     setState(() {
       selectedLanguage = language;
     });
-    await _updateTranslations();
+
+    // Update translations when language changes
+    await updateTranslations();
   }
 }

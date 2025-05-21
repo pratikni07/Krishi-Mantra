@@ -1,0 +1,1 @@
+// This file is just a re-export of the TranslationMixin from language_helper.dart\n// This prevents having two implementations and maintains backward compatibility\nexport '../../core/utils/language_helper.dart' show TranslationMixin;
