@@ -1,24 +1,62 @@
-const  mongoose  = require("mongoose");
+const mongoose = require("mongoose");
 
 const reelAdSchema = new mongoose.Schema({
-    title:{
-        type:String,
+  title: {
+    type: String,
+    required: true,
+  },
+  videoUrl: {
+    type: String,
+    required: true,
+  },
+  popUpView: {
+    enabled: {
+      type: Boolean,
+      default: false,
     },
-    content:{
-        type:String,
+    productId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MarketplaceProduct",
     },
-    dirURL:{
-        type:String,
+    type: {
+      type: String,
+      enum: ["marketplace", "posts"],
     },
-    impression:{
-        type:Number
+    image: {
+      type: String,
     },
-    views:{
-        type:Number
+    popupTitle: {
+      type: String,
     },
-    createdAt:{
-        type:String,
-    }
-})
+  },
+  impressions: {
+    type: Number,
+    default: 0,
+  },
+  views: {
+    type: Number,
+    default: 0,
+  },
+  viewTracking: [
+    {
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      viewedAt: {
+        type: Date,
+        default: Date.now,
+      },
+      duration: {
+        type: Number,
+        default: 0,
+      },
+    },
+  ],
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
 
-module.exports = mongoose.model("ReelAds",reelAdSchema)
+module.exports = mongoose.model("ReelAds", reelAdSchema);

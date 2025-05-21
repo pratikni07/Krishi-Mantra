@@ -16,6 +16,7 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../../data/services/language_service.dart';
 import 'package:krishimantra/core/utils/error_handler.dart';
 import '../../../utils/image_utils.dart';
+import '../../../core/utils/language_helper.dart';
 
 import '../../controllers/ads_controller.dart';
 import 'widgets/services.dart';
@@ -30,7 +31,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   final ScrollController _scrollController = ScrollController();
   bool _showWeather = true;
   String _location = "Fetching location...";
@@ -52,34 +53,54 @@ class _HomeScreenState extends State<HomeScreen> {
   final FeedController _feedController = Get.find<FeedController>();
   final WeatherService _weatherService = WeatherService();
   Position? _currentPosition;
-  late LanguageService _languageService;
-  String servicesText = '🌾 Services';
-  String locationServiceDisabledText = "Location Service Disabled";
-  String enableLocationText = "Please enable location services.";
-  String permissionDeniedText = "Permission Denied";
-  String allowLocationText =
-      "Please allow location access to use this feature.";
-  String permissionDeniedForeverText = "Permission Denied Forever";
-  String goToSettingsText =
-      "You have denied location permission permanently. Go to settings to enable it.";
-  String errorFetchingLocationText = "Error fetching location";
-  String closeText = "Close";
   List<Map<String, String>> _testimonials = [];
-  String testimonialsText = "What Farmers Say";
-  String shareAppText =
-      "Share KrishiMantra with more farmers and enjoy our free services. Let's grow with technology together!";
+
+  // Translation keys
+  static const String KEY_SERVICES = 'services';
+  static const String KEY_LOCATION_DISABLED = 'location_disabled';
+  static const String KEY_ENABLE_LOCATION = 'enable_location';
+  static const String KEY_PERMISSION_DENIED = 'permission_denied';
+  static const String KEY_ALLOW_LOCATION = 'allow_location';
+  static const String KEY_PERMISSION_DENIED_FOREVER =
+      'permission_denied_forever';
+  static const String KEY_GO_TO_SETTINGS = 'go_to_settings';
+  static const String KEY_ERROR_FETCHING_LOCATION = 'error_fetching_location';
+  static const String KEY_CLOSE = 'close';
+  static const String KEY_TESTIMONIALS = 'testimonials';
+  static const String KEY_SHARE_APP = 'share_app';
+  static const String KEY_FETCHING_LOCATION = 'fetching_location';
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
     _loadUserData();
-    _initializeLanguage();
+    _registerTranslations();
     _checkLocationPermission();
     _initializeAds();
     _initializeSlider();
     _feedController.fetchTopFeeds();
     _initializeTestimonials();
+  }
+
+  void _registerTranslations() {
+    registerTranslation(KEY_SERVICES, '🌾 Services');
+    registerTranslation(KEY_LOCATION_DISABLED, 'Location Service Disabled');
+    registerTranslation(
+        KEY_ENABLE_LOCATION, 'Please enable location services.');
+    registerTranslation(KEY_PERMISSION_DENIED, 'Permission Denied');
+    registerTranslation(KEY_ALLOW_LOCATION,
+        'Please allow location access to use this feature.');
+    registerTranslation(
+        KEY_PERMISSION_DENIED_FOREVER, 'Permission Denied Forever');
+    registerTranslation(KEY_GO_TO_SETTINGS,
+        'You have denied location permission permanently. Go to settings to enable it.');
+    registerTranslation(KEY_ERROR_FETCHING_LOCATION, 'Error fetching location');
+    registerTranslation(KEY_CLOSE, 'Close');
+    registerTranslation(KEY_TESTIMONIALS, 'What Farmers Say');
+    registerTranslation(KEY_SHARE_APP,
+        "Share KrishiMantra with more farmers and enjoy our free services. Let's grow with technology together!");
+    registerTranslation(KEY_FETCHING_LOCATION, "Fetching location...");
   }
 
   void _onScroll() {
@@ -99,53 +120,38 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _initializeLanguage() async {
-    _languageService = await LanguageService.getInstance();
-    if (mounted) {
-      await _updateTranslations();
-    }
+  Future<void> _initializeTestimonials() async {
+    // Example testimonials - in a real app, these might come from an API
+    _testimonials = [
+      {
+        'name': 'Rajesh Kumar',
+        'location': 'Maharashtra',
+        'content':
+            'KrishiMantra has helped me increase my crop yield by 30%. The weather predictions are very accurate!',
+      },
+      {
+        'name': 'Anita Patel',
+        'location': 'Gujarat',
+        'content':
+            'I love the marketplace feature. It helped me sell my produce directly to buyers at better prices.',
+      },
+      {
+        'name': 'Suresh Singh',
+        'location': 'Punjab',
+        'content':
+            'The crop disease detection feature saved my entire wheat field this season.',
+      }
+    ];
+
+    // Translate testimonial content
+    await _translateTestimonials();
   }
 
-  Future<void> _updateTranslations() async {
-    final translations = await Future.wait([
-      _languageService.translate('🌾 Services'),
-      _languageService.translate('Location Service Disabled'),
-      _languageService.translate('Please enable location services.'),
-      _languageService.translate('Permission Denied'),
-      _languageService
-          .translate('Please allow location access to use this feature.'),
-      _languageService.translate('Permission Denied Forever'),
-      _languageService.translate(
-          'You have denied location permission permanently. Go to settings to enable it.'),
-      _languageService.translate('Error fetching location'),
-      _languageService.translate('Close'),
-      _languageService.translate('What Farmers Say'),
-      _languageService.translate(
-          'Share KrishiMantra with more farmers and enjoy our free services. Let\'s grow with technology together!'),
-    ]);
-
-    if (!mounted) return;
-
-    setState(() {
-      servicesText = translations[0];
-      locationServiceDisabledText = translations[1];
-      enableLocationText = translations[2];
-      permissionDeniedText = translations[3];
-      allowLocationText = translations[4];
-      permissionDeniedForeverText = translations[5];
-      goToSettingsText = translations[6];
-      errorFetchingLocationText = translations[7];
-      closeText = translations[8];
-      testimonialsText = translations[9];
-      shareAppText = translations[10];
-    });
-
-    // Translate testimonials
+  Future<void> _translateTestimonials() async {
     for (var i = 0; i < _testimonials.length; i++) {
       _testimonials[i]['content'] =
-          await _languageService.translate(_testimonials[i]['content'] ?? '');
+          await translate(_testimonials[i]['content'] ?? '');
     }
-    
     if (mounted) {
       setState(() {});
     }
@@ -160,7 +166,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         setState(() => _hasLocationPermission = false);
         return;
       }
@@ -178,7 +185,8 @@ class _HomeScreenState extends State<HomeScreen> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) {
-          _showLocationDialog(locationServiceDisabledText, enableLocationText);
+          _showLocationDialog(getTranslation(KEY_LOCATION_DISABLED),
+              getTranslation(KEY_ENABLE_LOCATION));
         }
         return;
       }
@@ -188,7 +196,8 @@ class _HomeScreenState extends State<HomeScreen> {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           if (mounted) {
-            _showLocationDialog(permissionDeniedText, allowLocationText);
+            _showLocationDialog(getTranslation(KEY_PERMISSION_DENIED),
+                getTranslation(KEY_ALLOW_LOCATION));
           }
           return;
         }
@@ -196,7 +205,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (permission == LocationPermission.deniedForever) {
         if (mounted) {
-          _showLocationDialog(permissionDeniedForeverText, goToSettingsText);
+          _showLocationDialog(getTranslation(KEY_PERMISSION_DENIED_FOREVER),
+              getTranslation(KEY_GO_TO_SETTINGS));
         }
         return;
       }
@@ -205,13 +215,16 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _hasLocationPermission = true);
       _fetchLocation();
     } catch (e) {
-      setState(() => _hasLocationPermission = false);
+      if (mounted) {
+        _showLocationDialog(
+            getTranslation(KEY_ERROR_FETCHING_LOCATION), e.toString());
+      }
     }
   }
 
   Future<void> _fetchLocation() async {
     if (!_hasLocationPermission) return;
-    
+
     try {
       Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
@@ -246,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _location = errorFetchingLocationText;
+          _location = getTranslation(KEY_ERROR_FETCHING_LOCATION);
         });
       }
     }
@@ -254,16 +267,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchWeatherData() async {
     if (_currentPosition == null) return;
-    
+
     try {
       if (mounted) {
         setState(() => _isLoadingWeather = true);
       }
-      
-      final weatherData = await _weatherService.getWeatherData(_currentPosition!);
-      
+
+      final weatherData =
+          await _weatherService.getWeatherData(_currentPosition!);
+
       if (!mounted) return;
-      
+
       setState(() {
         _temperature = weatherData['temperature'];
         _humidity = weatherData['humidity'];
@@ -283,9 +297,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final homeScreenAds = await _adsController.fetchHomeScreenAds();
       final splashAds = await _adsController.fetchSplashAds();
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         _homeScreenAds = homeScreenAds;
         _splashAds = splashAds;
@@ -299,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _checkAndShowSplashAd() async {
     if (!mounted) return;
-    
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final lastShownTime = prefs.getInt(LAST_SPLASH_SHOWN_KEY) ?? 0;
@@ -416,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         side: BorderSide(color: Colors.grey),
                       ),
                     ),
-                    child: Text(closeText),
+                    child: Text(getTranslation(KEY_CLOSE)),
                   ),
                 ],
               ),
@@ -433,7 +447,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => LocationDialog(
         title: title,
         message: message,
-        showSettingsButton: title == permissionDeniedForeverText,
+        showSettingsButton:
+            title == getTranslation(KEY_PERMISSION_DENIED_FOREVER),
       ),
     );
   }
@@ -455,9 +470,9 @@ class _HomeScreenState extends State<HomeScreen> {
     while (retryCount < maxRetries) {
       try {
         final sliderData = await _adsController.fetchHomeScreenSlider();
-        
+
         if (!mounted) return;
-        
+
         _homeScreenSlider = sliderData;
         return; // Success, exit the function
       } catch (e) {
@@ -494,53 +509,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _initializeTestimonials() {
-    _testimonials = [
-      {
-        'name': 'Rajesh Patel',
-        'village': 'Ahmedabad, Gujarat',
-        'content':
-            'KrishiMantra helped me understand the best time to sow my wheat crop. My yield increased by 20% this season!'
-      },
-      {
-        'name': 'Sunita Devi',
-        'village': 'Jaipur, Rajasthan',
-        'content':
-            'The weather alerts from this app saved my crops during unexpected rainfall. Thank you KrishiMantra!'
-      },
-      {
-        'name': 'Anand Singh',
-        'village': 'Lucknow, UP',
-        'content':
-            'I got the best price for my produce using the market rates feature. This app has changed how I do farming.'
-      },
-      {
-        'name': 'Lakshmi Venkatesh',
-        'village': 'Chennai, Tamil Nadu',
-        'content':
-            'The pest control tips helped me save my entire paddy field. KrishiMantra is truly a blessing for farmers.'
-      },
-      {
-        'name': 'Mohammad Farooq',
-        'village': 'Srinagar, Kashmir',
-        'content':
-            'I learned modern farming techniques through this app. My apple orchard is thriving now!'
-      },
-      {
-        'name': 'Gurpreet Kaur',
-        'village': 'Amritsar, Punjab',
-        'content':
-            'The soil testing advice from KrishiMantra experts doubled my crop yield this year. Highly recommended!'
-      },
-      {
-        'name': 'Deepak Mahto',
-        'village': 'Ranchi, Jharkhand',
-        'content':
-            'KrishiMantra connected me with other farmers facing similar challenges. Together we found solutions!'
-      },
-    ];
-  }
-
   @override
   void dispose() {
     _scrollController.dispose();
@@ -554,21 +522,21 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _isLoadingWeather = true;
     });
-    
+
     // Refresh all data
     await _checkLocationPermission();
     await _initializeAds();
     await _initializeSlider();
-    
+
     _feedController.fetchTopFeeds();
-    
+
     setState(() {
       _isLoadingWeather = false;
     });
-    
+
     return;
   }
-  
+
   // Loading weather widget
   Widget _buildLoadingWeather() {
     return Container(
@@ -582,7 +550,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-  
+
   // Location request widget
   Widget _buildLocationRequestWidget() {
     return Container(
@@ -633,13 +601,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final screenHeight = mediaQuery.size.height;
     final statusBarHeight = mediaQuery.padding.top;
     final isSmallScreen = screenWidth < 360;
-    
+
     // Calculate dynamic sizes
     final cardPadding = isSmallScreen ? 8.0 : 16.0;
     final sectionSpacing = isSmallScreen ? 16.0 : 24.0;
     final titleFontSize = isSmallScreen ? 18.0 : 22.0;
     final textScaleFactor = mediaQuery.textScaleFactor;
-    
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: RefreshIndicator(
@@ -669,7 +637,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     : null,
               ),
             ),
-            
+
             // Carousel Slider
             SliverToBoxAdapter(
               child: Container(
@@ -677,15 +645,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: _buildCarouselSlider(),
               ),
             ),
-            
+
             // Services Section
             SliverToBoxAdapter(
               child: Column(
                 children: [
                   Container(
-                    margin: EdgeInsets.symmetric(vertical: sectionSpacing * 0.5),
+                    margin:
+                        EdgeInsets.symmetric(vertical: sectionSpacing * 0.5),
                     child: Text(
-                      servicesText,
+                      getTranslation(KEY_SERVICES),
                       style: TextStyle(
                         color: AppColors.green,
                         fontSize: titleFontSize,
@@ -701,7 +670,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            
+
             // Ads and Feeds
             SliverToBoxAdapter(
               child: Column(
@@ -710,9 +679,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_homeScreenAds.isNotEmpty)
                     Container(
                       margin: EdgeInsets.symmetric(
-                        horizontal: cardPadding, 
-                        vertical: cardPadding * 0.5
-                      ),
+                          horizontal: cardPadding, vertical: cardPadding * 0.5),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8.0),
                         boxShadow: [
@@ -726,13 +693,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8.0),
                         child: Image.network(
-                          ImageUtils.validateUrl(_homeScreenAds[0]['dirURL'] ?? ''),
+                          ImageUtils.validateUrl(
+                              _homeScreenAds[0]['dirURL'] ?? ''),
                           fit: BoxFit.cover,
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;
                             return Center(
                               child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
+                                value: loadingProgress.expectedTotalBytes !=
+                                        null
                                     ? loadingProgress.cumulativeBytesLoaded /
                                         loadingProgress.expectedTotalBytes!
                                     : null,
@@ -760,7 +729,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                  
+
                   // Top Feeds
                   Obx(() {
                     if (_feedController.isLoadingTopFeeds.value) {
@@ -768,18 +737,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Padding(
                           padding: EdgeInsets.all(24),
                           child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(AppColors.green),
                           ),
                         ),
                       );
                     }
-        
+
                     return Column(
                       children: _feedController.topFeeds
                           .map((feed) => FeedCard(
                                 feed: feed,
                                 onLike: () => _feedController.likeFeed(feed.id),
-                                onSave: () {}, // Implement save functionality if needed
+                                onSave:
+                                    () {}, // Implement save functionality if needed
                               ))
                           .toList(),
                     );
@@ -787,15 +758,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            
+
             // Testimonials Section
             SliverToBoxAdapter(
               child: Column(
                 children: [
                   Container(
-                    margin: EdgeInsets.only(top: sectionSpacing, bottom: sectionSpacing * 0.5),
+                    margin: EdgeInsets.only(
+                        top: sectionSpacing, bottom: sectionSpacing * 0.5),
                     child: Text(
-                      testimonialsText,
+                      getTranslation(KEY_TESTIMONIALS),
                       style: TextStyle(
                         color: AppColors.green,
                         fontSize: titleFontSize,
@@ -820,11 +792,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            
+
             // Share App Section
             SliverToBoxAdapter(
               child: Container(
-                margin: EdgeInsets.symmetric(horizontal: cardPadding * 1.5, vertical: sectionSpacing),
+                margin: EdgeInsets.symmetric(
+                    horizontal: cardPadding * 1.5, vertical: sectionSpacing),
                 padding: EdgeInsets.all(16.0),
                 decoration: BoxDecoration(
                   color: AppColors.green.withOpacity(0.1),
@@ -832,7 +805,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   border: Border.all(color: AppColors.green, width: 1.0),
                 ),
                 child: Text(
-                  shareAppText,
+                  getTranslation(KEY_SHARE_APP),
                   style: TextStyle(
                     color: AppColors.green,
                     fontSize: isSmallScreen ? 14 : 16,
@@ -842,7 +815,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            
+
             // Bottom padding
             SliverToBoxAdapter(
               child: SizedBox(height: sectionSpacing),
@@ -992,7 +965,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Align(
             alignment: Alignment.bottomRight,
             child: Text(
-              "- ${testimonial['name'] ?? ''} (${testimonial['village']?.split(',')[0] ?? ''})",
+              "- ${testimonial['name'] ?? ''} (${testimonial['location']?.split(',')[0] ?? ''})",
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,

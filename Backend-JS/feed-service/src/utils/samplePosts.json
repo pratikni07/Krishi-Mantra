@@ -1,0 +1,137 @@
+[
+  {
+    "description": "Best farming practices for organic cultivation",
+    "content": "Organic farming not only benefits the environment but also yields healthier crops. #OrganicFarming #Sustainability",
+    "mediaUrl": "https://example.com/images/organic-farming.jpg",
+    "location": {
+      "latitude": 28.6139,
+      "longitude": 77.209
+    }
+  },
+  {
+    "description": "Water conservation techniques for agriculture",
+    "content": "Drip irrigation can save up to 60% water compared to traditional irrigation methods. #WaterConservation #SustainableAgriculture",
+    "mediaUrl": "https://example.com/images/drip-irrigation.jpg",
+    "location": {
+      "latitude": 19.076,
+      "longitude": 72.8777
+    }
+  },
+  {
+    "description": "Understanding crop rotation benefits",
+    "content": "Crop rotation helps break pest cycles and improves soil health naturally. #CropRotation #SoilHealth #OrganicFarming",
+    "mediaUrl": "https://example.com/images/crop-rotation.jpg",
+    "location": {
+      "latitude": 12.9716,
+      "longitude": 77.5946
+    }
+  },
+  {
+    "description": "Modern farming equipment that saves time",
+    "content": "Smart tractors with GPS guidance can increase efficiency by 20%. #ModernFarming #AgriTech #FarmingEquipment",
+    "mediaUrl": "https://example.com/images/smart-tractor.jpg",
+    "location": {
+      "latitude": 26.8467,
+      "longitude": 80.9462
+    }
+  },
+  {
+    "description": "Natural pest control methods",
+    "content": "Neem oil is an effective natural pesticide that doesn't harm beneficial insects. #NaturalPestControl #OrganicFarming",
+    "mediaUrl": "https://example.com/images/neem-oil.jpg",
+    "location": {
+      "latitude": 17.385,
+      "longitude": 78.4867
+    }
+  },
+  {
+    "description": "Seasonal planting guide for North India",
+    "content": "Planning your crops according to seasons can significantly improve yield. Here's a guide for North India. #SeasonalPlanting #NorthIndia #CropCalendar",
+    "mediaUrl": "https://example.com/images/seasonal-planting.jpg",
+    "location": {
+      "latitude": 30.901,
+      "longitude": 75.8573
+    }
+  },
+  {
+    "description": "Benefits of vermicomposting",
+    "content": "Vermicomposting creates nutrient-rich soil amendments while reducing waste. #Vermicomposting #OrganicFertilizer #WasteManagement",
+    "mediaUrl": "https://example.com/images/vermicomposting.jpg",
+    "location": {
+      "latitude": 23.0225,
+      "longitude": 72.5714
+    }
+  },
+  {
+    "description": "Weather prediction tools for farmers",
+    "content": "Modern weather prediction apps can help farmers make informed decisions about planting and harvesting. #WeatherPrediction #SmartFarming",
+    "mediaUrl": "https://example.com/images/weather-app.jpg",
+    "location": {
+      "latitude": 13.0827,
+      "longitude": 80.2707
+    }
+  },
+  {
+    "description": "Understanding soil pH for better crop selection",
+    "content": "Soil pH affects nutrient availability. Testing your soil helps choose appropriate crops. #SoilHealth #SoilTesting #CropSelection",
+    "mediaUrl": "https://example.com/images/soil-testing.jpg",
+    "location": {
+      "latitude": 22.5726,
+      "longitude": 88.3639
+    }
+  },
+  {
+    "description": "Government schemes for farmers in 2023",
+    "content": "Stay updated with the latest government initiatives and subsidies for farmers. #GovtSchemes #FarmerSubsidies #AgriPolicy",
+    "mediaUrl": "https://example.com/images/govt-schemes.jpg",
+    "location": {
+      "latitude": 18.5204,
+      "longitude": 73.8567
+    }
+  },
+  {
+    "description": "Rainwater harvesting for farm use",
+    "content": "Simple rainwater harvesting systems can provide water security during dry seasons. #RainwaterHarvesting #WaterSecurity #SustainableFarming",
+    "mediaUrl": "https://example.com/images/rainwater-harvesting.jpg",
+    "location": {
+      "latitude": 11.0168,
+      "longitude": 76.9558
+    }
+  },
+  {
+    "description": "Hydroponics: Future of farming?",
+    "content": "Hydroponics uses 90% less water than traditional farming while increasing yields. #Hydroponics #ModernFarming #WaterConservation",
+    "mediaUrl": "https://example.com/images/hydroponics.jpg",
+    "location": {
+      "latitude": 20.2961,
+      "longitude": 85.8245
+    }
+  },
+  {
+    "description": "Direct marketing strategies for farmers",
+    "content": "Selling directly to consumers can increase profits by eliminating middlemen. #DirectMarketing #FarmToTable #AgriMarketing",
+    "mediaUrl": "https://example.com/images/direct-marketing.jpg",
+    "location": {
+      "latitude": 27.1767,
+      "longitude": 78.0081
+    }
+  },
+  {
+    "description": "Benefits of multi-cropping",
+    "content": "Multi-cropping can reduce risk and provide multiple income streams throughout the year. #MultiCropping #RiskManagement #FarmIncome",
+    "mediaUrl": "https://example.com/images/multi-cropping.jpg",
+    "location": {
+      "latitude": 15.4989,
+      "longitude": 73.8278
+    }
+  },
+  {
+    "description": "Latest developments in seed technology",
+    "content": "Drought-resistant seed varieties are helping farmers adapt to climate change. #SeedTechnology #ClimateAdaptation #AgriInnovation",
+    "mediaUrl": "https://example.com/images/seed-tech.jpg",
+    "location": {
+      "latitude": 24.5854,
+      "longitude": 73.7125
+    }
+  }
+]

@@ -137,7 +137,7 @@ class VideoTutorialRepository {
 
   Future<void> deleteComment(String commentId) async {
     try {
-      await _apiService.delete('/reels/videos/comments/$commentId');
+      await _apiService.delete('/api/reels/videos/comments/$commentId');
     } catch (e) {
       throw Exception('Failed to delete comment: $e');
     }

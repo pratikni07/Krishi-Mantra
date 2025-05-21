@@ -1,0 +1,50 @@
+[
+  {
+    "userId": "admin_001",
+    "userName": "Krishi Admin",
+    "profilePhoto": "https://example.com/profiles/admin1.jpg",
+    "role": "admin"
+  },
+  {
+    "userId": "admin_002",
+    "userName": "Farm Admin",
+    "profilePhoto": "https://example.com/profiles/admin2.jpg",
+    "role": "admin"
+  },
+  {
+    "userId": "admin_003",
+    "userName": "Agri Knowledge Admin",
+    "profilePhoto": "https://example.com/profiles/admin3.jpg",
+    "role": "admin"
+  },
+  {
+    "userId": "consultant_001",
+    "userName": "Dr. Plant Expert",
+    "profilePhoto": "https://example.com/profiles/consultant1.jpg",
+    "role": "consultant"
+  },
+  {
+    "userId": "consultant_002",
+    "userName": "Organic Farming Guru",
+    "profilePhoto": "https://example.com/profiles/consultant2.jpg",
+    "role": "consultant"
+  },
+  {
+    "userId": "consultant_003",
+    "userName": "Agricultural Scientist",
+    "profilePhoto": "https://example.com/profiles/consultant3.jpg",
+    "role": "consultant"
+  },
+  {
+    "userId": "consultant_004",
+    "userName": "Soil Chemistry Expert",
+    "profilePhoto": "https://example.com/profiles/consultant4.jpg",
+    "role": "consultant"
+  },
+  {
+    "userId": "consultant_005",
+    "userName": "Irrigation Specialist",
+    "profilePhoto": "https://example.com/profiles/consultant5.jpg",
+    "role": "consultant"
+  }
+]

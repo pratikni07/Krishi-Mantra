@@ -1,0 +1,58 @@
+[2025-04-22T18:34:19.580Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T18:34:19.581Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T18:34:19.588Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T18:58:20.676Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T18:58:20.677Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T18:58:20.679Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:10:15.444Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:10:15.446Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:10:15.448Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:11:06.306Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:11:06.307Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:11:06.309Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:11:18.829Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:11:18.830Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:11:18.832Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:12:35.509Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:12:35.510Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:12:35.512Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:13:19.713Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:13:19.714Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:13:19.716Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:13:32.016Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:13:32.017Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:13:32.020Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:16:04.365Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:16:04.367Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:16:04.369Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:16:13.687Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:16:13.689Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:16:13.691Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:16:37.290Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:16:37.291Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:16:37.293Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:17:39.723Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:17:39.724Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:17:39.726Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-22T19:17:49.049Z] [INFO] Starting auto reel scheduler...
+[2025-04-22T19:17:49.050Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-22T19:17:49.052Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-28T04:03:29.585Z] [INFO] Starting auto reel scheduler...
+[2025-04-28T04:03:29.585Z] [INFO] Using base URL: http://localhost:3005
+[2025-04-28T04:03:29.587Z] [INFO] Auto reel scheduler initialized - will post every 3 minutes
+[2025-04-28T04:06:00.770Z] [INFO] Creating reel as consultant user: Irrigation Specialist
+[2025-04-28T04:06:00.773Z] [DEBUG] Reel data to be posted:
+{
+  "userId": "consultant_005",
+  "userName": "Irrigation Specialist",
+  "profilePhoto": "https://example.com/profiles/consultant5.jpg",
+  "description": "How to identify healthy soil for farming #HealthySoil #FarmingTips",
+  "mediaUrl": "https://example.com/videos/soil-health-test.mp4",
+  "location": {
+    "latitude": 28.6139,
+    "longitude": 77.209
+  }
+}
+[2025-04-28T04:06:00.774Z] [INFO] Making POST request to: http://localhost:3005/reels
+[2025-04-28T04:06:00.912Z] [INFO] Auto reel created successfully. Reel ID: 680efea8ffcd6996cdc8b267
+[2025-04-28T04:06:00.913Z] [INFO] Auto reel created successfully

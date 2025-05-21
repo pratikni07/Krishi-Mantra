@@ -29,9 +29,25 @@ class ProductModel {
       usage: json['usage'] ?? '',
       company: CompanyModel.fromJson(json['company'] ?? {}),
       usedFor: CropModel.fromJson(json['usedFor'] ?? {}),
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
+      createdAt:
+          DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
+      updatedAt:
+          DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
     );
+  }
+
+  /// Convert model to JSON for API operations and translations
+  Map<String, dynamic> toJson() {
+    return {
+      '_id': id,
+      'name': name,
+      'image': image,
+      'usage': usage,
+      'company': company.toJson(),
+      'usedFor': usedFor.toJson(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
   }
 }
 
@@ -53,4 +69,13 @@ class CompanyModel {
       logo: json['logo'] ?? '',
     );
   }
-} 
+
+  /// Convert model to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      '_id': id,
+      'name': name,
+      'logo': logo,
+    };
+  }
+}

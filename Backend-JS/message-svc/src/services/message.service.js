@@ -2,7 +2,6 @@
 const Message = require("../models/message.model");
 const Chat = require("../models/chat.model");
 const Group = require("../models/group.model");
-const MessageQueueService = require("./message-queue.service");
 
 class MessageService {
   /**
@@ -70,8 +69,8 @@ class MessageService {
       $inc: { [`unreadCount.${sender}`]: 1 },
     });
 
-    // Queue message for delivery
-    await this.queueMessageForDelivery(message._id, chatId, {
+    // Handle message delivery without using a message queue
+    await this.handleDirectMessageDelivery(message._id, chatId, {
       userId: sender,
       userName: senderName || senderInfo.userName,
       profilePhoto: senderPhoto || senderInfo.profilePhoto,
@@ -81,23 +80,47 @@ class MessageService {
   }
 
   /**
-   * Queue a message for delivery to offline users
+   * Handle message delivery directly instead of using a message queue
    * @param {string} messageId - Message ID
    * @param {string} chatId - Chat ID
    * @param {Object} sender - Sender information
    */
-  async queueMessageForDelivery(messageId, chatId, sender) {
-    await MessageQueueService.channel.sendToQueue(
-      "message_delivery",
-      Buffer.from(
-        JSON.stringify({
-          messageId,
-          chatId,
-          sender,
-        })
-      ),
-      { persistent: true }
-    );
+  async handleDirectMessageDelivery(messageId, chatId, sender) {
+    try {
+      // Get the chat to find participants
+      const chat = await Chat.findById(chatId);
+      if (!chat) return;
+
+      // Get the message
+      const message = await Message.findById(messageId);
+      if (!message) return;
+
+      // Implement direct delivery logic here
+      // For example, update deliveredTo for all participants
+      const deliveryUpdates = chat.participants
+        .filter((p) => p.userId !== sender.userId) // Skip sender
+        .map((p) => ({
+          userId: p.userId,
+          userName: p.userName,
+          profilePhoto: p.profilePhoto,
+          deliveredAt: new Date(),
+        }));
+
+      if (deliveryUpdates.length > 0) {
+        await Message.findByIdAndUpdate(messageId, {
+          $push: { deliveredTo: { $each: deliveryUpdates } },
+        });
+      }
+
+      // This is where you would trigger notifications or socket events
+      // to notify clients about new messages
+
+      console.log(
+        `Message ${messageId} delivered to ${deliveryUpdates.length} recipients`
+      );
+    } catch (error) {
+      console.error("Error in direct message delivery:", error);
+    }
   }
 
   /**

@@ -3,7 +3,7 @@ class MessageLimitService {
     this.FREE_DAILY_LIMIT = 5;
   }
 
-  async checkAndUpdateMessageCount(userId) {
+  async checkAndUpdateMessageCount(userId, incrementBy = 1) {
     try {
       const user = await require("../models/user.model").findOne({ userId });
       if (user && user.isPremium) {
@@ -28,23 +28,25 @@ class MessageLimitService {
           { userId },
           {
             $set: {
-              "dailyMessageCount.count": 1,
+              "dailyMessageCount.count": incrementBy,
               "dailyMessageCount.lastResetDate": new Date(),
             },
           }
         );
         return {
           canSendMessage: true,
-          remainingMessages: this.FREE_DAILY_LIMIT - 1,
+          remainingMessages: this.FREE_DAILY_LIMIT - incrementBy,
           isLimited: true,
         };
       }
 
       const currentCount = latestChat.dailyMessageCount.count;
-      if (currentCount >= this.FREE_DAILY_LIMIT) {
+
+      // Check if the increment would exceed limit
+      if (currentCount + incrementBy > this.FREE_DAILY_LIMIT) {
         return {
           canSendMessage: false,
-          remainingMessages: 0,
+          remainingMessages: Math.max(0, this.FREE_DAILY_LIMIT - currentCount),
           isLimited: true,
         };
       }
@@ -52,12 +54,12 @@ class MessageLimitService {
       // Update count
       await AIChat.updateMany(
         { userId, "dailyMessageCount.lastResetDate": { $gte: today } },
-        { $inc: { "dailyMessageCount.count": 1 } }
+        { $inc: { "dailyMessageCount.count": incrementBy } }
       );
 
       return {
         canSendMessage: true,
-        remainingMessages: this.FREE_DAILY_LIMIT - (currentCount + 1),
+        remainingMessages: this.FREE_DAILY_LIMIT - (currentCount + incrementBy),
         isLimited: true,
       };
     } catch (error) {

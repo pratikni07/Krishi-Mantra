@@ -2,32 +2,66 @@ import '../models/feed_model.dart';
 import '../models/comment_modal.dart';
 import '../services/api_service.dart';
 import '../../core/utils/api_helper.dart';
+import 'package:dio/dio.dart';
+import 'package:get/get.dart';
+import '../../core/constants/api_constants.dart';
+import '../services/UserService.dart';
 
 class FeedRepository {
   final ApiService _apiService;
 
   FeedRepository(this._apiService);
 
-  // Future<Map<String, dynamic>> getFeeds({int page = 1, int limit = 10}) async {
-  //   try {
-  //     final response = await _apiService.get(
-  //       '/api/feed/feeds',
-  //       queryParameters: {'page': page, 'limit': limit},
-  //     );
+  Future<List<FeedModel>> getFeeds(
+      {required int page,
+      required int limit,
+      String? searchTerm,
+      String? category,
+      CancelToken? cancelToken}) async {
+    try {
+      final params = {
+        'page': page,
+        'limit': limit,
+        if (searchTerm != null && searchTerm.isNotEmpty) 'search': searchTerm,
+        if (category != null && category.isNotEmpty) 'category': category,
+      };
 
-  //     final data = ApiHelper.handleResponse(response);
-  //     final List<FeedModel> feeds = (data['feeds'] as List)
-  //         .map((feed) => FeedModel.fromJson(feed))
-  //         .toList();
+      // Use caching with maxAge and a long maxStale to serve stale content when offline
+      final response = await _apiService.get(
+        '/api/feed/feeds',
+        queryParameters: params,
+        options: Options(extra: {'cancelToken': cancelToken}),
+        cacheDuration: const Duration(minutes: 15),
+      );
 
-  //     return {
-  //       'feeds': feeds,
-  //       'pagination': data['pagination'],
-  //     };
-  //   } catch (e) {
-  //     throw ApiHelper.handleError(e);
-  //   }
-  // }
+      final List<dynamic> feedsData = response.data['feeds'] ?? [];
+      return feedsData.map((json) => FeedModel.fromJson(json)).toList();
+    } catch (e) {
+      // Log the error but don't re-throw it at this level
+      print('Error fetching feeds: $e');
+
+      // Try to get cached data directly if the request fails
+      try {
+        final cacheResponse = await _apiService
+            .getCachedResponse(ApiConstants.FEEDS, queryParameters: {
+          'page': page,
+          'limit': limit,
+          if (searchTerm != null && searchTerm.isNotEmpty) 'search': searchTerm,
+          if (category != null && category.isNotEmpty) 'category': category,
+        });
+
+        if (cacheResponse != null) {
+          final List<dynamic> feedsData = cacheResponse.data['feeds'] ?? [];
+          return feedsData.map((json) => FeedModel.fromJson(json)).toList();
+        }
+      } catch (cacheError) {
+        print('Error fetching from cache: $cacheError');
+      }
+
+      // If no cached data available, return empty list instead of throwing error
+      return [];
+    }
+  }
 
   // Get feed by ID with comments
   Future<FeedModel> getFeedById(String feedId,
@@ -86,8 +120,9 @@ class FeedRepository {
   Future<Map<String, dynamic>> getComments(String feedId,
       {int page = 1, int limit = 10}) async {
     try {
-      print('🔍 Repository: Fetching comments for feedId: $feedId, page: $page, limit: $limit');
-      
+      print(
+          '🔍 Repository: Fetching comments for feedId: $feedId, page: $page, limit: $limit');
+
       final response = await _apiService.get(
         '/api/feed/comments/getComment',
         queryParameters: {
@@ -100,25 +135,26 @@ class FeedRepository {
       print('📊 Repository: Raw API response: ${response.data}');
       final data = ApiHelper.handleResponse(response);
       print('📄 Repository: Parsed response data: $data');
-      
+
       // Verify the response structure
       if (data == null) {
         print('⚠️ Repository: Received null data from API');
         throw Exception('Invalid response: null data');
       }
-      
+
       // Check for the "No comments found" response format
       if (data.containsKey('message') && data.containsKey('comments')) {
-        print('ℹ️ Repository: Using alternate response format (message + comments)');
+        print(
+            'ℹ️ Repository: Using alternate response format (message + comments)');
         final List<CommentModel> comments = [];
-        
+
         // Only try to parse comments if they exist and are not empty
         if (data['comments'] is List && (data['comments'] as List).isNotEmpty) {
-          comments.addAll(
-            (data['comments'] as List).map((comment) => CommentModel.fromJson(comment)).toList()
-          );
+          comments.addAll((data['comments'] as List)
+              .map((comment) => CommentModel.fromJson(comment))
+              .toList());
         }
-        
+
         return {
           'comments': comments,
           'totalDocs': 0,
@@ -132,18 +168,19 @@ class FeedRepository {
           'nextPage': null,
         };
       }
-      
+
       // Original format check for "docs" field
       if (!data.containsKey('docs')) {
         print('⚠️ Repository: Response missing "docs" field: ${data.keys}');
         throw Exception('Invalid response format: missing docs');
       }
-      
+
       if (!(data['docs'] is List)) {
-        print('⚠️ Repository: "docs" is not a list: ${data['docs'].runtimeType}');
+        print(
+            '⚠️ Repository: "docs" is not a list: ${data['docs'].runtimeType}');
         throw Exception('Invalid response format: docs is not a list');
       }
-      
+
       final List<CommentModel> comments = (data['docs'] as List)
           .map((comment) => CommentModel.fromJson(comment))
           .toList();
@@ -201,10 +238,11 @@ class FeedRepository {
       );
 
       final data = ApiHelper.handleResponse(response);
-      
+
       // Handle the nested structure: the feeds are inside data.feeds
-      final feedsData = data['data'] != null ? data['data']['feeds'] : data['feeds'];
-      
+      final feedsData =
+          data['data'] != null ? data['data']['feeds'] : data['feeds'];
+
       if (feedsData == null) {
         // Return empty result if no feeds are found
         return {
@@ -213,13 +251,16 @@ class FeedRepository {
           'recommendationType': null
         };
       }
-      
-      final List<FeedModel> feeds = (feedsData as List)
-          .map((feed) => FeedModel.fromJson(feed))
-          .toList();
 
-      final pagination = data['data'] != null ? data['data']['pagination'] : data['pagination'];
-      final recommendationType = data['data'] != null ? data['data']['recommendationType'] : data['recommendationType'];
+      final List<FeedModel> feeds =
+          (feedsData as List).map((feed) => FeedModel.fromJson(feed)).toList();
+
+      final pagination = data['data'] != null
+          ? data['data']['pagination']
+          : data['pagination'];
+      final recommendationType = data['data'] != null
+          ? data['data']['recommendationType']
+          : data['recommendationType'];
 
       return {
         'feeds': feeds,
@@ -282,22 +323,22 @@ class FeedRepository {
       );
 
       final data = ApiHelper.handleResponse(response);
-      
-      // Check if data exists and handle different response structures
-      final feedsData = data['data'] != null && data['data']['feeds'] != null 
-          ? data['data']['feeds'] 
-          : (data['feeds'] ?? []);
-      
-      final List<FeedModel> feeds = (feedsData as List)
-          .map((feed) => FeedModel.fromJson(feed))
-          .toList();
 
-      final pagination = data['data'] != null && data['data']['pagination'] != null 
-          ? data['data']['pagination'] 
-          : (data['pagination'] ?? {'hasMore': false});
-          
-      final tag = data['data'] != null && data['data']['tag'] != null 
-          ? data['data']['tag'] 
+      // Check if data exists and handle different response structures
+      final feedsData = data['data'] != null && data['data']['feeds'] != null
+          ? data['data']['feeds']
+          : (data['feeds'] ?? []);
+
+      final List<FeedModel> feeds =
+          (feedsData as List).map((feed) => FeedModel.fromJson(feed)).toList();
+
+      final pagination =
+          data['data'] != null && data['data']['pagination'] != null
+              ? data['data']['pagination']
+              : (data['pagination'] ?? {'hasMore': false});
+
+      final tag = data['data'] != null && data['data']['tag'] != null
+          ? data['data']['tag']
           : data['tag'];
 
       return {

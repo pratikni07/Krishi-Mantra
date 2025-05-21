@@ -1,0 +1,50 @@
+[
+  {
+    "userId": "admin_001",
+    "userName": "Admin Sharma",
+    "profilePhoto": "https://example.com/profiles/admin1.jpg",
+    "role": "admin"
+  },
+  {
+    "userId": "admin_002",
+    "userName": "Admin Patel",
+    "profilePhoto": "https://example.com/profiles/admin2.jpg",
+    "role": "admin"
+  },
+  {
+    "userId": "admin_003",
+    "userName": "Admin Singh",
+    "profilePhoto": "https://example.com/profiles/admin3.jpg",
+    "role": "admin"
+  },
+  {
+    "userId": "consultant_001",
+    "userName": "Dr. Agri Consultant",
+    "profilePhoto": "https://example.com/profiles/consultant1.jpg",
+    "role": "consultant"
+  },
+  {
+    "userId": "consultant_002",
+    "userName": "Krishi Consultant",
+    "profilePhoto": "https://example.com/profiles/consultant2.jpg",
+    "role": "consultant"
+  },
+  {
+    "userId": "consultant_003",
+    "userName": "Farm Expert",
+    "profilePhoto": "https://example.com/profiles/consultant3.jpg",
+    "role": "consultant"
+  },
+  {
+    "userId": "consultant_004",
+    "userName": "Soil Specialist",
+    "profilePhoto": "https://example.com/profiles/consultant4.jpg",
+    "role": "consultant"
+  },
+  {
+    "userId": "consultant_005",
+    "userName": "Crop Scientist",
+    "profilePhoto": "https://example.com/profiles/consultant5.jpg",
+    "role": "consultant"
+  }
+]

@@ -10,6 +10,8 @@ const connectDB = require("./config/database");
 const reelRoutes = require("./routes/reelRoutes");
 const videoTutorialRoutes = require("./routes/videoTutorialRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
+// Import auto-reel scheduler
+const autoReelScheduler = require("./utils/autoReelScheduler");
 
 const app = express();
 
@@ -20,7 +22,19 @@ app.use(morgan("dev"));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-connectDB();
+connectDB()
+  .then(() => {
+    console.log("MongoDB Connected Successfully");
+
+    // Start auto-reel scheduler after successful database connection
+    if (process.env.ENABLE_AUTO_REELS !== "false") {
+      // autoReelScheduler.init();
+    }
+  })
+  .catch((err) => {
+    console.error("Error connecting to database:", err);
+  });
+
 app.use("/reels", reelRoutes);
 app.use("/videos", videoTutorialRoutes);
 app.use("/analytics", analyticsRoutes);

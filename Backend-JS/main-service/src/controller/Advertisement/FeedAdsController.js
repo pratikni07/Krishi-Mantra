@@ -141,19 +141,28 @@ class FeedAdsController {
   // REELS CONTORLLERS
   async createReelAd(req, res) {
     try {
-      const { title, content, dirURL } = req.body;
-      const file = req.file;
-      const cloudinaryResult = file
-        ? await cloudinary.uploader.upload(file.path)
-        : null;
+      const { title, videoUrl, popUpView } = req.body;
+
       const newReelAd = new ReelAds({
         title,
-        content,
-        dirURL: cloudinaryResult ? cloudinaryResult.secure_url : dirURL,
+        videoUrl,
+        popUpView: popUpView
+          ? {
+              enabled: true,
+              productId: popUpView.productId,
+              type: popUpView.type,
+              image: popUpView.image,
+              popupTitle: popUpView.popupTitle,
+            }
+          : {
+              enabled: false,
+            },
         impressions: 0,
         views: 0,
-        createdAt: new Date().toISOString(),
+        viewTracking: [],
+        createdAt: new Date(),
       });
+
       await newReelAd.save();
 
       // Clear cache but don't fail if Redis is down
@@ -165,7 +174,10 @@ class FeedAdsController {
           error.message
         );
       }
-      res.status(201).json({ message: "Reel Ad created", ad: newReelAd });
+
+      res
+        .status(201)
+        .json({ message: "Reel Ad created successfully", ad: newReelAd });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -203,17 +215,31 @@ class FeedAdsController {
   async updateReelAd(req, res) {
     try {
       const { id } = req.params;
-      const { title, content, dirURL } = req.body;
-      const file = req.file;
-      if (file) {
-        const cloudinaryResult = await cloudinary.uploader.upload(file.path);
-        dirURL = cloudinaryResult.secure_url;
+      const { title, videoUrl, popUpView } = req.body;
+
+      const updateData = {
+        title,
+        videoUrl,
+        popUpView: popUpView
+          ? {
+              enabled: true,
+              productId: popUpView.productId,
+              type: popUpView.type,
+              image: popUpView.image,
+              popupTitle: popUpView.popupTitle,
+            }
+          : {
+              enabled: false,
+            },
+      };
+
+      const updatedAd = await ReelAds.findByIdAndUpdate(id, updateData, {
+        new: true,
+      });
+
+      if (!updatedAd) {
+        return res.status(404).json({ message: "Reel Ad not found" });
       }
-      const updatedAd = await ReelAds.findByIdAndUpdate(
-        id,
-        { title, content, dirURL },
-        { new: true }
-      );
 
       // Clear cache but don't fail if Redis is down
       try {
@@ -224,7 +250,10 @@ class FeedAdsController {
           error.message
         );
       }
-      res.status(200).json({ message: "Updated Reel Ad", ad: updatedAd });
+
+      res
+        .status(200)
+        .json({ message: "Reel Ad updated successfully", ad: updatedAd });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -279,11 +308,25 @@ class FeedAdsController {
   async trackView(req, res) {
     try {
       const { id } = req.params;
+      const { userId, duration } = req.body;
+
       const ad = await ReelAds.findByIdAndUpdate(
         id,
-        { $inc: { views: 1 } },
+        {
+          $inc: { views: 1 },
+          $push: {
+            viewTracking: {
+              userId,
+              duration: duration || 0,
+            },
+          },
+        },
         { new: true }
       );
+
+      if (!ad) {
+        return res.status(404).json({ message: "Reel Ad not found" });
+      }
 
       // Clear cache but don't fail if Redis is down
       try {
@@ -295,7 +338,7 @@ class FeedAdsController {
         );
       }
 
-      res.status(201).json({ message: "View tracked", ad: ad });
+      res.status(200).json({ message: "View tracked successfully", ad });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

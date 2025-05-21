@@ -109,14 +109,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final screenHeight = mediaQuery.size.height;
     final paddingTop = mediaQuery.padding.top;
     final isSmallScreen = screenWidth < 360;
-    
+
     // Calculate dynamic sizes
     final appBarHeight = screenHeight * 0.28;
     final profileImageSize = isSmallScreen ? 80.0 : 90.0;
     final cardPadding = isSmallScreen ? 12.0 : 16.0;
     final textScaleFactor = mediaQuery.textScaleFactor;
     final titleFontSize = isSmallScreen ? 18.0 : 22.0;
-    
+
     if (isLoading) {
       return const Scaffold(
         body: Center(
@@ -127,12 +127,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    final String fullName = '${userData?['firstName'] ?? ''} ${userData?['lastName'] ?? ''}';
+    final String fullName =
+        '${userData?['firstName'] ?? ''} ${userData?['lastName'] ?? ''}';
     final String userType = userData?['accountType']?.toUpperCase() ?? '';
-    final String location = userData?['additionalDetails']?['address'] ?? notSpecifiedText;
-    final String subscriptionType = userData?['additionalDetails']?['subscription']?['type'] ?? 'FREE';
-    final String experience = userData?['additionalDetails']?['experience']?.toString() ?? '0';
-    final String rating = userData?['additionalDetails']?['rating']?.toString() ?? '0';
+    final String location =
+        userData?['additionalDetails']?['address'] ?? notSpecifiedText;
+    final String subscriptionType =
+        userData?['additionalDetails']?['subscription']?['type'] ?? 'FREE';
+    final String experience =
+        userData?['additionalDetails']?['experience']?.toString() ?? '0';
+    final String rating =
+        userData?['additionalDetails']?['rating']?.toString() ?? '0';
 
     // Mock statistics - replace with real data when available
     final int postsCount = userData?['stats']?['posts'] ?? 5;
@@ -180,7 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
-                  
+
                   // Profile image and name
                   Positioned(
                     top: paddingTop + 60,
@@ -206,11 +211,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       fit: BoxFit.cover,
                                       width: profileImageSize - 4,
                                       height: profileImageSize - 4,
-                                      placeholder: (context, url) => const CircularProgressIndicator(
+                                      placeholder: (context, url) =>
+                                          const CircularProgressIndicator(
                                         color: AppColors.green,
                                         strokeWidth: 2,
                                       ),
-                                      errorWidget: (context, url, error) => const Icon(
+                                      errorWidget: (context, url, error) =>
+                                          const Icon(
                                         Icons.person,
                                         size: 40,
                                         color: AppColors.green,
@@ -254,14 +261,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-          
+
           // Content
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: cardPadding, 
-                vertical: isSmallScreen ? 8 : 12
-              ),
+                  horizontal: cardPadding, vertical: isSmallScreen ? 8 : 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -283,25 +288,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildStatItem(postsText, postsCount.toString(), isSmallScreen),
+                        _buildStatItem(
+                            postsText, postsCount.toString(), isSmallScreen),
                         Container(
                           height: 40,
                           width: 1,
                           color: Colors.grey[300],
                         ),
-                        _buildStatItem(commentsText, commentsCount.toString(), isSmallScreen),
+                        _buildStatItem(commentsText, commentsCount.toString(),
+                            isSmallScreen),
                         Container(
                           height: 40,
                           width: 1,
                           color: Colors.grey[300],
                         ),
-                        _buildStatItem(likesText, likesCount.toString(), isSmallScreen),
+                        _buildStatItem(
+                            likesText, likesCount.toString(), isSmallScreen),
                       ],
                     ),
                   ),
-                  
+
                   SizedBox(height: 16),
-                  
+
                   // Contact Information
                   Container(
                     margin: const EdgeInsets.symmetric(vertical: 8),
@@ -331,9 +339,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         const Divider(),
-                        _buildProfileInfoItem(Icons.email, emailText, userData?['email'] ?? ''),
-                        _buildProfileInfoItem(Icons.phone, phoneText, userData?['phoneNo']?.toString() ?? ''),
-                        _buildProfileInfoItem(Icons.location_on, locationText, location),
+                        _buildProfileInfoItem(
+                            Icons.email, emailText, userData?['email'] ?? ''),
+                        _buildProfileInfoItem(Icons.phone, phoneText,
+                            userData?['phoneNo']?.toString() ?? ''),
+                        _buildProfileInfoItem(
+                            Icons.location_on, locationText, location),
                       ],
                     ),
                   ),
@@ -367,10 +378,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         const Divider(),
-                        _buildProfileInfoItem(Icons.card_membership, subscriptionText, subscriptionType),
+                        _buildProfileInfoItem(Icons.card_membership,
+                            subscriptionText, subscriptionType),
                         if (userData?['accountType'] == 'consultant') ...[
-                          _buildProfileInfoItem(Icons.work, experienceText, '$experience $yearsText'),
-                          _buildProfileInfoItem(Icons.star, ratingText, '$rating/5'),
+                          _buildProfileInfoItem(Icons.work, experienceText,
+                              '$experience $yearsText'),
+                          _buildProfileInfoItem(
+                              Icons.star, ratingText, '$rating/5'),
                         ],
                       ],
                     ),
@@ -406,47 +420,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Logout Button
                   Container(
                     width: double.infinity,
-                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        // Show confirmation dialog
-                        Get.dialog(
-                          AlertDialog(
-                            title: Text('Logout'),
-                            content: Text('Are you sure you want to logout?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Get.back(),
-                                child: Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  Get.back();
-                                  await _authController.logout();
-                                },
-                                child: Text(
-                                  'Logout',
-                                  style: TextStyle(color: Colors.red[400]),
+                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: OutlinedButton(
+                      onPressed: () {
+                        // Show logout confirmation dialog
+                        showDialog(
+                          context: context,
+                          builder: (context) {
+                            return AlertDialog(
+                              title: Text(logoutText),
+                              content: const Text(
+                                  'Are you sure you want to logout?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Cancel'),
                                 ),
-                              ),
-                            ],
-                          ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _authController.logout();
+                                  },
+                                  child: Text(logoutText),
+                                ),
+                              ],
+                            );
+                          },
                         );
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red[400],
-                        foregroundColor: Colors.white,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.green),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        minimumSize: const Size(double.infinity, 54),
                       ),
                       child: Text(
                         logoutText,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: AppColors.green,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Settings Button
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Get.toNamed('/settings');
+                      },
+                      icon: const Icon(Icons.settings, color: AppColors.green),
+                      label: const Text(
+                        'Settings',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.green,
                         ),
                       ),
                     ),

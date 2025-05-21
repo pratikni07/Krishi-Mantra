@@ -20,12 +20,18 @@ class ReelService {
         await TagService.processTags(reelData.description, reel._id);
       }
 
-      // Clear relevant cache
-      await redis.del(`reels:trending`);
-      await redis.del(`reels:user:${reelData.userId}`);
+      // Clear relevant cache - wrapped in try/catch to handle Redis errors
+      try {
+        await redis.del(`reels:trending`);
+        await redis.del(`reels:user:${reelData.userId}`);
+      } catch (redisError) {
+        console.warn("Redis cache clearing error:", redisError.message);
+        // Continue execution despite Redis error
+      }
 
       return reel;
     } catch (error) {
+      console.error("Error creating reel:", error);
       throw error;
     }
   }
@@ -33,12 +39,17 @@ class ReelService {
   static async getReels(page = 1, limit = 10, filters = {}, userId = null) {
     const cacheKey = `reels:page:${page}:limit:${limit}:${JSON.stringify(
       filters
-    )}:user:${userId || 'guest'}`;
-    
-    const cachedData = await redis.get(cacheKey);
+    )}:user:${userId || "guest"}`;
 
-    if (cachedData) {
-      return JSON.parse(cachedData);
+    // Try to get cached data, but handle Redis errors gracefully
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        return JSON.parse(cachedData);
+      }
+    } catch (redisError) {
+      console.warn("Redis cache retrieval error:", redisError.message);
+      // Continue execution without cache data
     }
 
     const skip = (page - 1) * limit;
@@ -68,7 +79,14 @@ class ReelService {
       total
     );
 
-    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+    // Try to cache the result, but handle Redis errors gracefully
+    try {
+      await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+    } catch (redisError) {
+      console.warn("Redis cache storage error:", redisError.message);
+      // Continue execution despite Redis error
+    }
+
     return result;
   }
 
@@ -124,7 +142,9 @@ class ReelService {
   }
 
   static async getTrendingReels(page = 1, limit = 10, userId = null) {
-    const cacheKey = `reels:trending:${page}:${limit}:user:${userId || 'guest'}`;
+    const cacheKey = `reels:trending:${page}:${limit}:user:${
+      userId || "guest"
+    }`;
     const cachedData = await redis.get(cacheKey);
 
     if (cachedData) {
@@ -169,7 +189,7 @@ class ReelService {
         reels.map(async (reel) => {
           const like = await Like.findOne({ reel: reel._id, userId });
           reel.like = {
-            ...reel.like || {},
+            ...(reel.like || {}),
             isLiked: !!like,
           };
         })
@@ -198,7 +218,7 @@ class ReelService {
       // Check for existing like
       const existingLike = await Like.findOne({
         reel: reelId,
-        userId: userData.userId
+        userId: userData.userId,
       });
 
       if (existingLike) {
@@ -214,13 +234,10 @@ class ReelService {
       await like.save();
 
       // Update reel like count
-      await Reel.findByIdAndUpdate(
-        reelId,
-        {
-          $inc: { "like.count": 1 },
-          $addToSet: { "like.users": userData.userId }
-        }
-      );
+      await Reel.findByIdAndUpdate(reelId, {
+        $inc: { "like.count": 1 },
+        $addToSet: { "like.users": userData.userId },
+      });
 
       // Clear ALL relevant cache keys
       await redis.del(`reel:${reelId}`);
@@ -248,7 +265,7 @@ class ReelService {
       // Find and delete like
       const deletedLike = await Like.findOneAndDelete({
         reel: reelId,
-        userId
+        userId,
       });
 
       if (!deletedLike) {
@@ -256,13 +273,10 @@ class ReelService {
       }
 
       // Update reel like count
-      await Reel.findByIdAndUpdate(
-        reelId,
-        {
-          $inc: { "like.count": -1 },
-          $pull: { "like.users": userId }
-        }
-      );
+      await Reel.findByIdAndUpdate(reelId, {
+        $inc: { "like.count": -1 },
+        $pull: { "like.users": userId },
+      });
 
       // Clear ALL relevant cache keys
       await redis.del(`reel:${reelId}`);
@@ -281,7 +295,7 @@ class ReelService {
 
   static async getCommentByReelId(reelId, { page, limit, parentComment }) {
     const COMMENTS_CACHE_TTL = 30;
-    
+
     const cacheKey = `comment:${reelId}:${page}:${limit}:${parentComment}`;
     const cachedComment = await redis.get(cacheKey);
 
@@ -294,7 +308,7 @@ class ReelService {
     const query = {
       reel: reelId,
       isDeleted: false,
-      parentComment: parentComment || null
+      parentComment: parentComment || null,
     };
 
     const [comments, total] = await Promise.all([
@@ -310,11 +324,11 @@ class ReelService {
           populate: {
             path: "replies",
             match: { isDeleted: false },
-            options: { sort: { createdAt: -1 } }
-          }
+            options: { sort: { createdAt: -1 } },
+          },
         })
         .lean(),
-      Comment.countDocuments(query)
+      Comment.countDocuments(query),
     ]);
 
     const totalPages = Math.ceil(total / limit);
@@ -356,11 +370,11 @@ class ReelService {
       }
 
       comment.depth = parentComment.depth + 1;
-      
+
       await comment.save();
-      
+
       await Comment.findByIdAndUpdate(parentComment._id, {
-        $push: { replies: comment._id }
+        $push: { replies: comment._id },
       });
     } else {
       await comment.save();
@@ -377,17 +391,17 @@ class ReelService {
       `reel:${reelId}*`,
       `comment:${reelId}*`,
       `reel:${reelId}:comments*`,
-      'reels:trending*'  // Clear trending cache as engagement changes
+      "reels:trending*", // Clear trending cache as engagement changes
     ];
 
-    await Promise.all(cachePatterns.map(pattern => redis.del(pattern)));
+    await Promise.all(cachePatterns.map((pattern) => redis.del(pattern)));
 
     return Comment.findById(comment._id)
       .populate({
         path: "replies",
         select: "-__v",
         match: { isDeleted: false },
-        options: { sort: { createdAt: -1 } }
+        options: { sort: { createdAt: -1 } },
       })
       .lean();
   }
@@ -419,7 +433,9 @@ class ReelService {
   }
 
   static async getUserReels(userId, page = 1, limit = 10, viewerId = null) {
-    const cacheKey = `reels:user:${userId}:${page}:${limit}:viewer:${viewerId || 'guest'}`;
+    const cacheKey = `reels:user:${userId}:${page}:${limit}:viewer:${
+      viewerId || "guest"
+    }`;
     const cachedData = await redis.get(cacheKey);
 
     if (cachedData) {

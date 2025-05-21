@@ -21,6 +21,8 @@ import 'package:krishimantra/presentation/controllers/crop_controller.dart';
 // Add imports for video tutorial
 import 'package:krishimantra/data/repositories/video_tutorial_repository.dart';
 import 'package:krishimantra/presentation/controllers/video_tutorial_controller.dart';
+// Add imports for connectivity
+import 'package:krishimantra/presentation/controllers/connectivity_controller.dart';
 
 import 'data/repositories/company_repository.dart';
 import 'data/repositories/product_repository.dart';
@@ -36,15 +38,23 @@ import 'package:krishimantra/presentation/controllers/presigned_url_controller.d
 import 'package:krishimantra/data/repositories/marketplace_repository.dart';
 import 'package:krishimantra/presentation/controllers/marketplace_controller.dart';
 
-void initDependencies() {
+Future<void> initDependencies() async {
   // Initialize Dio and ApiService first
   final dio = Dio();
-  Get.put(ApiService(dio), permanent: true);
+  final apiService = ApiService(dio);
+  await Get.putAsync(() async => apiService, permanent: true);
 
   // Initialize core services with permanent: true
-  Get.put(UserService(), permanent: true);
-  Get.put(SocketService(), permanent: true);
-  Get.put(LocationService(), permanent: true);
+  await Get.putAsync(() async => UserService(), permanent: true);
+  final socketService = SocketService();
+  await Get.putAsync(() async => socketService, permanent: true);
+  await Get.putAsync(() async => LocationService(), permanent: true);
+
+  // Initialize connectivity controller early as it's needed by many components
+  Get.put(
+    ConnectivityController(Get.find<ApiService>()),
+    permanent: true,
+  );
 
   // Initialize repositories with fenix: true
   Get.lazyPut(() => AuthRepository(Get.find<ApiService>()), fenix: true);

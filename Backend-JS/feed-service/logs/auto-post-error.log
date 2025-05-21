@@ -1,0 +1,136 @@
+[2025-04-22T17:56:01.093Z] [ERROR] Error creating auto post: Request failed with status code 404
+[2025-04-22T17:56:01.094Z] [ERROR] Error creating auto post:
+{
+  "message": "Request failed with status code 404",
+  "stack": "AxiosError: Request failed with status code 404\n    at settle (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:2031:12)\n    at IncomingMessage.handleStreamEnd (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:3148:11)\n    at IncomingMessage.emit (node:events:519:35)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios.request (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:4258:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:73:24)"
+}
+[2025-04-22T17:58:00.704Z] [ERROR] Error creating auto post: Request failed with status code 500
+[2025-04-22T17:58:00.704Z] [ERROR] Error response details:
+{
+  "status": 500,
+  "statusText": "Internal Server Error",
+  "data": {
+    "error": "Internal server error"
+  },
+  "headers": {
+    "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-resource-policy": "same-origin",
+    "origin-agent-cluster": "?1",
+    "referrer-policy": "no-referrer",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-content-type-options": "nosniff",
+    "x-dns-prefetch-control": "off",
+    "x-download-options": "noopen",
+    "x-frame-options": "SAMEORIGIN",
+    "x-permitted-cross-domain-policies": "none",
+    "x-xss-protection": "0",
+    "access-control-allow-origin": "*",
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "33",
+    "etag": "W/\"21-u8tno/8IdqEY6PFcopkQe0syfE4\"",
+    "date": "Tue, 22 Apr 2025 17:58:00 GMT",
+    "connection": "keep-alive",
+    "keep-alive": "timeout=5"
+  }
+}
+[2025-04-22T17:58:00.717Z] [ERROR] Error creating auto post:
+{
+  "message": "Request failed with status code 500",
+  "stack": "AxiosError: Request failed with status code 500\n    at settle (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:2031:12)\n    at IncomingMessage.handleStreamEnd (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:3148:11)\n    at IncomingMessage.emit (node:events:519:35)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios.request (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:4258:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:76:24)"
+}
+[2025-04-22T18:02:00.798Z] [ERROR] Error creating auto post: Request failed with status code 500
+[2025-04-22T18:02:00.798Z] [ERROR] Error response details:
+{
+  "status": 500,
+  "statusText": "Internal Server Error",
+  "data": {
+    "error": "Internal server error"
+  },
+  "headers": {
+    "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-resource-policy": "same-origin",
+    "origin-agent-cluster": "?1",
+    "referrer-policy": "no-referrer",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-content-type-options": "nosniff",
+    "x-dns-prefetch-control": "off",
+    "x-download-options": "noopen",
+    "x-frame-options": "SAMEORIGIN",
+    "x-permitted-cross-domain-policies": "none",
+    "x-xss-protection": "0",
+    "access-control-allow-origin": "*",
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "33",
+    "etag": "W/\"21-u8tno/8IdqEY6PFcopkQe0syfE4\"",
+    "date": "Tue, 22 Apr 2025 18:02:00 GMT",
+    "connection": "keep-alive",
+    "keep-alive": "timeout=5"
+  }
+}
+[2025-04-22T18:02:00.813Z] [ERROR] Error creating auto post:
+{
+  "message": "Request failed with status code 500",
+  "stack": "AxiosError: Request failed with status code 500\n    at settle (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:2031:12)\n    at IncomingMessage.handleStreamEnd (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:3148:11)\n    at IncomingMessage.emit (node:events:519:35)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios.request (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/node_modules/axios/dist/node/axios.cjs:4258:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:76:24)"
+}
+[2025-04-22T18:10:10.168Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:10:10.171Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
+[2025-04-22T18:12:10.475Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:12:10.476Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
+[2025-04-22T18:14:10.806Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:14:10.816Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
+[2025-04-22T18:16:10.154Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:16:10.157Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
+[2025-04-22T18:18:10.447Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:18:10.449Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
+[2025-04-22T18:20:10.875Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:20:10.877Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
+[2025-04-22T18:22:10.203Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:22:10.205Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
+[2025-04-22T18:24:10.472Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:24:10.477Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)"
+}
+[2025-04-22T18:26:10.696Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:26:10.697Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
+[2025-04-22T18:28:10.921Z] [ERROR] Error creating auto post: timeout of 10000ms exceeded
+[2025-04-22T18:28:10.922Z] [ERROR] Error creating auto post:
+{
+  "message": "Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle",
+  "stack": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Socket'\n    |     property 'parser' -> object with constructor 'HTTPParser'\n    --- property 'socket' closes the circle\n    at JSON.stringify (<anonymous>)\n    at Logger.formatLogMessage (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:31:29)\n    at Logger.log (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:47:25)\n    at Logger.error (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/logger.js:87:10)\n    at AutoPostScheduler.createRandomPost (/Users/pratik/Desktop/PRAT/KrishiMantra/Backend-JS/feed-service/src/utils/autoPostScheduler.js:102:16)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at listOnTimeout (node:internal/timers:575:9)\n    at process.processTimers (node:internal/timers:549:7)"
+}
