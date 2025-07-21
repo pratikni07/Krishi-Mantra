@@ -1,73 +1,273 @@
 version: '3.8'
 
+# Shared environment variables for all services
+x-common-variables: &common-variables
+  NODE_ENV: ${NODE_ENV:-production}
+  MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+  MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-secure-password}
+  JWT_SECRET: ${JWT_SECRET:-your-super-secure-jwt-secret-key}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-password}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+
+# Base service configuration
+x-service-base: &service-base
+  restart: unless-stopped
+  logging: &logging-config
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
+  # Database services
   mongodb:
-    image: mongo:latest
-    container_name: microservices-mongodb
+    image: mongo:6.0
+    container_name: krishi-mongodb
+    <<: *service-base
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT:-27017}:27017"
     volumes:
       - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=secure-password
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-secure-password}
+      - MONGO_INITDB_DATABASE=krishi-mantra-main
+    command: ["--auth", "--wiredTigerCacheSizeGB", "1.5"]
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/admin --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
-  api-gateway:
-    build: 
-      context: ./api-gateway
-      dockerfile: Dockerfile
-    container_name: api-gateway
+  redis:
+    image: redis:7.0-alpine
+    container_name: krishi-redis
+    <<: *service-base
     ports:
-      - "3000:3000"
-    environment:
-      - PORT=3000
-      - MAIN_SERVICE_URL=http://main-service:4000
-      - NOTIFICATION_SERVICE_URL=http://notification-service:4001
-      - FEED_SERVICE_URL=http://feed-service:4002
-    depends_on:
-      - mongodb
-      - main-service
-      - notification-service
-      - feed-service
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis-password}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
+  # API Gateway - Entry point for all services
+  api-gateway:
+    build:
+      context: ./api-gateway-service
+      dockerfile: Dockerfile
+    container_name: krishi-api-gateway
+    <<: *service-base
+    ports:
+      - "${API_GATEWAY_PORT:-3001}:3001"
+    environment:
+      <<: *common-variables
+      PORT: 3001
+      MAIN_SERVICE_URL: http://main-service:3002
+      MESSAGE_SERVICE_URL: http://message-service:3004
+      FEED_SERVICE_URL: http://feed-service:3003
+      NOTIFICATION_SERVICE_URL: http://notification-service:3006
+      REEL_SERVICE_URL: http://reel-service:3005
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-password}
+      REDIS_SSL: "true"
+      ALLOWED_ORIGINS: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Main Service - Core functionality and authentication
   main-service:
-    build: 
+    build:
       context: ./main-service
       dockerfile: Dockerfile
-    container_name: main-service
-    ports:
-      - "4000:4000"
+    <<: *service-base
+    deploy:
+      replicas: ${MAIN_SERVICE_REPLICAS:-2}
     environment:
-      - PORT=4000
-      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/maindb
+      <<: *common-variables
+      PORT: 3002
+      MONGODB_URL: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-secure-password}@mongodb:27017/krishi-mantra-main?authSource=admin
+      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:3000},http://api-gateway:3001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-password}
+      REDIS_SSL: "true"
+      ENABLE_CLUSTERING: "false" # Managed by Docker instead
+      API_GATEWAY_URL: http://api-gateway:3001
+      MESSAGE_SERVICE_URL: http://message-service:3004
+      FEED_SERVICE_URL: http://feed-service:3003
+      NOTIFICATION_SERVICE_URL: http://notification-service:3006
     depends_on:
       - mongodb
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
-  notification-service:
-    build: 
-      context: ./notification-service
-      dockerfile: Dockerfile
-    container_name: notification-service
-    ports:
-      - "4001:4001"
-    environment:
-      - PORT=4001
-      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/notificationdb
-    depends_on:
-      - mongodb
-
+  # Feed Service - Content feeds and posts
   feed-service:
-    build: 
+    build:
       context: ./feed-service
       dockerfile: Dockerfile
-    container_name: feed-service
-    ports:
-      - "4002:4002"
+    <<: *service-base
+    deploy:
+      replicas: ${FEED_SERVICE_REPLICAS:-2}
     environment:
-      - PORT=4002
-      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/feeddb
+      <<: *common-variables
+      PORT: 3003
+      MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-secure-password}@mongodb:27017/krishi-mantra-feed?authSource=admin
+      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:3000},http://api-gateway:3001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-password}
+      ENABLE_AUTO_POST: "true"
+      MAIN_SERVICE_URL: http://main-service:3002
+      API_GATEWAY_URL: http://api-gateway:3001
     depends_on:
       - mongodb
+      - redis
+      - main-service
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Message Service - User messaging functionality
+  message-service:
+    build:
+      context: ./message-svc
+      dockerfile: Dockerfile
+    <<: *service-base
+    environment:
+      <<: *common-variables
+      PORT: 3004
+      MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-secure-password}@mongodb:27017/krishi-mantra-messages?authSource=admin
+      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:3000},http://api-gateway:3001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-password}
+      MAIN_SERVICE_URL: http://main-service:3002
+      API_GATEWAY_URL: http://api-gateway:3001
+    depends_on:
+      - mongodb
+      - redis
+      - main-service
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Reel Service - Short video content
+  reel-service:
+    build:
+      context: ./reel-service
+      dockerfile: Dockerfile
+    <<: *service-base
+    environment:
+      <<: *common-variables
+      PORT: 3005
+      MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-secure-password}@mongodb:27017/krishi-mantra-reels?authSource=admin
+      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:3000},http://api-gateway:3001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-password}
+      MAIN_SERVICE_URL: http://main-service:3002
+      API_GATEWAY_URL: http://api-gateway:3001
+    depends_on:
+      - mongodb
+      - redis
+      - main-service
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Notification Service - Push notifications and alerts
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    <<: *service-base
+    environment:
+      <<: *common-variables
+      PORT: 3006
+      MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-secure-password}@mongodb:27017/krishi-mantra-notifications?authSource=admin
+      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:3000},http://api-gateway:3001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-password}
+      MAIN_SERVICE_URL: http://main-service:3002
+      API_GATEWAY_URL: http://api-gateway:3001
+    depends_on:
+      - mongodb
+      - redis
+      - main-service
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Monitoring system
+  prometheus:
+    image: prom/prometheus:v2.41.0
+    container_name: prometheus
+    <<: *service-base
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  grafana:
+    image: grafana/grafana:9.3.2
+    container_name: grafana
+    <<: *service-base
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
 
 volumes:
   mongodb_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default:
+    driver: bridge

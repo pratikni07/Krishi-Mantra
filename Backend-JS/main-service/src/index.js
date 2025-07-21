@@ -4,15 +4,20 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const fileUpload = require("express-fileupload");
 const helmet = require("helmet");
-const connect = require("./config/database");
-const winston = require("winston");
-const Joi = require("joi");
-const rateLimit = require("express-rate-limit");
-const Redis = require("redis");
 const path = require("path");
-const { MemoryStore } = require("express-rate-limit");
-const statusMonitor = require("express-status-monitor");
+const compression = require("compression");
+const cluster = require('cluster');
+const os = require('os');
 
+// Load environment variables based on NODE_ENV
+require('./config/environment')();
+
+// Import core modules
+const connect = require("./config/database");
+const { logger, requestLogger } = require("./utils/logger");
+const redisService = require("./utils/redis");
+
+// Routes
 const userRoutes = require("./routes/User");
 const companyRoutes = require("./routes/companyRoutes");
 const productRoutes = require("./routes/productRoutes");
@@ -25,240 +30,207 @@ const schemeRoutes = require("./routes/schemeRoutes");
 const analyticsRoutes = require("./routes/AnalyticsRoutes");
 const marketplaceRoutes = require("./routes/marketplaceRoutes");
 
-// Load environment variables based on NODE_ENV
-require('./config/environment')();
+// Determine if we should use clustering
+const ENABLE_CLUSTERING = process.env.ENABLE_CLUSTERING === 'true' && process.env.NODE_ENV === 'production';
+const numCPUs = os.cpus().length;
 
-// Validate environment variables
-const envSchema = Joi.object({
-  NODE_ENV: Joi.string()
-    .valid("development", "production")
-    .default("development"),
-  PORT: Joi.number().default(3002),
-  MONGODB_URL: Joi.string().uri().required(),
-  CORS_ORIGIN: Joi.string().uri().required(),
-  JWT_SECRET: Joi.string().required(),
-  REDIS_HOST: Joi.string().required(),
-  REDIS_PORT: Joi.number().default(6379),
-  REDIS_PASSWORD: Joi.string().allow(''),
-});
+// Use clustering in production for better performance
+if (ENABLE_CLUSTERING && cluster.isPrimary) {
+  logger.info(`Primary ${process.pid} is running`);
+  logger.info(`Setting up ${numCPUs} workers`);
 
-const app = express();
-const PORT = process.env.PORT || 3002;
-
-// Initialize logger
-const logger = winston.createLogger({
-  level: "info",
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      ),
-    }),
-    new winston.transports.File({
-      filename: "logs/app.log",
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-      ),
-    }),
-  ],
-});
-
-const { error } = envSchema.validate(process.env, { allowUnknown: true });
-if (error) {
-  logger.error(`Config validation error: ${error.message}`);
-  process.exit(1);
-}
-
-// Connect to database
-connect();
-
-// Apply security headers
-app.use(helmet());
-
-// Middleware setup
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(cookieParser());
-
-// Redis client configuration with proper error handling
-let redisClient = null;
-try {
-  redisClient = Redis.createClient({
-    host: process.env.REDIS_HOST,
-    port: process.env.REDIS_PORT,
-    password: process.env.REDIS_PASSWORD,
-    // Add TLS configuration for production
-    ...(process.env.NODE_ENV === "production" && {
-      tls: {},
-      socket: {
-        servername: process.env.REDIS_HOST,
-      },
-    }),
-  });
-
-  redisClient.on("error", (err) => {
-    console.warn("Redis client error:", err.message);
-    console.warn("Application will continue without Redis rate limiting");
-  });
-
-  // Only connect if the connection is needed
-  if (process.env.NODE_ENV === 'production') {
-    redisClient.connect().catch(err => {
-      console.warn("Redis connection failed:", err.message);
-    });
+  // Fork workers based on CPU count
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
   }
-} catch (error) {
-  console.warn("Redis client initialization error:", error.message);
-  console.warn("Application will continue without Redis rate limiting");
+
+  // Handle worker crashes
+  cluster.on('exit', (worker, code, signal) => {
+    logger.warn(`Worker ${worker.process.pid} died with code ${code} and signal ${signal}`);
+    logger.info('Starting a new worker');
+    cluster.fork();
+  });
+} else {
+  // Worker process or single-process mode
+  startServer();
 }
 
-// Configure rate limiting with memory store
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new MemoryStore(),
-  skipFailedRequests: true,
-  handler: (req, res) => {
-    res.status(429).json({
-      error: "Too many requests, please try again later.",
-    });
-  },
-});
+function startServer() {
+  const app = express();
+  const PORT = process.env.PORT || 3002;
 
-app.use(
-  statusMonitor({
-    path: "/status",
-    spans: [
-      { interval: 1, retention: 60 },
-      { interval: 5, retention: 60 },
-      { interval: 15, retention: 60 },
-    ],
-    chartVisibility: {
-      cpu: true,
-      mem: true,
-      load: true,
-      eventLoop: true,
-      heap: true,
-      responseTime: true,
-      rps: true,
-      statusCodes: true,
-    },
-  })
-);
+  // Apply security headers
+  app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production',
+    crossOriginEmbedderPolicy: process.env.NODE_ENV === 'production',
+  }));
 
-console.log(process.env.MONGODB_URL);
+  // Enable compression for responses
+  app.use(compression());
 
-// Configure CORS for production
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (process.env.NODE_ENV === "development") {
-        return callback(null, true);
-      }
-      const allowedOrigins = process.env.CORS_ORIGIN
-        ? process.env.CORS_ORIGIN.split(",")
-        : ["http://localhost:3000"];
+  // Middleware setup
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(cookieParser());
 
-      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        console.log("Blocked by CORS in main-service:", origin);
-        callback(null, true);
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-    maxAge: 86400,
-  })
-);
+  // Configure CORS
+  app.use(
+    cors({
+      origin: function (origin, callback) {
+        if (process.env.NODE_ENV === "development") {
+          return callback(null, true);
+        }
+        const allowedOrigins = process.env.CORS_ORIGIN
+          ? process.env.CORS_ORIGIN.split(",")
+          : ["http://localhost:3000"];
 
-// File upload configuration
-app.use(
-  fileUpload({
-    useTempFiles: true,
-    tempFileDir: path.join(__dirname, "temp"),
-  })
-);
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          logger.warn(`Blocked by CORS in main-service: ${origin}`);
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+      credentials: true,
+      maxAge: 86400,
+    })
+  );
 
-// Routes
-app.get("/", (req, res) => {
-  res.status(200).json({
-    message: "Welcome to the API",
-  });
-});
+  // Request logging
+  app.use(requestLogger);
 
-app.get("/health", (req, res) => {
-  try {
-    logger.info("Health check received", {
-      headers: req.headers,
-      ip: req.ip,
+  // File upload configuration
+  app.use(
+    fileUpload({
+      useTempFiles: true,
+      tempFileDir: path.join(__dirname, "temp"),
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+      abortOnLimit: true,
+    })
+  );
+
+  // Connect to database
+  connect()
+    .then(() => {
+      logger.info('Database connected successfully');
+    })
+    .catch((err) => {
+      logger.error('Database connection failed:', err);
+      process.exit(1);
     });
 
-    res.setHeader("Content-Type", "application/json");
-    res.status(200).json({
+  // Health check endpoint
+  app.get("/health", (req, res) => {
+    const healthData = {
       status: "OK",
       timestamp: new Date().toISOString(),
       service: "main",
-      port: PORT,
+      version: process.env.npm_package_version || '1.0.0',
       environment: process.env.NODE_ENV || "development",
+      uptime: process.uptime(),
+      pid: process.pid,
+      memory: process.memoryUsage(),
+      redis: redisService.isConnected ? 'connected' : 'disconnected',
+    };
+
+    res.status(200).json(healthData);
+  });
+
+  // API Routes
+  app.get("/", (req, res) => {
+    res.status(200).json({
+      message: "Krishi Mantra API - Main Service",
+      version: process.env.npm_package_version || '1.0.0',
+      environment: process.env.NODE_ENV || "development"
     });
-  } catch (error) {
-    logger.error("Health check error:", error);
-    res.status(500).json({
-      status: "ERROR",
-      message: error.message,
+  });
+
+  app.use("/auth", userRoutes);
+  app.use("/companies", companyRoutes);
+  app.use("/products", productRoutes);
+  app.use("/ads", adsRoutes);
+  app.use("/news", newsRoutes);
+  app.use("/service", serviceRoutes);
+  app.use("/user", userRoutesOne);
+  app.use("/crop-calendar", cropRoutes);
+  app.use("/schemes", schemeRoutes);
+  app.use("/analytics", analyticsRoutes);
+  app.use("/marketplace", marketplaceRoutes);
+
+  // 404 handler
+  app.use((req, res) => {
+    res.status(404).json({
+      error: "Not Found",
+      message: `Route ${req.method} ${req.path} not found`
     });
-  }
-});
-
-app.use("/auth", userRoutes);
-app.use("/companies", companyRoutes);
-app.use("/products", productRoutes);
-app.use("/ads", adsRoutes);
-app.use("/news", newsRoutes);
-app.use("/service", serviceRoutes);
-app.use("/user", userRoutesOne);
-app.use("/crop-calendar", cropRoutes);
-app.use("/schemes", schemeRoutes);
-app.use("/analytics", analyticsRoutes);
-app.use("/marketplace", marketplaceRoutes);
-
-app.use((req, res, next) => {
-  logger.info({
-    method: req.method,
-    path: req.path,
-    body: req.method === "POST" ? req.body : undefined,
-    headers: req.headers,
-  });
-  next();
-});
-
-app.use((err, req, res, next) => {
-  logger.error("Error:", {
-    message: err.message,
-    stack: err.stack,
-    path: req.path,
-    method: req.method,
   });
 
-  res.status(err.status || 500).json({
-    error: err.message || "Internal Server Error",
-    status: err.status || 500,
+  // Global error handler
+  app.use((err, req, res, next) => {
+    logger.error("Error:", {
+      message: err.message,
+      stack: err.stack,
+      path: req.path,
+      method: req.method,
+    });
+
+    res.status(err.status || 500).json({
+      error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
+      requestId: req.headers['x-trace-id']
+    });
   });
-});
 
-// Graceful shutdown
-process.on("SIGINT", () => {
-  logger.info("Server is shutting down...");
-  process.exit();
-});
+  // Start server
+  const server = app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT} (${process.env.NODE_ENV} mode, PID: ${process.pid})`);
+    logger.info(`Main database: ${process.env.MONGODB_URL}`);
+  });
 
-// Start the server
-app.listen(PORT, () => {
-  logger.info(`Server is running on port ${PORT}`);
-});
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM signal received. Shutting down gracefully...');
+    
+    server.close(async () => {
+      logger.info('HTTP server closed');
+      
+      // Close database connection
+      try {
+        const mongoose = require('mongoose');
+        await mongoose.disconnect();
+        logger.info('MongoDB connection closed');
+      } catch (err) {
+        logger.error('Error during MongoDB disconnect:', err);
+      }
+      
+      // Close Redis connection if available
+      try {
+        await redisService.close();
+        logger.info('Redis connection closed');
+      } catch (err) {
+        logger.error('Error during Redis disconnect:', err);
+      }
+      
+      process.exit(0);
+    });
+  });
+
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception:', error);
+    
+    // In production, we might want to attempt a graceful restart
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('Process will exit due to uncaught exception');
+      process.exit(1);
+    }
+  });
+
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Promise Rejection:', reason);
+  });
+}
+
+module.exports = { app: express() }; // For testing
