@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'dart:async';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/responsive_utils.dart';
+import '../../../core/utils/language_helper.dart';
 import '../../../data/models/message_model.dart';
 import '../../../data/services/UserService.dart';
 import '../../../data/services/SocketService.dart';
@@ -29,7 +31,7 @@ class ChatDetailScreen extends StatefulWidget {
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
 }
 
-class _ChatDetailScreenState extends State<ChatDetailScreen> {
+class _ChatDetailScreenState extends State<ChatDetailScreen> with TranslationMixin {
   final MessageController _messageController = Get.find<MessageController>();
   final UserService _userService = UserService();
   final SocketService _socketService = SocketService();
@@ -51,10 +53,87 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   static const int _messagesPerPage = 20;
   static const Duration _typingTimeout = Duration(seconds: 3);
 
+  // Track messages already marked as read to prevent duplicates
+  final Set<String> _markedAsReadMessageIds = {};
+  Timer? _readMarkingDebounceTimer;
+  final List<String> _pendingReadMessageIds = [];
+
+  // Translation keys
+  static const String KEY_FAILED_SEND_MESSAGE = 'failed_send_message';
+  static const String KEY_TODAY = 'today';
+  static const String KEY_YESTERDAY = 'yesterday';
+  static const String KEY_IS_TYPING = 'is_typing';
+  static const String KEY_PEOPLE_TYPING = 'people_typing';
+  static const String KEY_TYPE_MESSAGE = 'type_message';
+  static const String KEY_SHARE_CONTENT = 'share_content';
+  static const String KEY_GALLERY = 'gallery';
+  static const String KEY_CAMERA = 'camera';
+  static const String KEY_DOCUMENT = 'document';
+  static const String KEY_PERMISSION_REQUIRED = 'permission_required';
+  static const String KEY_GALLERY_ACCESS = 'gallery_access_needed';
+  static const String KEY_CAMERA_ACCESS = 'camera_access_needed';
+  static const String KEY_STORAGE_ACCESS = 'storage_access_needed';
+  static const String KEY_ERROR = 'error';
+  static const String KEY_FAILED_UPLOAD_IMAGE = 'failed_upload_image';
+  static const String KEY_FAILED_UPLOAD_DOCUMENT = 'failed_upload_document';
+  static const String KEY_FAILED_PREVIEW_IMAGE = 'failed_preview_image';
+  static const String KEY_FAILED_PREVIEW_DOCUMENT = 'failed_preview_document';
+  static const String KEY_UNKNOWN_GROUP = 'unknown_group';
+  static const String KEY_PARTICIPANTS = 'participants';
+  static const String KEY_LEAVE_GROUP = 'leave_group';
+  static const String KEY_LEAVE_GROUP_CONFIRM = 'leave_group_confirm';
+  static const String KEY_CANCEL = 'cancel';
+  static const String KEY_LEAVE = 'leave';
+  static const String KEY_SUCCESS = 'success';
+  static const String KEY_LEFT_GROUP = 'left_group';
+  static const String KEY_FAILED_LEAVE_GROUP = 'failed_leave_group';
+  static const String KEY_GROUP_PARTICIPANTS = 'group_participants';
+  static const String KEY_ADMIN = 'admin';
+
   @override
   void initState() {
     super.initState();
+    _registerTranslations();
+    _initializeLanguage();
     _initializeChat();
+  }
+
+  void _registerTranslations() {
+    registerTranslation(KEY_FAILED_SEND_MESSAGE, 'Failed to send message');
+    registerTranslation(KEY_TODAY, 'Today');
+    registerTranslation(KEY_YESTERDAY, 'Yesterday');
+    registerTranslation(KEY_IS_TYPING, 'is typing...');
+    registerTranslation(KEY_PEOPLE_TYPING, 'people are typing...');
+    registerTranslation(KEY_TYPE_MESSAGE, 'Type a message...');
+    registerTranslation(KEY_SHARE_CONTENT, 'Share Content');
+    registerTranslation(KEY_GALLERY, 'Gallery');
+    registerTranslation(KEY_CAMERA, 'Camera');
+    registerTranslation(KEY_DOCUMENT, 'Document');
+    registerTranslation(KEY_PERMISSION_REQUIRED, 'Permission Required');
+    registerTranslation(KEY_GALLERY_ACCESS, 'Gallery access is needed to select images');
+    registerTranslation(KEY_CAMERA_ACCESS, 'Camera access is needed to take photos');
+    registerTranslation(KEY_STORAGE_ACCESS, 'Storage access is needed to select documents');
+    registerTranslation(KEY_ERROR, 'Error');
+    registerTranslation(KEY_FAILED_UPLOAD_IMAGE, 'Failed to upload image');
+    registerTranslation(KEY_FAILED_UPLOAD_DOCUMENT, 'Failed to upload document');
+    registerTranslation(KEY_FAILED_PREVIEW_IMAGE, 'Failed to preview image');
+    registerTranslation(KEY_FAILED_PREVIEW_DOCUMENT, 'Failed to preview document');
+    registerTranslation(KEY_UNKNOWN_GROUP, 'Unknown Group');
+    registerTranslation(KEY_PARTICIPANTS, 'participants');
+    registerTranslation(KEY_LEAVE_GROUP, 'Leave Group');
+    registerTranslation(KEY_LEAVE_GROUP_CONFIRM, 'Are you sure you want to leave this group?');
+    registerTranslation(KEY_CANCEL, 'Cancel');
+    registerTranslation(KEY_LEAVE, 'Leave');
+    registerTranslation(KEY_SUCCESS, 'Success');
+    registerTranslation(KEY_LEFT_GROUP, 'You have left the group');
+    registerTranslation(KEY_FAILED_LEAVE_GROUP, 'Failed to leave group');
+    registerTranslation(KEY_GROUP_PARTICIPANTS, 'Group Participants');
+    registerTranslation(KEY_ADMIN, 'Admin');
+  }
+
+  Future<void> _initializeLanguage() async {
+    await updateTranslations();
+    if (mounted) setState(() {});
   }
 
   Future<void> _initializeChat() async {
@@ -302,7 +381,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _scrollToBottom();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to send message')),
+        SnackBar(content: Text(getTranslation(KEY_FAILED_SEND_MESSAGE))),
       );
     }
   }
@@ -318,17 +397,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         );
       }
 
+      // Find unread messages that haven't been marked yet
       final unreadMessageIds = messages
           .where((m) =>
               m.senderId != currentUserId &&
-              !m.readByUserIds.contains(currentUserId))
+              !m.readByUserIds.contains(currentUserId) &&
+              !_markedAsReadMessageIds.contains(m.id))
           .map((m) => m.id)
           .toList();
 
-      // Mark visible messages as read in batch
+      // Mark visible messages as read with debouncing to prevent duplicates
       if (unreadMessageIds.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _socketService.markMessagesAsRead(widget.chat.id, unreadMessageIds);
+        _pendingReadMessageIds.addAll(unreadMessageIds);
+        _markedAsReadMessageIds.addAll(unreadMessageIds);
+
+        // Debounce the read marking to batch multiple calls
+        _readMarkingDebounceTimer?.cancel();
+        _readMarkingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+          if (_pendingReadMessageIds.isNotEmpty) {
+            _socketService.markMessagesAsRead(widget.chat.id, List.from(_pendingReadMessageIds));
+            _pendingReadMessageIds.clear();
+          }
         });
       }
 
@@ -398,19 +487,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   Widget _buildDateHeader(DateTime date) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: RPadding.symmetric(vertical: 16),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: RPadding.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppSizes.radiusL),
           ),
           child: Text(
             _formatDateHeader(date),
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textGrey,
-              fontSize: 12,
+              fontSize: AppSizes.fontS,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -425,9 +514,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final messageDate = DateTime(date.year, date.month, date.day);
 
     if (messageDate == DateTime(now.year, now.month, now.day)) {
-      return 'Today';
+      return getTranslation(KEY_TODAY);
     } else if (messageDate == yesterday) {
-      return 'Yesterday';
+      return getTranslation(KEY_YESTERDAY);
     } else {
       return '${date.day}/${date.month}/${date.year}';
     }
@@ -590,8 +679,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             // Typing text
             Text(
               _typingUsers.length == 1
-                  ? '${_typingUsers.first} is typing...'
-                  : '${_typingUsers.length} people are typing...',
+                  ? '${_typingUsers.first} ${getTranslation(KEY_IS_TYPING)}'
+                  : '${_typingUsers.length} ${getTranslation(KEY_PEOPLE_TYPING)}',
               style: const TextStyle(
                 color: AppColors.textGrey,
                 fontSize: 12,
@@ -629,9 +718,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget _buildMessageInput() {
     return Container(
       padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
+        left: AppSizes.paddingL,
+        right: AppSizes.paddingL,
+        top: AppSizes.paddingS,
         bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
       decoration: BoxDecoration(
@@ -648,26 +737,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.attach_file, color: AppColors.textGrey),
+            icon: Icon(Icons.attach_file, color: AppColors.textGrey, size: AppSizes.iconM),
             onPressed: _showAttachmentOptions,
           ),
           Expanded(
             child: TextField(
               controller: _textController,
               focusNode: _focusNode,
+              style: TextStyle(fontSize: AppSizes.fontM),
               decoration: InputDecoration(
-                hintText: 'Type a message...',
+                hintText: getTranslation(KEY_TYPE_MESSAGE),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusXXL),
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
                 fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                hintStyle: const TextStyle(color: AppColors.textGrey),
+                contentPadding: RPadding.symmetric(horizontal: 20, vertical: 10),
+                hintStyle: TextStyle(color: AppColors.textGrey, fontSize: AppSizes.fontM),
               ),
               maxLines: null,
               textCapitalization: TextCapitalization.sentences,
@@ -675,7 +762,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.send, color: AppColors.green),
+            icon: Icon(Icons.send, color: AppColors.green, size: AppSizes.iconM),
             onPressed: _sendMessage,
           ),
         ],
@@ -688,43 +775,43 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
+        padding: RPadding.all(20),
+        decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXXL)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Share Content',
+            Text(
+              getTranslation(KEY_SHARE_CONTENT),
               style: TextStyle(
-                fontSize: 18,
+                fontSize: AppSizes.fontL,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: AppSizes.paddingL),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildAttachmentOption(
                   icon: Icons.photo,
-                  label: 'Gallery',
+                  label: getTranslation(KEY_GALLERY),
                   onTap: () async {
                     Navigator.pop(context);
-                    
+
                     // Check gallery permission first
                     final hasPermission = await PermissionHelper.requestGalleryPermission(context);
                     if (!hasPermission) {
                       Get.snackbar(
-                        'Permission Required',
-                        'Gallery access is needed to select images',
+                        getTranslation(KEY_PERMISSION_REQUIRED),
+                        getTranslation(KEY_GALLERY_ACCESS),
                         snackPosition: SnackPosition.BOTTOM,
                         duration: const Duration(seconds: 3),
                       );
                       return;
                     }
-                    
+
                     final ImagePicker picker = ImagePicker();
                     final XFile? image = await picker.pickImage(
                       source: ImageSource.gallery,
@@ -737,22 +824,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ),
                 _buildAttachmentOption(
                   icon: Icons.camera_alt,
-                  label: 'Camera',
+                  label: getTranslation(KEY_CAMERA),
                   onTap: () async {
                     Navigator.pop(context);
-                    
+
                     // Check camera permission first
                     final hasPermission = await PermissionHelper.requestCameraPermission(context);
                     if (!hasPermission) {
                       Get.snackbar(
-                        'Permission Required',
-                        'Camera access is needed to take photos',
+                        getTranslation(KEY_PERMISSION_REQUIRED),
+                        getTranslation(KEY_CAMERA_ACCESS),
                         snackPosition: SnackPosition.BOTTOM,
                         duration: const Duration(seconds: 3),
                       );
                       return;
                     }
-                    
+
                     final ImagePicker picker = ImagePicker();
                     final XFile? photo = await picker.pickImage(
                       source: ImageSource.camera,
@@ -765,22 +852,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ),
                 _buildAttachmentOption(
                   icon: Icons.insert_drive_file,
-                  label: 'Document',
+                  label: getTranslation(KEY_DOCUMENT),
                   onTap: () async {
                     Navigator.pop(context);
-                    
+
                     // Check storage permission for documents
                     final hasPermission = await PermissionHelper.requestGalleryPermission(context);
                     if (!hasPermission) {
                       Get.snackbar(
-                        'Permission Required',
-                        'Storage access is needed to select documents',
+                        getTranslation(KEY_PERMISSION_REQUIRED),
+                        getTranslation(KEY_STORAGE_ACCESS),
                         snackPosition: SnackPosition.BOTTOM,
                         duration: const Duration(seconds: 3),
                       );
                       return;
                     }
-                    
+
                     final result = await FilePicker.platform.pickFiles(
                       type: FileType.custom,
                       allowedExtensions: ['pdf', 'doc', 'docx'],
@@ -850,8 +937,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               _messageController.removeTempMessage(tempId);
 
               Get.snackbar(
-                'Error',
-                'Failed to upload image: ${e.toString()}',
+                getTranslation(KEY_ERROR),
+                '${getTranslation(KEY_FAILED_UPLOAD_IMAGE)}: ${e.toString()}',
                 snackPosition: SnackPosition.BOTTOM,
               );
             }
@@ -866,8 +953,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     } catch (e) {
       Get.snackbar(
-        'Error',
-        'Failed to preview image: ${e.toString()}',
+        getTranslation(KEY_ERROR),
+        '${getTranslation(KEY_FAILED_PREVIEW_IMAGE)}: ${e.toString()}',
         snackPosition: SnackPosition.BOTTOM,
       );
     }
@@ -925,8 +1012,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               _messageController.removeTempMessage(tempId);
 
               Get.snackbar(
-                'Error',
-                'Failed to upload document: ${e.toString()}',
+                getTranslation(KEY_ERROR),
+                '${getTranslation(KEY_FAILED_UPLOAD_DOCUMENT)}: ${e.toString()}',
                 snackPosition: SnackPosition.BOTTOM,
               );
             }
@@ -941,8 +1028,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     } catch (e) {
       Get.snackbar(
-        'Error',
-        'Failed to preview document: ${e.toString()}',
+        getTranslation(KEY_ERROR),
+        '${getTranslation(KEY_FAILED_PREVIEW_DOCUMENT)}: ${e.toString()}',
         snackPosition: SnackPosition.BOTTOM,
       );
     }
@@ -959,19 +1046,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(15),
+            padding: RPadding.all(15),
             decoration: BoxDecoration(
               color: AppColors.faintGreen,
               borderRadius: BorderRadius.circular(50),
             ),
-            child: Icon(icon, color: AppColors.green, size: 25),
+            child: Icon(icon, color: AppColors.green, size: AppSizes.iconM),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: AppSizes.paddingS),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textGrey,
-              fontSize: 12,
+              fontSize: AppSizes.fontS,
             ),
           ),
         ],
@@ -980,43 +1067,49 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final avatarRadius = ResponsiveUtils.responsive(mobile: 20.0, tablet: 25.0);
+
     return AppBar(
       backgroundColor: AppColors.green,
       elevation: 1,
       title: Row(
         children: [
           CircleAvatar(
-            radius: 20,
+            radius: avatarRadius,
             backgroundColor: AppColors.faintGreen,
-            backgroundImage: widget.chat.type == 'group'
+            backgroundImage: widget.chat.type == 'group' || widget.chat.otherParticipants.isEmpty
                 ? null
-                : NetworkImage(
-                    widget.chat.otherParticipants.first.profilePhoto ?? '',
-                  ),
-            child: widget.chat.type == 'group'
-                ? const Icon(Icons.group, color: AppColors.green)
-                : null,
+                : (widget.chat.otherParticipants.first.profilePhoto?.isNotEmpty == true
+                    ? NetworkImage(widget.chat.otherParticipants.first.profilePhoto!)
+                    : null),
+            child: widget.chat.type == 'group' || widget.chat.otherParticipants.isEmpty
+                ? Icon(Icons.group, color: AppColors.green, size: AppSizes.iconM)
+                : (widget.chat.otherParticipants.first.profilePhoto?.isNotEmpty != true
+                    ? Icon(Icons.person, color: AppColors.green, size: AppSizes.iconM)
+                    : null),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: AppSizes.paddingM),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   widget.chat.type == 'group'
-                      ? widget.chat.groupDetails?.name ?? 'Unknown Group'
-                      : widget.chat.otherParticipants.first.userName,
-                  style: const TextStyle(
-                    fontSize: 16,
+                      ? widget.chat.groupDetails?.name ?? getTranslation(KEY_UNKNOWN_GROUP)
+                      : (widget.chat.otherParticipants.isNotEmpty
+                          ? widget.chat.otherParticipants.first.userName
+                          : 'Unknown'),
+                  style: TextStyle(
+                    fontSize: AppSizes.fontL,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
                 ),
                 if (widget.chat.type == 'group')
                   Text(
-                    '${widget.chat.participants.length} participants',
+                    '${widget.chat.participants.length} ${getTranslation(KEY_PARTICIPANTS)}',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: AppSizes.fontS,
                       color: Colors.white.withOpacity(0.8),
                     ),
                   ),
@@ -1043,7 +1136,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     Icon(Icons.group, color: AppColors.textGrey),
                     const SizedBox(width: 12),
                     Text(
-                      'Participants',
+                      getTranslation(KEY_PARTICIPANTS),
                       style: TextStyle(
                         color: AppColors.textGrey,
                         fontSize: 14,
@@ -1059,7 +1152,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     const Icon(Icons.exit_to_app, color: Colors.red),
                     const SizedBox(width: 12),
                     Text(
-                      'Leave Group',
+                      getTranslation(KEY_LEAVE_GROUP),
                       style: TextStyle(
                         color: Colors.red,
                         fontSize: 14,
@@ -1119,7 +1212,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Group Participants (${widget.chat.participants.length})',
+                      '${getTranslation(KEY_GROUP_PARTICIPANTS)} (${widget.chat.participants.length})',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -1188,9 +1281,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                   color: AppColors.faintGreen,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Text(
-                                  'Admin',
-                                  style: TextStyle(
+                                child: Text(
+                                  getTranslation(KEY_ADMIN),
+                                  style: const TextStyle(
                                     color: AppColors.green,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
@@ -1215,14 +1308,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Leave Group'),
-        content: const Text('Are you sure you want to leave this group?'),
+        title: Text(getTranslation(KEY_LEAVE_GROUP)),
+        content: Text(getTranslation(KEY_LEAVE_GROUP_CONFIRM)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textGrey),
+            child: Text(
+              getTranslation(KEY_CANCEL),
+              style: const TextStyle(color: AppColors.textGrey),
             ),
           ),
           TextButton(
@@ -1236,8 +1329,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   Navigator.pop(context); // Close dialog
                   Navigator.pop(context); // Go back to chat list
                   Get.snackbar(
-                    'Success',
-                    'You have left the group',
+                    getTranslation(KEY_SUCCESS),
+                    getTranslation(KEY_LEFT_GROUP),
                     backgroundColor: AppColors.green,
                     colorText: Colors.white,
                     snackPosition: SnackPosition.BOTTOM,
@@ -1246,17 +1339,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               } catch (e) {
                 Navigator.pop(context);
                 Get.snackbar(
-                  'Error',
-                  'Failed to leave group',
+                  getTranslation(KEY_ERROR),
+                  getTranslation(KEY_FAILED_LEAVE_GROUP),
                   backgroundColor: Colors.red,
                   colorText: Colors.white,
                   snackPosition: SnackPosition.BOTTOM,
                 );
               }
             },
-            child: const Text(
-              'Leave',
-              style: TextStyle(color: Colors.red),
+            child: Text(
+              getTranslation(KEY_LEAVE),
+              style: const TextStyle(color: Colors.red),
             ),
           ),
         ],
@@ -1266,6 +1359,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: _buildAppBar(),
@@ -1289,6 +1384,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _readReceiptSubscription?.cancel();
     _onlineStatusSubscription?.cancel();
     _typingTimer?.cancel();
+    _readMarkingDebounceTimer?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();

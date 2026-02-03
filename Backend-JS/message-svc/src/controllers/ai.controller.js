@@ -636,17 +636,87 @@ class AIController {
     }
   }
 
+  // Helper method to check message limits
+  async checkMessageLimits(userId, endpoint) {
+    const limitStatus = await MessageLimitService.checkAndUpdateMessageCount(userId);
+
+    if (!limitStatus.canSendMessage) {
+      return {
+        canProceed: false,
+        limitInfo: {
+          dailyLimit: MessageLimitService.FREE_DAILY_LIMIT,
+          remainingMessages: 0,
+          resetsAt: new Date(new Date().setHours(24, 0, 0, 0)),
+        },
+        errorResponse: {
+          error: "Daily message limit reached",
+          limitInfo: {
+            dailyLimit: MessageLimitService.FREE_DAILY_LIMIT,
+            remainingMessages: 0,
+            resetsAt: new Date(new Date().setHours(24, 0, 0, 0)),
+          },
+        },
+      };
+    }
+
+    return {
+      canProceed: true,
+      limitInfo: {
+        dailyLimit: MessageLimitService.FREE_DAILY_LIMIT,
+        remainingMessages: limitStatus.remainingMessages,
+        resetsAt: new Date(new Date().setHours(24, 0, 0, 0)),
+      },
+      errorResponse: null,
+    };
+  }
+
+  // Helper method to update chat context
+  updateContext(existingContext, userMessage, aiResponse) {
+    const context = { ...existingContext };
+
+    // Extract topics from user message
+    const lowerMessage = (userMessage || "").toLowerCase();
+    if (lowerMessage.includes("disease") || lowerMessage.includes("pest")) {
+      context.currentTopic = "plant health";
+    } else if (lowerMessage.includes("fertilizer") || lowerMessage.includes("nutrient")) {
+      context.currentTopic = "plant nutrition";
+    }
+
+    // Extract issues and solutions from AI response
+    const lines = (aiResponse || "").split("\n");
+    const issues = [];
+    const solutions = [];
+
+    lines.forEach((line) => {
+      const lowerLine = line.toLowerCase();
+      if (lowerLine.includes("problem:") || lowerLine.includes("issue:") || lowerLine.includes("disease:")) {
+        const parts = line.split(":");
+        if (parts[1]) issues.push(parts[1].trim());
+      }
+      if (lowerLine.includes("solution:") || lowerLine.includes("treatment:") || lowerLine.includes("recommendation:")) {
+        const parts = line.split(":");
+        if (parts[1]) solutions.push(parts[1].trim());
+      }
+    });
+
+    context.identifiedIssues = [...new Set([...(context.identifiedIssues || []), ...issues])];
+    context.suggestedSolutions = [...new Set([...(context.suggestedSolutions || []), ...solutions])];
+    context.lastContext = aiResponse;
+
+    return context;
+  }
+
+  // Helper method to apply rate limit headers
+  applyRateLimitHeaders(res, endpoint) {
+    res.set({
+      "X-RateLimit-Limit": MessageLimitService.FREE_DAILY_LIMIT,
+      "X-RateLimit-Reset": new Date(new Date().setHours(24, 0, 0, 0)).getTime(),
+    });
+  }
+
   async analyzeMultipleImages(req, res) {
     try {
       console.log("Analyze multiple images request received");
-
-      // Debug info to see what's coming in the request
-      console.log("Request headers:", req.headers);
-      console.log("Request body fields:", Object.keys(req.body || {}));
-      console.log(
-        "Files in request:",
-        req.files ? "Yes (" + req.files.length + ")" : "No"
-      );
 
       // Check if user provided files
       if (!req.files || req.files.length === 0) {
@@ -672,15 +742,120 @@ class AIController {
         chatId,
         message,
         preferredLanguage,
-        location,
-        weather,
       } = req.body;
 
-      // ... rest of the existing code ...
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+
+      // Parse location and weather
+      let location = { lat: 0, lon: 0 };
+      let weather = { temperature: 25, humidity: 60 };
+
+      try {
+        if (req.body.location) {
+          location = typeof req.body.location === "string"
+            ? JSON.parse(req.body.location)
+            : req.body.location;
+        }
+        if (req.body.weather) {
+          weather = typeof req.body.weather === "string"
+            ? JSON.parse(req.body.weather)
+            : req.body.weather;
+        }
+      } catch (parseError) {
+        console.error("Error parsing location/weather:", parseError);
+      }
+
+      // Check rate limits
+      const { canProceed, limitInfo, errorResponse } =
+        await this.checkMessageLimits(userId, "analyze-multi-images");
+      if (!canProceed) {
+        return res.status(429).json(errorResponse);
+      }
+
+      // Get or create chat
+      let chat = null;
+      if (chatId) {
+        chat = await AIChat.findById(chatId);
+        if (!chat) {
+          return res.status(404).json({ error: "Chat not found" });
+        }
+      }
+
+      // Convert images to base64
+      const base64Images = req.files.map((file) => file.buffer.toString("base64"));
+
+      // Process images with AI
+      console.log(`Processing ${base64Images.length} images...`);
+      const analysis = await AIService.processMultipleImages(
+        base64Images,
+        chatId,
+        message || ""
+      );
+
+      // Create or update chat
+      if (!chat) {
+        const newChatTitle = `Multi-Image Analysis - ${new Date().toLocaleString()}`;
+        chat = new AIChat({
+          userId,
+          userName,
+          userProfilePhoto: userProfilePhoto || "",
+          title: newChatTitle,
+          metadata: {
+            preferredLanguage: preferredLanguage || "en",
+            location,
+            weather,
+          },
+          context: {
+            currentTopic: "plant health",
+            lastContext: "",
+            identifiedIssues: [],
+            suggestedSolutions: [],
+          },
+          dailyMessageCount: {
+            count: 1,
+            lastResetDate: new Date(),
+          },
+        });
+      }
+
+      // Add messages to chat
+      const userMessageData = {
+        role: "user",
+        content: message || `Uploaded ${req.files.length} images for analysis`,
+        timestamp: new Date(),
+        imageUrl: "multi_image_upload",
+      };
+
+      const aiMessageData = {
+        role: "assistant",
+        content: analysis,
+        timestamp: new Date(),
+      };
+
+      chat.messages.push(userMessageData);
+      chat.messages.push(aiMessageData);
+
+      // Update context
+      const context = this.updateContext(chat.context || {}, message, analysis);
+      chat.context = context;
+
+      await chat.save();
+
+      // Apply rate limit headers
+      this.applyRateLimitHeaders(res, "analyze-multi-images");
+
+      return res.status(200).json({
+        chatId: chat._id,
+        analysis,
+        context,
+        history: chat.messages,
+        limitInfo,
+      });
     } catch (error) {
       console.error("Error in analyzeMultipleImages:", error);
 
-      // Check for common error types
       if (
         error.code === "ECONNRESET" ||
         error.message?.includes("ECONNRESET")

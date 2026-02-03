@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishimantra/core/constants/colors.dart';
+import 'package:krishimantra/core/utils/responsive_utils.dart';
 import '../../../data/services/language_service.dart';
 import '../../../core/utils/language_helper.dart';
 import '../../../core/utils/error_with_translation.dart';
@@ -84,30 +85,37 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
+    final logoSize = ResponsiveUtils.responsive(
+      mobile: ResponsiveUtils.wp(50),
+      tablet: ResponsiveUtils.wp(35),
+    );
+
     return Scaffold(
       backgroundColor: AppColors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            padding: RPadding.symmetric(horizontal: 24),
             child: Form(
               key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.1),
+                  SizedBox(height: ResponsiveUtils.hp(8)),
 
                   // Logo
                   Hero(
                     tag: 'app_logo',
                     child: Image.asset(
                       'assets/Images/Logo.png',
-                      height: 230,
-                      width: 230,
+                      height: logoSize,
+                      width: logoSize,
                     ),
                   ),
 
-                  const SizedBox(height: 32),
+                  SizedBox(height: AppSizes.paddingXXL),
 
                   // Welcome Text
                   Column(
@@ -115,43 +123,48 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                       Text(
                         getTranslation(KEY_WELCOME_BACK),
                         style: TextStyle(
-                          fontSize: 28,
+                          fontSize: AppSizes.fontTitle,
                           fontWeight: FontWeight.bold,
                           color: AppColors.green,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: AppSizes.paddingS),
                       Text(
                         getTranslation(KEY_SIGN_IN),
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: AppSizes.fontL,
                           color: AppColors.textGrey,
                         ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 48),
+                  SizedBox(height: ResponsiveUtils.hp(5)),
 
                   // Email Field
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
+                    style: TextStyle(
+                      fontSize: AppSizes.fontL,
+                      color: AppColors.textDark,
+                    ),
                     decoration: InputDecoration(
                       labelText: getTranslation(KEY_EMAIL),
                       hintText: getTranslation(KEY_ENTER_EMAIL),
-                      prefixIcon: Icon(Icons.email, color: AppColors.green),
+                      labelStyle: const TextStyle(color: AppColors.textGrey),
+                      hintStyle: const TextStyle(color: AppColors.textLight),
+                      prefixIcon: Icon(Icons.email, color: AppColors.green, size: AppSizes.iconM),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppSizes.radiusL),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                        borderSide: const BorderSide(color: AppColors.borderLight),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.green, width: 2),
+                        borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                        borderSide: const BorderSide(color: AppColors.green, width: 2),
                       ),
                     ),
                     validator: (value) {
@@ -165,36 +178,42 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                     },
                   ),
 
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSizes.paddingXL),
 
                   // Password Field
                   Obx(() => TextFormField(
                         controller: _passwordController,
                         obscureText: !_authController.isPasswordVisible.value,
+                        style: TextStyle(
+                          fontSize: AppSizes.fontL,
+                          color: AppColors.textDark,
+                        ),
                         decoration: InputDecoration(
                           labelText: getTranslation(KEY_PASSWORD),
                           hintText: getTranslation(KEY_ENTER_PASSWORD),
-                          prefixIcon: Icon(Icons.lock, color: AppColors.green),
+                          labelStyle: const TextStyle(color: AppColors.textGrey),
+                          hintStyle: const TextStyle(color: AppColors.textLight),
+                          prefixIcon: Icon(Icons.lock, color: AppColors.green, size: AppSizes.iconM),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _authController.isPasswordVisible.value
                                   ? Icons.visibility
                                   : Icons.visibility_off,
-                              color: Colors.grey,
+                              color: AppColors.textLight,
+                              size: AppSizes.iconM,
                             ),
                             onPressed: _authController.togglePasswordVisibility,
                           ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppSizes.radiusL),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                            borderSide: const BorderSide(color: AppColors.borderLight),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: AppColors.green, width: 2),
+                            borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                            borderSide: const BorderSide(color: AppColors.green, width: 2),
                           ),
                         ),
                         validator: (value) {
@@ -208,41 +227,46 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                         },
                       )),
 
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSizes.paddingXL),
 
                   // Login Button
                   SizedBox(
                     width: double.infinity,
-                    height: 50,
+                    height: AppSizes.buttonHeight,
                     child: Obx(() => ElevatedButton(
                           onPressed: _authController.isLoading.value
                               ? null
                               : _handleLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.green,
-                            disabledBackgroundColor:
-                                AppColors.green.withOpacity(0.5),
-                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: AppColors.green.withOpacity(0.5),
+                            foregroundColor: AppColors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(AppSizes.radiusL),
                             ),
+                            elevation: 2,
                           ),
                           child: _authController.isLoading.value
-                              ? const CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white),
+                              ? SizedBox(
+                                  height: AppSizes.iconS,
+                                  width: AppSizes.iconS,
+                                  child: const CircularProgressIndicator(
+                                    color: AppColors.white,
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : Text(
                                   getTranslation(KEY_LOGIN),
-                                  style: const TextStyle(
-                                    fontSize: 16,
+                                  style: TextStyle(
+                                    fontSize: AppSizes.fontL,
                                     fontWeight: FontWeight.bold,
+                                    color: AppColors.white,
                                   ),
                                 ),
                         )),
                   ),
 
-                  const SizedBox(height: 16),
+                  SizedBox(height: AppSizes.paddingL),
 
                   // Forgot Password
                   Align(
@@ -256,24 +280,25 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                         style: TextStyle(
                           color: AppColors.green,
                           fontWeight: FontWeight.w500,
+                          fontSize: AppSizes.fontM,
                         ),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSizes.paddingXL),
 
                   // Terms and Conditions
                   Text(
                     getTranslation(KEY_TERMS),
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: AppSizes.fontM,
                       color: AppColors.textGrey,
                     ),
                     textAlign: TextAlign.center,
                   ),
 
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSizes.paddingXL),
 
                   // Register
                   Row(
@@ -283,6 +308,7 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                         getTranslation(KEY_DONT_HAVE_ACCOUNT),
                         style: TextStyle(
                           color: AppColors.textGrey,
+                          fontSize: AppSizes.fontM,
                         ),
                       ),
                       TextButton(
@@ -294,13 +320,14 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                           style: TextStyle(
                             color: AppColors.green,
                             fontWeight: FontWeight.bold,
+                            fontSize: AppSizes.fontM,
                           ),
                         ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 16),
+                  SizedBox(height: AppSizes.paddingL),
 
                   // Language Selection
                   GestureDetector(
@@ -308,24 +335,28 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                       Get.to(() => const LanguageSelectionScreen());
                     },
                     child: Container(
-                      padding: const EdgeInsets.all(8.0),
+                      padding: RPadding.all(8),
                       decoration: BoxDecoration(
                         border: Border.all(color: AppColors.green),
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: BorderRadius.circular(AppSizes.radiusM),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.language, color: AppColors.green),
-                          const SizedBox(width: 8),
+                          Icon(Icons.language, color: AppColors.green, size: AppSizes.iconM),
+                          SizedBox(width: AppSizes.paddingS),
                           Text(
                             'Select Language',
-                            style: TextStyle(color: AppColors.green),
+                            style: TextStyle(
+                              color: AppColors.green,
+                              fontSize: AppSizes.fontM,
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
+                  SizedBox(height: AppSizes.paddingXL),
                 ],
               ),
             ),

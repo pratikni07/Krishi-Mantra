@@ -8,11 +8,13 @@ import '../../data/models/message_model.dart';
 import '../../data/repositories/message_repository.dart';
 import '../../data/services/SocketService.dart';
 import '../../data/services/UserService.dart';
+import '../../data/services/engagement_service.dart';
 import '../../presentation/controllers/presigned_url_controller.dart';
 
 class MessageController extends GetxController {
   final MessageRepository _messageRepository;
   final UserService _userService;
+  final EngagementService _engagementService = EngagementService();
 
   final hasMoreMessages = true.obs;
 
@@ -147,6 +149,11 @@ class MessageController extends GetxController {
         if (mediaUrl != null) 'mediaUrl': mediaUrl,
         if (mediaMetadata != null) 'mediaMetadata': mediaMetadata,
       });
+
+      // Track chat message sent engagement
+      if (result) {
+        _engagementService.trackChatMessageSent(chatId);
+      }
 
       return result;
     } catch (e) {

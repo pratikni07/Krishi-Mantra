@@ -79,8 +79,24 @@ class _ServicesState extends State<Services> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Responsive calculations
+    final isSmallScreen = screenWidth < 360;
+    final isMediumScreen = screenWidth >= 360 && screenWidth < 400;
+    final isLargeScreen = screenWidth >= 400;
+
+    // Dynamic padding based on screen size
+    final horizontalPadding = screenWidth * 0.02;
+    final verticalPadding = screenHeight * 0.015;
+
+    // Dynamic item height based on screen height
+    final itemHeight = screenHeight * 0.13;
+    final rowSpacing = screenHeight * 0.01;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: EdgeInsets.symmetric(vertical: verticalPadding),
       child: Container(
         decoration: BoxDecoration(
           border: Border.all(
@@ -89,29 +105,34 @@ class _ServicesState extends State<Services> {
           ),
           borderRadius: BorderRadius.circular(10),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding.clamp(6.0, 12.0),
+          vertical: verticalPadding.clamp(10.0, 18.0),
+        ),
         child: Column(
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: serviceItems
                   .sublist(0, 4)
-                  .map((item) => SizedBox(
-                        width: 85,
-                        height: 110,
-                        child: _buildServiceItem(context, item),
+                  .map((item) => Expanded(
+                        child: SizedBox(
+                          height: itemHeight.clamp(90.0, 130.0),
+                          child: _buildServiceItem(context, item),
+                        ),
                       ))
                   .toList(),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: rowSpacing.clamp(6.0, 14.0)),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: serviceItems
                   .sublist(4)
-                  .map((item) => SizedBox(
-                        width: 85,
-                        height: 110,
-                        child: _buildServiceItem(context, item),
+                  .map((item) => Expanded(
+                        child: SizedBox(
+                          height: itemHeight.clamp(90.0, 130.0),
+                          child: _buildServiceItem(context, item),
+                        ),
                       ))
                   .toList(),
             ),
@@ -122,6 +143,24 @@ class _ServicesState extends State<Services> {
   }
 
   Widget _buildServiceItem(BuildContext context, ServiceItem item) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Responsive icon size - scales with screen width
+    final iconSize = (screenWidth * 0.15).clamp(50.0, 75.0);
+
+    // Responsive font size
+    final fontSize = (screenWidth * 0.03).clamp(10.0, 14.0);
+
+    // Responsive spacing
+    final spacing = (screenHeight * 0.008).clamp(4.0, 10.0);
+
+    // Responsive text height
+    final textHeight = (screenHeight * 0.045).clamp(30.0, 45.0);
+
+    // Responsive error icon size
+    final errorIconSize = (iconSize * 0.45).clamp(20.0, 35.0);
+
     return GestureDetector(
       onTap: () {
         Get.toNamed(item.route);
@@ -130,8 +169,8 @@ class _ServicesState extends State<Services> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 65,
-            height: 65,
+            width: iconSize,
+            height: iconSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.grey[200],
@@ -149,7 +188,7 @@ class _ServicesState extends State<Services> {
                     color: Colors.grey[300],
                     child: Icon(
                       Icons.image,
-                      size: 30,
+                      size: errorIconSize,
                       color: Colors.grey[600],
                     ),
                   );
@@ -157,16 +196,16 @@ class _ServicesState extends State<Services> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: spacing),
           SizedBox(
-            height: 35,
+            height: textHeight,
             child: Text(
               item.label,
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
+              style: TextStyle(
+                fontSize: fontSize,
                 fontWeight: FontWeight.bold,
               ),
             ),

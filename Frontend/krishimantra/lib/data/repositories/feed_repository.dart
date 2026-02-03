@@ -1,5 +1,5 @@
 import '../models/feed_model.dart';
-import '../models/comment_modal.dart';
+import '../models/comment_model.dart';
 import '../services/api_service.dart';
 import '../../core/utils/api_helper.dart';
 import 'package:dio/dio.dart';
@@ -232,18 +232,24 @@ class FeedRepository {
   Future<Map<String, dynamic>> getRecommendedFeeds(String userId,
       {int page = 1, int limit = 10}) async {
     try {
+      print('FeedRepository: Fetching recommended feeds for userId: $userId, page: $page');
+
       final response = await _apiService.get(
         '/api/feed/feeds/user/$userId/recommended',
         queryParameters: {'page': page, 'limit': limit},
       );
 
+      print('FeedRepository: Got response with status: ${response.statusCode}');
+
       final data = ApiHelper.handleResponse(response);
+      print('FeedRepository: Parsed response keys: ${data.keys}');
 
       // Handle the nested structure: the feeds are inside data.feeds
       final feedsData =
           data['data'] != null ? data['data']['feeds'] : data['feeds'];
 
       if (feedsData == null) {
+        print('FeedRepository: No feeds data found in response');
         // Return empty result if no feeds are found
         return {
           'feeds': <FeedModel>[],
@@ -252,8 +258,10 @@ class FeedRepository {
         };
       }
 
+      print('FeedRepository: Found ${(feedsData as List).length} feeds');
+
       final List<FeedModel> feeds =
-          (feedsData as List).map((feed) => FeedModel.fromJson(feed)).toList();
+          feedsData.map((feed) => FeedModel.fromJson(feed)).toList();
 
       final pagination = data['data'] != null
           ? data['data']['pagination']
@@ -268,6 +276,7 @@ class FeedRepository {
         'recommendationType': recommendationType,
       };
     } catch (e) {
+      print('FeedRepository: Error fetching recommended feeds: $e');
       throw ApiHelper.handleError(e);
     }
   }
@@ -348,6 +357,103 @@ class FeedRepository {
       };
     } catch (e) {
       throw ApiHelper.handleError(e);
+    }
+  }
+
+  /// Track user interaction with a feed (view, like, comment, share, save)
+  /// This helps improve personalized recommendations
+  Future<bool> trackInteraction({
+    required String userId,
+    required String feedId,
+    required String interactionType,
+  }) async {
+    try {
+      final response = await _apiService.post(
+        ApiConstants.FEED_USER_INTERACTION,
+        data: {
+          'userId': userId,
+          'feedId': feedId,
+          'interactionType': interactionType,
+        },
+      );
+
+      final data = ApiHelper.handleResponse(response);
+      return data['success'] ?? false;
+    } catch (e) {
+      // Silently fail for tracking - don't interrupt user experience
+      print('Error tracking interaction: $e');
+      return false;
+    }
+  }
+
+  /// Update user's location and interests for better recommendations
+  Future<bool> updateUserInterest({
+    required String userId,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final Map<String, dynamic> data = {
+        'userId': userId,
+      };
+
+      if (latitude != null && longitude != null) {
+        data['location'] = {
+          'latitude': latitude,
+          'longitude': longitude,
+        };
+      }
+
+      final response = await _apiService.post(
+        ApiConstants.FEED_USER_INTEREST,
+        data: data,
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error updating user interest: $e');
+      return false;
+    }
+  }
+
+  /// Sync initial user interests from onboarding/profile
+  /// This seeds the recommendation engine with user's declared interests
+  Future<bool> syncInitialInterests({
+    required String userId,
+    List<String>? interests,
+    List<String>? categories,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final Map<String, dynamic> data = {
+        'userId': userId,
+      };
+
+      if (interests != null && interests.isNotEmpty) {
+        data['interests'] = interests;
+      }
+
+      if (categories != null && categories.isNotEmpty) {
+        data['categories'] = categories;
+      }
+
+      if (latitude != null && longitude != null) {
+        data['location'] = {
+          'latitude': latitude,
+          'longitude': longitude,
+        };
+      }
+
+      final response = await _apiService.post(
+        ApiConstants.FEED_SYNC_INTERESTS,
+        data: data,
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error syncing initial interests: $e');
+      return false;
     }
   }
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../data/models/company_model.dart';
 import '../../../../data/services/language_service.dart';
+import '../../../../core/utils/responsive_utils.dart';
+import '../../../../core/constants/colors.dart';
 
 class ContactInfo extends StatefulWidget {
   final CompanyModel company;
@@ -28,7 +30,7 @@ class _ContactInfoState extends State<ContactInfo> {
 
   Future<void> _initializeTranslations() async {
     final languageService = await LanguageService.getInstance();
-    
+
     final translations = await Future.wait([
       languageService.translate('Contact Information'),
       languageService.translate('Address'),
@@ -36,7 +38,7 @@ class _ContactInfoState extends State<ContactInfo> {
       languageService.translate('Phone'),
       languageService.translate('Website'),
     ]);
-    
+
     if (mounted) {
       setState(() {
         contactInfoText = translations[0];
@@ -70,64 +72,68 @@ class _ContactInfoState extends State<ContactInfo> {
     VoidCallback? onTap,
     bool isLast = false,
   }) {
-    if (subtitle == null) return SizedBox.shrink();
-    
+    if (subtitle == null) return const SizedBox.shrink();
+
     return Column(
       children: [
         ListTile(
-          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          contentPadding: RPadding.symmetric(horizontal: 20, vertical: 8),
           leading: Container(
-            padding: EdgeInsets.all(8),
+            padding: RPadding.all(8),
             decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(8),
+              color: AppColors.scaffoldBackground,
+              borderRadius: BorderRadius.circular(AppSizes.radiusM),
             ),
-            child: Icon(icon, color: Colors.grey[700], size: 24),
+            child: Icon(icon, color: AppColors.textGrey, size: AppSizes.iconM),
           ),
           title: Text(
             title,
             style: TextStyle(
               fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
+              color: AppColors.textGrey,
+              fontSize: AppSizes.fontM,
             ),
           ),
           subtitle: Padding(
-            padding: EdgeInsets.only(top: 4),
+            padding: EdgeInsets.only(top: AppSizes.paddingXS),
             child: Text(
               subtitle,
               style: TextStyle(
                 color: Colors.grey[600],
                 height: 1.3,
+                fontSize: AppSizes.fontS,
               ),
             ),
           ),
           onTap: onTap,
         ),
         if (!isLast)
-          Divider(height: 1, indent: 20, endIndent: 20, color: Colors.grey[200]),
+          Divider(height: 1, indent: AppSizes.paddingL, endIndent: AppSizes.paddingL, color: AppColors.borderLight),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Card(
       elevation: 2,
-      color: Colors.grey[50],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.scaffoldBackground,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusL)),
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: RPadding.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               contactInfoText,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: AppSizes.fontL,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            Divider(height: 24),
+            Divider(height: AppSizes.paddingXL),
             if (widget.company.address != null) ...[
               _buildInfoRow(
                 Icons.location_on,
@@ -140,16 +146,18 @@ class _ContactInfoState extends State<ContactInfo> {
                       return Text(
                         snapshot.data!,
                         overflow: TextOverflow.visible,
+                        style: TextStyle(fontSize: AppSizes.fontM),
                       );
                     }
                     return Text(
                       '${address!.street}, ${address.city}, ${address.state}, ${address.zip}',
                       overflow: TextOverflow.visible,
+                      style: TextStyle(fontSize: AppSizes.fontM),
                     );
                   }
                 ),
               ),
-              SizedBox(height: 12),
+              SizedBox(height: AppSizes.paddingM),
             ],
             if (widget.company.email != null) ...[
               _buildInfoRow(
@@ -158,9 +166,10 @@ class _ContactInfoState extends State<ContactInfo> {
                 Text(
                   widget.company.email!,
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: AppSizes.fontM),
                 ),
               ),
-              SizedBox(height: 12),
+              SizedBox(height: AppSizes.paddingM),
             ],
             if (widget.company.phone != null) ...[
               _buildInfoRow(
@@ -173,11 +182,12 @@ class _ContactInfoState extends State<ContactInfo> {
                     style: TextStyle(
                       color: Colors.blue,
                       decoration: TextDecoration.underline,
+                      fontSize: AppSizes.fontM,
                     ),
                   ),
                 ),
               ),
-              SizedBox(height: 12),
+              SizedBox(height: AppSizes.paddingM),
             ],
             if (widget.company.website != null) ...[
               _buildInfoRow(
@@ -190,6 +200,7 @@ class _ContactInfoState extends State<ContactInfo> {
                     style: TextStyle(
                       color: Colors.blue,
                       decoration: TextDecoration.underline,
+                      fontSize: AppSizes.fontM,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -206,8 +217,8 @@ class _ContactInfoState extends State<ContactInfo> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: Colors.grey[700]),
-        SizedBox(width: 12),
+        Icon(icon, size: AppSizes.iconS, color: AppColors.textGrey),
+        SizedBox(width: AppSizes.paddingM),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -215,12 +226,12 @@ class _ContactInfoState extends State<ContactInfo> {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: AppSizes.fontM,
                   color: Colors.grey[600],
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              SizedBox(height: 2),
+              SizedBox(height: AppSizes.paddingXS),
               value,
             ],
           ),

@@ -61,20 +61,37 @@ class AIChat {
 
   factory AIChat.fromJson(Map<String, dynamic> json) {
     return AIChat(
-      id: json['_id'],
-      userId: json['userId'],
-      userName: json['userName'],
-      userProfilePhoto: json['userProfilePhoto'],
-      title: json['title'],
-      messages: (json['messages'] as List)
-          .map((msg) => AIChatMessage.fromJson(msg))
-          .toList(),
-      metadata: AIMetadata.fromJson(json['metadata']),
-      context: AIContext.fromJson(json['context']),
-      lastMessageAt: DateTime.parse(json['lastMessageAt']),
-      isActive: json['isActive'],
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: DateTime.parse(json['updatedAt']),
+      id: json['_id'] ?? '',
+      userId: json['userId'] ?? '',
+      userName: json['userName'] ?? 'User',
+      userProfilePhoto: json['userProfilePhoto'] ?? '',
+      title: json['title'] ?? 'New Conversation',
+      messages: json['messages'] != null
+          ? (json['messages'] as List)
+              .map((msg) => AIChatMessage.fromJson(msg))
+              .toList()
+          : [],
+      metadata: json['metadata'] != null
+          ? AIMetadata.fromJson(json['metadata'])
+          : AIMetadata(preferredLanguage: 'en'),
+      context: json['context'] != null
+          ? AIContext.fromJson(json['context'])
+          : AIContext(
+              currentTopic: '',
+              lastContext: '',
+              identifiedIssues: [],
+              suggestedSolutions: [],
+            ),
+      lastMessageAt: json['lastMessageAt'] != null
+          ? DateTime.parse(json['lastMessageAt'])
+          : DateTime.now(),
+      isActive: json['isActive'] ?? true,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
+          : DateTime.now(),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
+          : DateTime.now(),
     );
   }
 }
@@ -92,7 +109,7 @@ class AIMetadata {
 
   factory AIMetadata.fromJson(Map<String, dynamic> json) {
     return AIMetadata(
-      preferredLanguage: json['preferredLanguage'],
+      preferredLanguage: json['preferredLanguage'] ?? 'en',
       location:
           json['location'] != null ? Location.fromJson(json['location']) : null,
       weather:

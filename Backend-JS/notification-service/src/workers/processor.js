@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 const Notification = require('../models/notification.model');
 const UserNotificationPreferences = require('../models/user.model');
 const pushService = require('../services/push.service');
+const websocketService = require('../services/websocket.service');
 const redisClient = require('../config/redis');
 const logger = require('../utils/logger');
 
@@ -172,9 +173,24 @@ class NotificationProcessor {
   }
 
   async _sendInAppNotification(notification) {
-    // In-app notifications are just stored in the database and retrieved by the client
-    // No additional action needed here as the notification is already stored
-    logger.debug(`In-app notification ready for user ${notification.userId}`);
+    // Send via WebSocket if user is connected
+    const sent = websocketService.sendNotification(notification.userId, {
+      _id: notification._id,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      category: notification.category,
+      priority: notification.priority,
+      data: notification.data,
+      createdAt: notification.createdAt,
+    });
+
+    if (sent) {
+      logger.debug(`In-app notification sent via WebSocket to user ${notification.userId}`);
+    } else {
+      logger.debug(`In-app notification ready for user ${notification.userId} (not connected via WebSocket)`);
+    }
+
     return true;
   }
 

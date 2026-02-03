@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:get/get.dart';
 
+import '../../../core/constants/colors.dart';
+import '../../../core/utils/responsive_utils.dart';
 import '../../../data/services/language_service.dart';
 import '../../../core/utils/translation_manager.dart';
 import '../../../routes/app_routes.dart';
@@ -106,8 +108,10 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       body: SafeArea(
         child: Column(
           children: [
@@ -123,8 +127,10 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
   }
 
   Widget _buildHeader() {
+    final emojiSize = ResponsiveUtils.responsive(mobile: 108.0, tablet: 140.0);
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: RPadding.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -133,28 +139,28 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
             builder: (_, child) {
               return Transform.rotate(
                 angle: _earthController.value * 2 * math.pi,
-                child: const Text(
+                child: Text(
                   '🌍',
-                  style: TextStyle(fontSize: 108),
+                  style: TextStyle(fontSize: emojiSize),
                 ),
               );
             },
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: AppSizes.paddingS),
           Text(
             getTranslation(KEY_CHOOSE_LANGUAGE),
-            style: const TextStyle(
-              fontSize: 24,
+            style: TextStyle(
+              fontSize: AppSizes.fontTitle,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2E7D32),
+              color: AppColors.green,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: AppSizes.paddingS),
           Text(
             getTranslation(KEY_SELECT_PREFERRED),
             style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
+              fontSize: AppSizes.fontL,
+              color: AppColors.textGrey,
             ),
           ),
         ],
@@ -164,7 +170,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
 
   Widget _buildLanguageList() {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: RPadding.symmetric(horizontal: 16, vertical: 8),
       itemCount: languages.length,
       shrinkWrap: true, // Important: Makes ListView work within Column
       physics: const BouncingScrollPhysics(), // Adds bounce effect on scroll
@@ -176,29 +182,31 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
 
   Widget _buildLanguageCard(LanguageData language) {
     final isSelected = selectedLanguage == language.name;
+    final flagContainerSize = ResponsiveUtils.responsive(mobile: 48.0, tablet: 56.0);
+    final flagFontSize = ResponsiveUtils.responsive(mobile: 24.0, tablet: 30.0);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: EdgeInsets.symmetric(vertical: AppSizes.paddingS),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _selectLanguage(language.name),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppSizes.radiusXL),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: RPadding.all(16),
             decoration: BoxDecoration(
-              color: isSelected ? Colors.green.withOpacity(0.1) : Colors.white,
+              color: isSelected ? AppColors.green.withOpacity(0.1) : AppColors.white,
               border: Border.all(
-                color: isSelected ? Colors.green : Colors.grey.withOpacity(0.2),
+                color: isSelected ? AppColors.green : AppColors.borderLight,
                 width: 2,
               ),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppSizes.radiusXL),
               boxShadow: [
                 BoxShadow(
                   color: isSelected
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.black.withOpacity(0.05),
+                      ? AppColors.green.withOpacity(0.1)
+                      : AppColors.shadowLight,
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -207,36 +215,37 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
             child: Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: flagContainerSize,
+                  height: flagContainerSize,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: AppColors.scaffoldBackground,
                     shape: BoxShape.circle,
                   ),
                   child: Text(
                     language.flagEmoji,
-                    style: const TextStyle(fontSize: 24),
+                    style: TextStyle(fontSize: flagFontSize),
                   ),
                 ),
-                const SizedBox(width: 16),
+                SizedBox(width: AppSizes.paddingL),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         language.name,
-                        style: const TextStyle(
-                          fontSize: 16,
+                        style: TextStyle(
+                          fontSize: AppSizes.fontL,
                           fontWeight: FontWeight.bold,
+                          color: AppColors.textDark,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: AppSizes.paddingS),
                       Text(
                         language.nativeName,
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
+                          fontSize: AppSizes.fontS,
+                          color: AppColors.textGrey,
                         ),
                       ),
                     ],
@@ -244,15 +253,15 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
                 ),
                 if (isSelected)
                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Colors.green,
+                    padding: RPadding.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.green,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.check,
-                      color: Colors.white,
-                      size: 16,
+                      color: AppColors.white,
+                      size: AppSizes.iconS,
                     ),
                   ),
               ],
@@ -265,12 +274,12 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
 
   Widget _buildBottomButton() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: RPadding.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: AppColors.shadowLight,
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -278,6 +287,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
       ),
       child: SizedBox(
         width: double.infinity,
+        height: AppSizes.buttonHeight,
         child: ElevatedButton(
           onPressed: selectedLanguage != null
               ? () async {
@@ -294,11 +304,11 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
                 }
               : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            backgroundColor: AppColors.green,
+            foregroundColor: AppColors.white,
+            padding: RPadding.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSizes.radiusXL),
             ),
             elevation: selectedLanguage != null ? 4 : 0,
           ),
@@ -306,8 +316,8 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
             selectedLanguage != null
                 ? getTranslation(KEY_CONTINUE)
                 : getTranslation(KEY_SELECT_LANGUAGE),
-            style: const TextStyle(
-              fontSize: 16,
+            style: TextStyle(
+              fontSize: AppSizes.fontL,
               fontWeight: FontWeight.bold,
             ),
           ),

@@ -9,6 +9,9 @@ import 'package:intl/intl.dart';
 import 'package:timeago/timeago.dart' as _dateFormat;
 
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/responsive_utils.dart';
+import '../../../core/utils/language_helper.dart';
+import '../../../data/services/language_service.dart';
 import '../../controllers/ai_chat_controller.dart';
 import '../../widgets/chat_message_bubble.dart';
 import '../../../data/models/ai_chat.dart';
@@ -23,7 +26,7 @@ class AIChatScreen extends StatefulWidget {
   State<AIChatScreen> createState() => _AIChatScreenState();
 }
 
-class _AIChatScreenState extends State<AIChatScreen> {
+class _AIChatScreenState extends State<AIChatScreen> with TranslationMixin {
   final controller = Get.find<AIChatController>();
   final TextEditingController messageController = TextEditingController();
   final ScrollController scrollController = ScrollController();
@@ -33,12 +36,42 @@ class _AIChatScreenState extends State<AIChatScreen> {
   // Control whether the sidebar is showing on mobile
   bool showSidebar = false;
 
+  // Translation keys
+  static const String KEY_NEW_CHAT = 'new_chat';
+  static const String KEY_TODAY = 'today';
+  static const String KEY_DAILY_MESSAGES = 'daily_messages';
+  static const String KEY_AI_THINKING = 'ai_thinking';
+  static const String KEY_FARMERS_AI = 'farmers_ai';
+  static const String KEY_AI_DESCRIPTION = 'ai_description';
+  static const String KEY_DELETE_CHAT = 'delete_chat';
+  static const String KEY_DELETE_CONFIRM = 'delete_confirm';
+  static const String KEY_CANCEL = 'cancel';
+  static const String KEY_DELETE = 'delete';
+  static const String KEY_TYPE_MESSAGE = 'type_message';
+  static const String KEY_IMAGES_SELECTED = 'images_selected';
+
   @override
   void initState() {
     super.initState();
     scrollController.addListener(_onScroll);
+    _registerTranslations();
     // Load message limit info
     controller.getMessageLimitInfo();
+  }
+
+  void _registerTranslations() {
+    registerTranslation(KEY_NEW_CHAT, 'New Chat');
+    registerTranslation(KEY_TODAY, 'Today');
+    registerTranslation(KEY_DAILY_MESSAGES, 'Daily messages');
+    registerTranslation(KEY_AI_THINKING, 'AI is thinking...');
+    registerTranslation(KEY_FARMERS_AI, "Farmer's AI Assistant");
+    registerTranslation(KEY_AI_DESCRIPTION, 'Ask farming questions, get crop advice, or upload images of plants for disease analysis.');
+    registerTranslation(KEY_DELETE_CHAT, 'Delete Chat');
+    registerTranslation(KEY_DELETE_CONFIRM, 'Are you sure you want to delete this chat?');
+    registerTranslation(KEY_CANCEL, 'Cancel');
+    registerTranslation(KEY_DELETE, 'Delete');
+    registerTranslation(KEY_TYPE_MESSAGE, 'Type a message...');
+    registerTranslation(KEY_IMAGES_SELECTED, 'images selected');
   }
 
   @override
@@ -69,53 +102,68 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
     final size = MediaQuery.of(context).size;
     final isLargeScreen = size.width > 800;
 
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        title:
-            Obx(() => Text(controller.currentChat.value?.title ?? 'New Chat')),
+        title: Obx(() => Text(
+              controller.currentChat.value?.title ?? 'Krishi AI',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: AppSizes.fontL),
+            )),
         backgroundColor: AppColors.green,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Get.back(),
+          icon: Icon(Icons.arrow_back, color: Colors.white, size: AppSizes.iconM),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Get.back();
+            }
+          },
         ),
         actions: [
-          // Show sidebar button on smaller screens
-          if (!isLargeScreen)
-            IconButton(
-              icon: const Icon(Icons.menu),
-              onPressed: () {
-                setState(() {
-                  showSidebar = !showSidebar;
-                });
-              },
-            ),
           // Show message limit indicator
           Obx(() => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                padding: EdgeInsets.only(right: AppSizes.paddingS),
                 child: Center(
-                  child: Text(
-                    'Messages: ${controller.remainingMessages}/5',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: controller.remainingMessages.value < 2
-                          ? FontWeight.bold
-                          : FontWeight.normal,
+                  child: Container(
+                    padding: RPadding.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                    ),
+                    child: Text(
+                      '${controller.remainingMessages}/5',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: AppSizes.fontS,
+                        fontWeight: controller.remainingMessages.value < 2
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
                     ),
                   ),
                 ),
               )),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => controller.createNewChat(),
-            tooltip: 'New Chat',
-          ),
+          // Show sidebar button on smaller screens
+          if (!isLargeScreen)
+            IconButton(
+              icon: Icon(Icons.menu, size: AppSizes.iconM),
+              onPressed: () {
+                _scaffoldKey.currentState?.openDrawer();
+              },
+            ),
         ],
       ),
-      drawer: !isLargeScreen ? _buildSidebar(context) : null,
+      drawer: !isLargeScreen
+          ? Drawer(
+              child: SafeArea(child: _buildSidebar(context)),
+            )
+          : null,
       body: Row(
         children: [
           // Sidebar for chat history on large screens
@@ -136,9 +184,9 @@ class _AIChatScreenState extends State<AIChatScreen> {
                     return Container(
                       padding: const EdgeInsets.all(16),
                       alignment: Alignment.centerLeft,
-                      child: const Row(
+                      child: Row(
                         children: [
-                          SizedBox(
+                          const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
@@ -147,8 +195,8 @@ class _AIChatScreenState extends State<AIChatScreen> {
                                   AppColors.green),
                             ),
                           ),
-                          SizedBox(width: 8),
-                          Text('AI is thinking...'),
+                          const SizedBox(width: 8),
+                          Text(getTranslation(KEY_AI_THINKING)),
                         ],
                       ),
                     );
@@ -167,27 +215,34 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   Widget _buildSidebar(BuildContext context) {
+    final sidebarWidth = ResponsiveUtils.responsive(mobile: 280.0, tablet: 320.0);
+
     return Container(
-      width: 280,
+      width: sidebarWidth,
       height: double.infinity,
       color: Colors.grey[100],
       child: Column(
         children: [
           // New chat button
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: RPadding.all(16),
             child: ElevatedButton.icon(
-              onPressed: () => controller.createNewChat(),
-              icon: const Icon(Icons.add),
-              label: const Text('New Chat'),
+              onPressed: () {
+                controller.createNewChat();
+                // Close drawer on mobile
+                if (MediaQuery.of(context).size.width <= 800) {
+                  Navigator.of(context).pop();
+                }
+              },
+              icon: Icon(Icons.add, size: AppSizes.iconS),
+              label: Text(getTranslation(KEY_NEW_CHAT), style: TextStyle(fontSize: AppSizes.fontM)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.green,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                minimumSize: const Size(double.infinity, 48),
+                padding: RPadding.symmetric(vertical: 12, horizontal: 16),
+                minimumSize: Size(double.infinity, AppSizes.buttonHeight),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusM),
                 ),
               ),
             ),
@@ -195,31 +250,30 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
           // Message limit indicator
           Obx(() => Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                margin: const EdgeInsets.only(bottom: 8),
+                padding: RPadding.symmetric(horizontal: 16, vertical: 8),
+                margin: EdgeInsets.only(bottom: AppSizes.paddingS),
                 decoration: BoxDecoration(
                   color: controller.remainingMessages.value < 2
                       // ignore: deprecated_member_use
                       ? Colors.orange.withOpacity(0.1)
                       : Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusM),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.info_outline,
-                      size: 18,
+                      size: AppSizes.iconS,
                       color: controller.remainingMessages.value < 2
                           ? Colors.orange
                           : AppColors.green,
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: AppSizes.paddingS),
                     Expanded(
                       child: Text(
-                        'Daily messages: ${controller.remainingMessages.value}/5 remaining',
+                        '${getTranslation(KEY_DAILY_MESSAGES)}: ${controller.remainingMessages.value}/5 remaining',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: AppSizes.fontS,
                           color: controller.remainingMessages.value < 2
                               ? Colors.orange[800]
                               : Colors.green[800],
@@ -232,13 +286,13 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
           // Today heading
           Padding(
-            padding: const EdgeInsets.only(left: 16, top: 8, bottom: 4),
+            padding: EdgeInsets.only(left: AppSizes.paddingL, top: AppSizes.paddingS, bottom: AppSizes.paddingXS),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Today',
+                getTranslation(KEY_TODAY),
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: AppSizes.fontS,
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[600],
                 ),
@@ -254,7 +308,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                padding: RPadding.symmetric(horizontal: 8, vertical: 8),
                 itemCount: controller.chats.length,
                 itemBuilder: (context, index) {
                   final chat = controller.chats[index];
@@ -262,17 +316,22 @@ class _AIChatScreenState extends State<AIChatScreen> {
                       controller.currentChat.value?.id == chat.id;
 
                   return InkWell(
-                    onTap: () => controller.loadChat(chat.id),
-                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      controller.loadChat(chat.id);
+                      // Close drawer on mobile
+                      if (MediaQuery.of(context).size.width <= 800) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(AppSizes.radiusM),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      margin: const EdgeInsets.only(bottom: 4),
+                      padding: RPadding.symmetric(horizontal: 12, vertical: 10),
+                      margin: EdgeInsets.only(bottom: AppSizes.paddingXS),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? AppColors.green.withOpacity(0.1)
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(AppSizes.radiusM),
                         border: isSelected
                             ? Border.all(
                                 color: AppColors.green.withOpacity(0.5))
@@ -282,11 +341,11 @@ class _AIChatScreenState extends State<AIChatScreen> {
                         children: [
                           Icon(
                             Icons.chat_bubble_outline,
-                            size: 16,
+                            size: AppSizes.iconS,
                             color:
                                 isSelected ? AppColors.green : Colors.grey[600],
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: AppSizes.paddingM),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -303,16 +362,17 @@ class _AIChatScreenState extends State<AIChatScreen> {
                                     color: isSelected
                                         ? AppColors.green
                                         : Colors.black87,
+                                    fontSize: AppSizes.fontM,
                                   ),
                                 ),
                                 if (chat.messages.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
+                                  SizedBox(height: AppSizes.paddingXS),
                                   Text(
                                     _getLastMessage(chat),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: AppSizes.fontS,
                                       color: Colors.grey[600],
                                     ),
                                   ),
@@ -321,7 +381,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 18),
+                            icon: Icon(Icons.delete_outline, size: AppSizes.iconS),
                             color: Colors.grey[600],
                             onPressed: () =>
                                 _showDeleteConfirmation(context, chat.id),
@@ -358,7 +418,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
       return ListView.builder(
         controller: scrollController,
-        padding: const EdgeInsets.all(16),
+        padding: RPadding.all(16),
         itemCount: controller.messages.length,
         itemBuilder: (context, index) {
           final message = controller.messages[index];
@@ -367,7 +427,8 @@ class _AIChatScreenState extends State<AIChatScreen> {
             message: message.content,
             isUser: message.role == 'user',
             timestamp: message.timestamp,
-            // imageUrl: message.imageUrl,
+            mediaUrl: message.imageUrl,
+            mediaType: message.hasImages ? 'image' : 'text',
           );
         },
       );
@@ -375,51 +436,54 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   Widget _buildEmptyState() {
+    final iconContainerSize = ResponsiveUtils.responsive(mobile: 80.0, tablet: 100.0);
+    final iconSize = ResponsiveUtils.responsive(mobile: 40.0, tablet: 50.0);
+
     return SingleChildScrollView(
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
+          padding: RPadding.symmetric(vertical: 16),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 80,
-                height: 80,
+                width: iconContainerSize,
+                height: iconContainerSize,
                 decoration: BoxDecoration(
                   color: AppColors.green.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.agriculture,
-                  size: 40,
+                  size: iconSize,
                   color: AppColors.green,
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: AppSizes.paddingXL),
               Text(
-                "Farmer's AI Assistant",
+                getTranslation(KEY_FARMERS_AI),
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: AppSizes.fontTitle,
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[800],
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: AppSizes.paddingL),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                padding: RPadding.symmetric(horizontal: 32),
                 child: Text(
-                  "Ask farming questions, get crop advice, or upload images of plants for disease analysis.",
+                  getTranslation(KEY_AI_DESCRIPTION),
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: AppSizes.fontL,
                     color: Colors.grey[600],
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: AppSizes.paddingXXL),
               Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: AppSizes.paddingM,
+                runSpacing: AppSizes.paddingM,
                 alignment: WrapAlignment.center,
                 children: [
                   _buildSuggestionChip("What crops grow best in clay soil?"),
@@ -428,7 +492,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                   _buildSuggestionChip("When to harvest wheat?"),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: AppSizes.paddingL),
             ],
           ),
         ),
@@ -442,19 +506,20 @@ class _AIChatScreenState extends State<AIChatScreen> {
         messageController.text = text;
         setState(() {});
       },
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(AppSizes.radiusXXL),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: RPadding.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppSizes.radiusXXL),
           border: Border.all(color: AppColors.green),
           color: Colors.white,
         ),
         child: Text(
           text,
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.green,
             fontWeight: FontWeight.w500,
+            fontSize: AppSizes.fontM,
           ),
         ),
       ),
@@ -463,7 +528,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
   Widget _buildInputBox() {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: RPadding.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [

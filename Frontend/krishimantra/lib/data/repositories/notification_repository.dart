@@ -19,13 +19,24 @@ class NotificationRepository {
 
       final responseData = response.data;
 
-      final notifications = (responseData['data'] as List)
+      // Handle both possible API response formats
+      final notificationsList = responseData['data']?['notifications'] ??
+                                responseData['data'] ??
+                                responseData['notifications'] ??
+                                [];
+
+      final notifications = (notificationsList as List)
           .map((json) => NotificationModel.fromJson(json))
           .toList();
 
+      // Handle both pagination formats
+      final pagination = responseData['data']?['pagination'] ??
+                         responseData['pagination'] ??
+                         {'page': page, 'limit': limit, 'total': notifications.length, 'pages': 1};
+
       return {
         'notifications': notifications,
-        'pagination': responseData['pagination'],
+        'pagination': pagination,
       };
     } catch (e) {
       rethrow;

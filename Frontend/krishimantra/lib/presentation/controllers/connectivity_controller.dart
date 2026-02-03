@@ -114,6 +114,7 @@ class ConnectivityController extends GetxController {
       await _apiService.clearCacheEntry('feeds');
       await _apiService.clearCacheEntry('products');
       await _apiService.clearCacheEntry('schemes');
+      await _apiService.clearCacheEntry('companies');
 
       print('Network restored - refreshed cached data');
     } catch (e) {

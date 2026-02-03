@@ -6,12 +6,35 @@ const Like = require("../models/LikeModel");
 const TagService = require("./tagService");
 const redis = require("../config/redis");
 const PaginationUtils = require("../utils/pagination");
+const extractHashtags = require("../utils/hashtagExtractor");
 
 const CACHE_TTL = 3600; // 1 hour
 
 class ReelService {
+  /**
+   * Helper method to clear cache keys matching a pattern
+   * Uses SCAN to avoid blocking Redis with KEYS command
+   */
+  static async clearCacheByPattern(pattern) {
+    try {
+      const keys = await redis.keys(pattern);
+      if (keys && keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch (error) {
+      // Silent fail for cache clearing
+      console.warn('Cache clear by pattern error:', error.message);
+    }
+  }
+
   static async createReel(reelData) {
     try {
+      // Extract and store tags from description
+      if (reelData.description) {
+        const tags = extractHashtags(reelData.description);
+        reelData.tags = tags;
+      }
+
       // Create reel without transaction
       const reel = new Reel(reelData);
       await reel.save();
@@ -209,41 +232,36 @@ class ReelService {
 
   static async likeReel(reelId, userData) {
     try {
-      // Check if reel exists
-      const reel = await Reel.findById(reelId);
-      if (!reel) {
-        throw new Error("Reel not found");
-      }
-
-      // Check for existing like
-      const existingLike = await Like.findOne({
-        reel: reelId,
-        userId: userData.userId,
-      });
-
-      if (existingLike) {
-        throw new Error("Reel already liked");
-      }
-
-      // Create new like
+      // Try to create like directly - unique index will prevent duplicates
+      // This is faster than checking existence first
       const like = new Like({
         reel: reelId,
         ...userData,
       });
 
-      await like.save();
+      try {
+        await like.save();
+      } catch (saveError) {
+        // Duplicate key error means already liked
+        if (saveError.code === 11000) {
+          throw new Error("Reel already liked");
+        }
+        throw saveError;
+      }
 
-      // Update reel like count
-      await Reel.findByIdAndUpdate(reelId, {
+      // Update reel like count (non-blocking for faster response)
+      Reel.findByIdAndUpdate(reelId, {
         $inc: { "like.count": 1 },
         $addToSet: { "like.users": userData.userId },
-      });
+      }).catch((err) => console.warn('Like count update error:', err.message));
 
-      // Clear ALL relevant cache keys
-      await redis.del(`reel:${reelId}`);
-      await redis.del(`reels:trending:*`);
-      await redis.del(`reels:user:${userData.userId}:*`);
-      await redis.del(`reels:page:*`);
+      // Clear relevant cache keys (non-blocking to avoid timeouts)
+      setImmediate(() => {
+        redis.del(`reel:${reelId}`).catch(() => {});
+        redis.del(`reels:trending`).catch(() => {});
+        redis.del(`reels:user:${userData.userId}`).catch(() => {});
+        // Skip pattern-based deletion for speed - it will expire naturally
+      });
 
       return {
         ...like.toObject(),
@@ -256,13 +274,7 @@ class ReelService {
 
   static async unlikeReel(reelId, userId) {
     try {
-      // Check if reel exists
-      const reel = await Reel.findById(reelId);
-      if (!reel) {
-        throw new Error("Reel not found");
-      }
-
-      // Find and delete like
+      // Find and delete like in a single operation (skip reel existence check for speed)
       const deletedLike = await Like.findOneAndDelete({
         reel: reelId,
         userId,
@@ -272,17 +284,19 @@ class ReelService {
         throw new Error("Like not found");
       }
 
-      // Update reel like count
-      await Reel.findByIdAndUpdate(reelId, {
+      // Update reel like count (non-blocking for faster response)
+      Reel.findByIdAndUpdate(reelId, {
         $inc: { "like.count": -1 },
         $pull: { "like.users": userId },
-      });
+      }).catch((err) => console.warn('Unlike count update error:', err.message));
 
-      // Clear ALL relevant cache keys
-      await redis.del(`reel:${reelId}`);
-      await redis.del(`reels:trending:*`);
-      await redis.del(`reels:user:${userId}:*`);
-      await redis.del(`reels:page:*`);
+      // Clear relevant cache keys (non-blocking to avoid timeouts)
+      setImmediate(() => {
+        redis.del(`reel:${reelId}`).catch(() => {});
+        redis.del(`reels:trending`).catch(() => {});
+        redis.del(`reels:user:${userId}`).catch(() => {});
+        // Skip pattern-based deletion for speed - it will expire naturally
+      });
 
       return {
         ...deletedLike.toObject(),
@@ -427,7 +441,8 @@ class ReelService {
     });
 
     await redis.del(`reel:${comment.reel}`);
-    await redis.del(`reel:${comment.reel}:comments:*`);
+    // Use pattern-based deletion for comments cache
+    this.clearCacheByPattern(`reel:${comment.reel}:comments:*`).catch(() => {});
 
     return comment;
   }

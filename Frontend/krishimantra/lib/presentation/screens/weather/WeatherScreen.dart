@@ -7,10 +7,14 @@ import 'package:weather_icons/weather_icons.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/responsive_utils.dart';
 import '../../../data/services/LocationService.dart';
 import '../../../data/services/weather_service.dart';
 import '../../../data/services/language_service.dart';
+import '../../../data/services/engagement_service.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 import '../home/widgets/location_dialog.dart';
 
 class WeatherScreen extends StatefulWidget {
@@ -21,22 +25,13 @@ class WeatherScreen extends StatefulWidget {
 }
 
 class _WeatherScreenState extends State<WeatherScreen> {
-  // Custom color scheme
-  static final customColors = {
-    'primary': const Color.fromARGB(255, 116, 206, 88),
-    'secondary': const Color(0xFF31A05F),
-    'accent': const Color(0xFFE09F3E), // Warm orange
-    'background': const Color(0xFFF5F3EF), // Light cream
-    'cardBg': Colors.white,
-    'textDark': const Color(0xFF2C3639), // Dark gray
-    'textLight': const Color(0xFF6B7280), // Medium gray
-  };
-
   String currentLocation = "Loading...";
   Position? currentPosition;
   bool isLoading = true;
   bool hasLocationPermission = false;
   late LanguageService _languageService;
+  final WeatherService _weatherService = WeatherService();
+  final EngagementService _engagementService = EngagementService();
 
   // Translatable text
   String loadingText = "Loading...";
@@ -67,6 +62,12 @@ class _WeatherScreenState extends State<WeatherScreen> {
   String allowLocationText = "Allow Location Access";
   String locationRequiredText = "Location Permission Required";
   String weatherNeedsLocationText = "Weather forecasts require your location to provide accurate data for your area.";
+  String locationServiceDisabledText = "Location Service Disabled";
+  String enableLocationServicesText = "Please enable location services in your device settings.";
+  String permissionDeniedText = "Permission Denied";
+  String weatherNeedsLocationAccessText = "Weather forecasts need location access to show accurate data for your region.";
+  String permissionPermanentlyDeniedText = "Permission Permanently Denied";
+  String enableLocationInSettingsText = "Please enable location access in app settings.";
 
   Map<String, dynamic> weatherData = {
     'temperature': 28,
@@ -129,8 +130,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _showLocationDialog(
-          "Location Service Disabled", 
-          "Please enable location services in your device settings.",
+          locationServiceDisabledText,
+          enableLocationServicesText,
           false
         );
         return;
@@ -141,8 +142,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           _showLocationDialog(
-            "Permission Denied", 
-            "Weather forecasts need location access to show accurate data for your region.",
+            permissionDeniedText,
+            weatherNeedsLocationAccessText,
             false
           );
           return;
@@ -151,8 +152,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
       if (permission == LocationPermission.deniedForever) {
         _showLocationDialog(
-          "Permission Permanently Denied", 
-          "Please enable location access in app settings.",
+          permissionPermanentlyDeniedText,
+          enableLocationInSettingsText,
           true
         );
         return;
@@ -211,6 +212,12 @@ class _WeatherScreenState extends State<WeatherScreen> {
       _languageService.translate('Allow Location Access'),
       _languageService.translate('Location Permission Required'),
       _languageService.translate('Weather forecasts require your location to provide accurate data for your area.'),
+      _languageService.translate('Location Service Disabled'),
+      _languageService.translate('Please enable location services in your device settings.'),
+      _languageService.translate('Permission Denied'),
+      _languageService.translate('Weather forecasts need location access to show accurate data for your region.'),
+      _languageService.translate('Permission Permanently Denied'),
+      _languageService.translate('Please enable location access in app settings.'),
     ]);
 
     setState(() {
@@ -240,28 +247,45 @@ class _WeatherScreenState extends State<WeatherScreen> {
       allowLocationText = translations[23];
       locationRequiredText = translations[24];
       weatherNeedsLocationText = translations[25];
+      locationServiceDisabledText = translations[26];
+      enableLocationServicesText = translations[27];
+      permissionDeniedText = translations[28];
+      weatherNeedsLocationAccessText = translations[29];
+      permissionPermanentlyDeniedText = translations[30];
+      enableLocationInSettingsText = translations[31];
     });
   }
 
   Future<void> _getCurrentLocation() async {
     if (!hasLocationPermission) return;
-    
+
     try {
       setState(() => isLoading = true);
-      
+
       Position position = await Geolocator.getCurrentPosition();
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
 
+      // Fetch weather data from API
+      final currentWeather = await _weatherService.getWeatherData(position);
+      final hourly = await _weatherService.getHourlyForecast(position);
+      final weekly = await _weatherService.getWeeklyForecast(position);
+
       setState(() {
         currentPosition = position;
         currentLocation = "${placemarks[0].locality}, ${placemarks[0].country}";
+        weatherData = currentWeather;
+        hourlyForecast = hourly;
+        weeklyForecast = weekly;
         isLoading = false;
       });
+
+      // Track weather check engagement
+      _engagementService.trackWeatherCheck(location: currentLocation);
     } catch (e) {
-      print(e);
+      logger.e('Error getting current location', tag: 'WeatherScreen', error: e);
       setState(() {
         error = e.toString();
         isLoading = false;
@@ -271,15 +295,18 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
-      backgroundColor: customColors['background'],
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.green,
         elevation: 0,
         leading: IconButton(
           icon: Icon(
             Icons.arrow_back,
-            color: customColors['textDark'],
+            color: AppColors.textDark,
+            size: AppSizes.iconM,
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -287,7 +314,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
           IconButton(
             icon: Icon(
               Icons.refresh,
-              color: customColors['textDark'],
+              color: AppColors.textDark,
+              size: AppSizes.iconM,
             ),
             onPressed: () {
               setState(() {
@@ -304,8 +332,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              customColors['primary']!.withOpacity(0.5),
-              customColors['background']!,
+              AppColors.lightGreen!.withOpacity(0.5),
+              AppColors.background!,
             ],
           ),
         ),
@@ -313,11 +341,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
           child: !hasLocationPermission
               ? _buildLocationPermissionRequest()
               : isLoading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                        color: customColors['primary'],
-                      ),
-                    )
+                  ? const SkeletonWeatherScreen()
                   : error != null
                       ? ErrorHandler.getErrorWidget(
                           errorType: error!.contains('location') 
@@ -333,7 +357,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                           showRetry: true,
                         )
                       : SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: RPadding.symmetric(horizontal: 16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -354,7 +378,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      padding: RPadding.symmetric(vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -366,16 +390,16 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   children: [
                     Icon(
                       Icons.location_on,
-                      color: customColors['primary'],
-                      size: 24,
+                      color: AppColors.lightGreen,
+                      size: AppSizes.iconM,
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: AppSizes.paddingS),
                     Flexible(
                       child: Text(
                         currentLocation,
                         style: TextStyle(
-                          color: customColors['textDark'],
-                          fontSize: 20,
+                          color: AppColors.textDark,
+                          fontSize: AppSizes.fontXXL,
                           fontWeight: FontWeight.bold,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -383,12 +407,12 @@ class _WeatherScreenState extends State<WeatherScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: AppSizes.paddingXS),
                 Text(
                   DateFormat('EEEE, d MMMM').format(DateTime.now()),
                   style: TextStyle(
-                    color: customColors['textLight'],
-                    fontSize: 14,
+                    color: AppColors.textLight,
+                    fontSize: AppSizes.fontM,
                   ),
                 ),
               ],
@@ -404,11 +428,11 @@ class _WeatherScreenState extends State<WeatherScreen> {
       margin: const EdgeInsets.symmetric(vertical: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: customColors['cardBg'],
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: customColors['textLight']!.withOpacity(0.1),
+            color: AppColors.textLight!.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -425,7 +449,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   Text(
                     '${weatherData['temperature']}°C',
                     style: TextStyle(
-                      color: customColors['textDark'],
+                      color: AppColors.textDark,
                       fontSize: 64,
                       fontWeight: FontWeight.bold,
                     ),
@@ -433,7 +457,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   Text(
                     weatherData['condition'],
                     style: TextStyle(
-                      color: customColors['textLight'],
+                      color: AppColors.textLight,
                       fontSize: 20,
                     ),
                   ),
@@ -442,7 +466,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               BoxedIcon(
                 WeatherIcons.day_cloudy,
                 size: 80,
-                color: customColors['accent'],
+                color: AppColors.warmOrange,
               ),
             ],
           ),
@@ -475,12 +499,12 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget _buildWeatherInfo(IconData icon, String value, String label) {
     return Column(
       children: [
-        BoxedIcon(icon, size: 20, color: customColors['primary']),
+        BoxedIcon(icon, size: 20, color: AppColors.lightGreen),
         const SizedBox(height: 8),
         Text(
           value,
           style: TextStyle(
-            color: customColors['textDark'],
+            color: AppColors.textDark,
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
@@ -488,7 +512,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         Text(
           label,
           style: TextStyle(
-            color: customColors['textLight'],
+            color: AppColors.textLight,
             fontSize: 12,
           ),
         ),
@@ -501,15 +525,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
       margin: const EdgeInsets.symmetric(vertical: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: customColors['cardBg'],
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: customColors['primary']!.withOpacity(0.2),
+          color: AppColors.lightGreen!.withOpacity(0.2),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: customColors['textLight']!.withOpacity(0.1),
+            color: AppColors.textLight!.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -522,14 +546,14 @@ class _WeatherScreenState extends State<WeatherScreen> {
             children: [
               Icon(
                 Icons.agriculture,
-                color: customColors['primary'],
+                color: AppColors.lightGreen,
                 size: 24,
               ),
               const SizedBox(width: 8),
               Text(
                 farmingTipsText,
                 style: TextStyle(
-                  color: customColors['textDark'],
+                  color: AppColors.textDark,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -559,10 +583,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: customColors['primary']!.withOpacity(0.1),
+            color: AppColors.lightGreen!.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, color: customColors['primary'], size: 20),
+          child: Icon(icon, color: AppColors.lightGreen, size: 20),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -572,7 +596,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               Text(
                 title,
                 style: TextStyle(
-                  color: customColors['textDark'],
+                  color: AppColors.textDark,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -580,7 +604,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               Text(
                 description,
                 style: TextStyle(
-                  color: customColors['textLight'],
+                  color: AppColors.textLight,
                   fontSize: 14,
                 ),
               ),
@@ -596,11 +620,11 @@ class _WeatherScreenState extends State<WeatherScreen> {
       margin: const EdgeInsets.symmetric(vertical: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: customColors['cardBg'],
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: customColors['textLight']!.withOpacity(0.1),
+            color: AppColors.textLight!.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -612,7 +636,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Text(
             todaysDetailsText,
             style: TextStyle(
-              color: customColors['textDark'],
+              color: AppColors.textDark,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -636,14 +660,14 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Text(
             label,
             style: TextStyle(
-              color: customColors['textLight'],
+              color: AppColors.textLight,
               fontSize: 14,
             ),
           ),
           Text(
             value,
             style: TextStyle(
-              color: customColors['textDark'],
+              color: AppColors.textDark,
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
@@ -667,11 +691,11 @@ class _WeatherScreenState extends State<WeatherScreen> {
             margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: customColors['cardBg'],
+              color: AppColors.cardBackground,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: customColors['textLight']!.withOpacity(0.1),
+                  color: AppColors.textLight!.withOpacity(0.1),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -683,19 +707,19 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Text(
                   DateFormat('HH:mm').format(forecast['time']),
                   style:
-                      TextStyle(color: customColors['textLight'], fontSize: 12),
+                      TextStyle(color: AppColors.textLight, fontSize: 12),
                 ),
                 BoxedIcon(
                   forecast['condition'] == 'Sunny'
                       ? WeatherIcons.day_sunny
                       : WeatherIcons.day_cloudy,
                   size: 25,
-                  color: customColors['accent'],
+                  color: AppColors.warmOrange,
                 ),
                 Text(
                   '${forecast['temperature']}°C',
                   style: TextStyle(
-                    color: customColors['textDark'],
+                    color: AppColors.textDark,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
@@ -713,11 +737,11 @@ class _WeatherScreenState extends State<WeatherScreen> {
       margin: const EdgeInsets.symmetric(vertical: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: customColors['cardBg'],
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: customColors['textLight']!.withOpacity(0.1),
+            color: AppColors.textLight!.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -729,7 +753,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Text(
             weeklyForecastText,
             style: TextStyle(
-              color: customColors['textDark'],
+              color: AppColors.textDark,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -752,7 +776,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             width: 100,
             child: Text(
               DateFormat('EEEE').format(forecast['date']),
-              style: TextStyle(color: customColors['textLight'], fontSize: 14),
+              style: TextStyle(color: AppColors.textLight, fontSize: 14),
             ),
           ),
           BoxedIcon(
@@ -760,11 +784,11 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 ? WeatherIcons.day_sunny
                 : WeatherIcons.day_cloudy,
             size: 20,
-            color: customColors['accent'],
+            color: AppColors.warmOrange,
           ),
           Text(
             '${forecast['min_temp']}°C - ${forecast['max_temp']}°C',
-            style: TextStyle(color: customColors['textDark'], fontSize: 14),
+            style: TextStyle(color: AppColors.textDark, fontSize: 14),
           ),
         ],
       ),
@@ -777,11 +801,11 @@ class _WeatherScreenState extends State<WeatherScreen> {
       margin: const EdgeInsets.symmetric(vertical: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: customColors['cardBg'],
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: customColors['textLight']!.withOpacity(0.1),
+            color: AppColors.textLight!.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -793,7 +817,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Text(
             temperatureVariationText,
             style: TextStyle(
-              color: customColors['textDark'],
+              color: AppColors.textDark,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -808,7 +832,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   horizontalInterval: 5,
                   getDrawingHorizontalLine: (value) {
                     return FlLine(
-                      color: customColors['textLight']!.withOpacity(0.1),
+                      color: AppColors.textLight!.withOpacity(0.1),
                       strokeWidth: 1,
                     );
                   },
@@ -825,7 +849,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                           return Text(
                             '$hour:00',
                             style: TextStyle(
-                              color: customColors['textLight'],
+                              color: AppColors.textLight,
                               fontSize: 12,
                             ),
                           );
@@ -843,7 +867,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                         return Text(
                           '${value.toInt()}°',
                           style: TextStyle(
-                            color: customColors['textLight'],
+                            color: AppColors.textLight,
                             fontSize: 12,
                           ),
                         );
@@ -869,21 +893,21 @@ class _WeatherScreenState extends State<WeatherScreen> {
                             ))
                         .toList(),
                     isCurved: true,
-                    color: customColors['primary'],
+                    color: AppColors.lightGreen,
                     barWidth: 2,
                     dotData: FlDotData(
                       show: true,
                       getDotPainter: (spot, percent, barData, index) {
                         return FlDotCirclePainter(
                           radius: 3,
-                          color: customColors['primary']!,
+                          color: AppColors.lightGreen!,
                           strokeWidth: 0,
                         );
                       },
                     ),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: customColors['primary']!.withOpacity(0.1),
+                      color: AppColors.lightGreen!.withOpacity(0.1),
                     ),
                   ),
                 ],
@@ -900,48 +924,56 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildLocationPermissionRequest() {
+    final imageSize = ResponsiveUtils.responsive(
+      mobile: ResponsiveUtils.wp(45),
+      tablet: ResponsiveUtils.wp(30),
+    );
+
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: RPadding.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(
               'assets/Images/krishimantralocation.png',
-              height: 180,
-              width: 180,
+              height: imageSize,
+              width: imageSize,
               fit: BoxFit.contain,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: AppSizes.paddingXL),
             Text(
               locationRequiredText,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: AppSizes.fontXXL,
                 fontWeight: FontWeight.bold,
-                color: customColors['textDark'],
+                color: AppColors.textDark,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: AppSizes.paddingL),
             Text(
               weatherNeedsLocationText,
               style: TextStyle(
-                fontSize: 16,
-                color: customColors['textLight'],
+                fontSize: AppSizes.fontL,
+                color: AppColors.textLight,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: AppSizes.paddingXXL),
             ElevatedButton.icon(
               onPressed: _requestLocationPermission,
-              icon: const Icon(Icons.location_on),
-              label: Text(allowLocationText),
+              icon: Icon(Icons.location_on, size: AppSizes.iconM),
+              label: Text(
+                allowLocationText,
+                style: TextStyle(fontSize: AppSizes.fontL),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.green,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: RPadding.symmetric(horizontal: 24, vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                 ),
               ),
             ),

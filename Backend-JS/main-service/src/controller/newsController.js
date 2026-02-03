@@ -1,163 +1,165 @@
-const News = require("../model/News");
-const redisClient = require("../config/redis");
-const cloudinary = require("../config/cloudinary");
-const mongoose = require("mongoose");
+const News = require('../model/News');
+const redis = require('../config/redis');
+const { asyncHandler } = require('../utils');
+const { HTTP_STATUS, CACHE_TTL, PAGINATION } = require('../utils/constants');
 
-class NewsController {
-    async createNews(req, res) {
-        try {
-            const { content, tags,imageUrl } = req.body;
-            const uploadedBy = req.user._id;
+/**
+ * Create news article
+ */
+const createNews = asyncHandler(async (req, res) => {
+  const { content, tags, imageUrl } = req.body;
+  const uploadedBy = req.user.id || req.user._id;
 
-            const news = new News({
-                content,
-                tags,
-                uploadedBy,
-                image: imageUrl
-            });
+  const news = new News({
+    content,
+    tags,
+    uploadedBy,
+    image: imageUrl,
+  });
 
-            await news.save();
+  await news.save();
 
-            // Invalidate news cache
-            await redisClient.del("news:all");
+  // Invalidate cache
+  await redis.del('news:all');
 
-            res.status(201).json({
-                success: true,
-                data: news
-            });
-        } catch (error) {
-            res.status(400).json({
-                success: false,
-                message: error.message
-            });
-        }
-    }
+  return res.status(HTTP_STATUS.CREATED).json({
+    success: true,
+    data: news,
+  });
+});
 
-    // Get All News with Caching
-    async getAllNews(req, res) {
-        try {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const skip = (page - 1) * limit;
+/**
+ * Get all news with pagination and caching
+ */
+const getAllNews = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page, 10) || PAGINATION.DEFAULT_PAGE;
+  const limit = Math.min(
+    parseInt(req.query.limit, 10) || PAGINATION.DEFAULT_LIMIT,
+    PAGINATION.MAX_LIMIT
+  );
+  const skip = (page - 1) * limit;
 
-            // Check Redis cache first
-            const cacheKey = `news:all:page:${page}:limit:${limit}`;
-            const cachedNews = await redisClient.get(cacheKey);
+  const cacheKey = `news:all:page:${page}:limit:${limit}`;
 
-            if (cachedNews) {
-                return res.status(200).json(JSON.parse(cachedNews));
-            }
+  // Try cache first
+  const cachedNews = await redis.get(cacheKey);
+  if (cachedNews) {
+    return res.status(HTTP_STATUS.OK).json(JSON.parse(cachedNews));
+  }
 
-            const news = await News.find({ isPublished: true })
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit)
-                .populate('uploadedBy', 'name');
+  const [news, total] = await Promise.all([
+    News.find({ isPublished: true })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('uploadedBy', 'name')
+      .lean(),
+    News.countDocuments({ isPublished: true }),
+  ]);
 
-            const total = await News.countDocuments({ isPublished: true });
+  const response = {
+    success: true,
+    count: news.length,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+    data: news,
+  };
 
-            const response = {
-                success: true,
-                count: news.length,
-                total,
-                page,
-                totalPages: Math.ceil(total / limit),
-                data: news
-            };
+  // Cache the result
+  await redis.setex(cacheKey, CACHE_TTL.LONG, JSON.stringify(response));
 
-            // Cache the result
-            await redisClient.setex(cacheKey, 3600, JSON.stringify(response));
+  return res.status(HTTP_STATUS.OK).json(response);
+});
 
-            res.status(200).json(response);
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: error.message
-            });
-        }
-    }
+/**
+ * Like a news article
+ */
+const likeNews = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id || req.user._id;
 
-    // Like a News
-    async likeNews(req, res) {
-        try {
-            const { id } = req.params;
-            const userId = req.user._id;
+  const news = await News.findById(id);
+  if (!news) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
+      success: false,
+      message: 'News not found',
+    });
+  }
 
-            const news = await News.findById(id);
-            if (!news) {
-                return res.status(404).json({
-                    success: false,
-                    message: "News not found"
-                });
-            }
+  // Check if user already liked
+  if (news.likedBy && news.likedBy.includes(userId)) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'You have already liked this news',
+    });
+  }
 
-            // Use atomic operation to prevent race conditions
-            const updatedNews = await News.findByIdAndUpdate(
-                id, 
-                { 
-                    $inc: { likes: 1 },
-                    $addToSet: { likedBy: userId }
-                },
-                { new: true }
-            );
+  // Atomic update to prevent race conditions
+  const updatedNews = await News.findByIdAndUpdate(
+    id,
+    {
+      $inc: { likes: 1 },
+      $addToSet: { likedBy: userId },
+    },
+    { new: true }
+  );
 
-            // Invalidate cache
-            await redisClient.del(`news:${id}`);
-            await redisClient.del("news:all");
+  // Invalidate cache
+  await redis.del(`news:${id}`);
+  await redis.del('news:all');
 
-            res.status(200).json({
-                success: true,
-                data: updatedNews
-            });
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: error.message
-            });
-        }
-    }
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: updatedNews,
+  });
+});
 
-    // Search News
-    async searchNews(req, res) {
-        try {
-            const { query, tags } = req.query;
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const skip = (page - 1) * limit;
+/**
+ * Search news
+ */
+const searchNews = asyncHandler(async (req, res) => {
+  const { query, tags } = req.query;
+  const page = parseInt(req.query.page, 10) || PAGINATION.DEFAULT_PAGE;
+  const limit = Math.min(
+    parseInt(req.query.limit, 10) || PAGINATION.DEFAULT_LIMIT,
+    PAGINATION.MAX_LIMIT
+  );
+  const skip = (page - 1) * limit;
 
-            let searchCriteria = { isPublished: true };
+  const searchCriteria = { isPublished: true };
 
-            if (query) {
-                searchCriteria.$text = { $search: query };
-            }
+  if (query) {
+    searchCriteria.$text = { $search: query };
+  }
 
-            if (tags) {
-                searchCriteria.tags = { $in: tags.split(',') };
-            }
+  if (tags) {
+    searchCriteria.tags = { $in: tags.split(',').map((t) => t.trim()) };
+  }
 
-            const news = await News.find(searchCriteria)
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit)
-                .populate('uploadedBy', 'name');
+  const [news, total] = await Promise.all([
+    News.find(searchCriteria)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('uploadedBy', 'name')
+      .lean(),
+    News.countDocuments(searchCriteria),
+  ]);
 
-            const total = await News.countDocuments(searchCriteria);
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    count: news.length,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+    data: news,
+  });
+});
 
-            res.status(200).json({
-                success: true,
-                count: news.length,
-                total,
-                page,
-                totalPages: Math.ceil(total / limit),
-                data: news
-            });
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: error.message
-            });
-        }
-    }
-}
-
-module.exports = new NewsController();
+module.exports = {
+  createNews,
+  getAllNews,
+  likeNews,
+  searchNews,
+};

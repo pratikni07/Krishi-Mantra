@@ -8,6 +8,7 @@ const UserInterest = require("../model/userInterest");
 const {
   updateUserInterestForInteraction,
 } = require("../utils/interactionUtils");
+const notificationService = require("../services/notificationService");
 
 const FEED_CACHE_KEY = "feed:";
 const COMMENTS_CACHE_KEY = "comments:";
@@ -115,6 +116,51 @@ class FeedController {
     this.getTrendingHashtags = this.getTrendingHashtags.bind(this);
     this.getAllFeeds = this.getAllFeeds.bind(this);
     this.getAllFeedsForAdmin = this.getAllFeedsForAdmin.bind(this);
+    this.getUserStats = this.getUserStats.bind(this);
+    this.syncInitialInterests = this.syncInitialInterests.bind(this);
+  }
+
+  /**
+   * Get user statistics (posts count, comments count, likes count)
+   * @route GET /user/:userId/stats
+   */
+  async getUserStats(req, res) {
+    try {
+      const { userId } = req.params;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      // Execute all count queries in parallel for better performance
+      const [postsCount, commentsCount, likesCount] = await Promise.all([
+        Feed.countDocuments({ userId, isDeleted: { $ne: true } }),
+        Comment.countDocuments({ userId, isDeleted: { $ne: true } }),
+        Like.countDocuments({ userId }),
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        message: "User statistics retrieved successfully",
+        data: {
+          stats: {
+            posts: postsCount,
+            comments: commentsCount,
+            likes: likesCount,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching user stats:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching user statistics",
+        error: error.message,
+      });
+    }
   }
   getCommonAggregationPipeline() {
     return [
@@ -399,6 +445,101 @@ class FeedController {
     } catch (error) {
       console.error("Error updating user interest:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  }
+
+  /**
+   * Sync initial user interests from main-service (onboarding interests)
+   * This seeds the recommendation engine with user's declared interests
+   * @route POST /user/sync-interests
+   */
+  async syncInitialInterests(req, res) {
+    try {
+      const { userId, interests, location, categories } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      let userInterest = await UserInterest.findOne({ userId });
+
+      if (!userInterest) {
+        userInterest = new UserInterest({
+          userId,
+          interests: [],
+          recentViews: [],
+          engagementLevel: "low",
+        });
+      }
+
+      // Add initial interests with a base score
+      if (interests && Array.isArray(interests)) {
+        const initialScore = 5.0; // Higher initial score for declared interests
+        for (const interest of interests) {
+          const tag = interest.toLowerCase().trim();
+          const existingInterest = userInterest.interests.find(
+            (i) => i.tag === tag
+          );
+
+          if (existingInterest) {
+            // Boost existing interest if user explicitly declares it
+            existingInterest.score = Math.max(
+              existingInterest.score,
+              initialScore
+            );
+            existingInterest.lastInteraction = new Date();
+          } else {
+            userInterest.interests.push({
+              tag,
+              score: initialScore,
+              lastInteraction: new Date(),
+            });
+          }
+        }
+      }
+
+      // Add categories if provided
+      if (categories && Array.isArray(categories)) {
+        userInterest.categories = [
+          ...new Set([...(userInterest.categories || []), ...categories]),
+        ];
+      }
+
+      // Update location if provided
+      if (location && location.latitude && location.longitude) {
+        userInterest.location = {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          lastUpdated: new Date(),
+        };
+      }
+
+      userInterest.lastActive = new Date();
+      await userInterest.save();
+
+      // Invalidate caches
+      await redis.del(`${USER_INTEREST_CACHE_KEY}${userId}`);
+      await redis.del(`${RECOMMENDED_FEEDS_CACHE_KEY}${userId}`);
+
+      res.json({
+        success: true,
+        message: "User interests synced successfully",
+        data: {
+          interestsCount: userInterest.interests.length,
+          categoriesCount: userInterest.categories?.length || 0,
+          hasLocation: !!userInterest.location?.latitude,
+        },
+      });
+    } catch (error) {
+      console.error("Error syncing initial interests:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error syncing user interests",
+        error: error.message,
+      });
     }
   }
 
@@ -849,6 +990,22 @@ class FeedController {
       const { userId, userName, profilePhoto, content, parentCommentId } =
         req.body;
 
+      // Validate required fields
+      if (!userId || !userName || !content) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          details: {
+            userId: !userId ? "userId is required" : undefined,
+            userName: !userName ? "userName is required" : undefined,
+            content: !content ? "content is required" : undefined,
+          },
+        });
+      }
+
+      if (!feedId) {
+        return res.status(400).json({ error: "Feed ID is required" });
+      }
+
       let depth = 0;
       if (parentCommentId) {
         const parentComment = await Comment.findById(parentCommentId);
@@ -869,16 +1026,20 @@ class FeedController {
         profilePhoto,
         feed: feedId,
         content,
-        parentComment: parentCommentId,
+        parentComment: parentCommentId || null,
         depth,
       });
 
       await comment.save();
 
+      // Get the feed to find the owner
+      const feed = await Feed.findById(feedId);
+
+      let parentComment = null;
       if (parentCommentId) {
-        await Comment.findByIdAndUpdate(parentCommentId, {
+        parentComment = await Comment.findByIdAndUpdate(parentCommentId, {
           $push: { replies: comment._id },
-        });
+        }, { new: true });
       }
 
       await Feed.findByIdAndUpdate(feedId, {
@@ -888,6 +1049,26 @@ class FeedController {
       // Update user interest for comment
       if (userId) {
         await updateUserInterestForInteraction(userId, feedId, "comment");
+      }
+
+      // Send notification to feed owner (and parent comment owner if reply)
+      if (feed) {
+        try {
+          await notificationService.sendCommentNotification({
+            feedOwnerId: feed.userId,
+            feedOwnerName: feed.userName,
+            commenterId: userId,
+            commenterName: userName,
+            commenterPhoto: profilePhoto,
+            feedId: feedId,
+            commentId: comment._id.toString(),
+            commentContent: content,
+            isReply: !!parentCommentId,
+            parentCommentOwnerId: parentComment?.userId,
+          });
+        } catch (notifError) {
+          console.error("Error sending comment notification:", notifError.message);
+        }
       }
 
       // Invalidate feed and comments cache
@@ -929,13 +1110,31 @@ class FeedController {
           feed: feedId,
         });
         await like.save();
-        await Feed.findByIdAndUpdate(feedId, {
+
+        const feed = await Feed.findByIdAndUpdate(feedId, {
           $inc: { "like.count": 1 },
-        });
+        }, { new: true });
 
         // Update user interest for like
         if (userId) {
           await updateUserInterestForInteraction(userId, feedId, "like");
+        }
+
+        // Send notification to feed owner
+        if (feed) {
+          try {
+            await notificationService.sendLikeNotification({
+              feedOwnerId: feed.userId,
+              feedOwnerName: feed.userName,
+              likerId: userId,
+              likerName: userName,
+              likerPhoto: profilePhoto,
+              feedId: feedId,
+              feedContent: feed.content || feed.description,
+            });
+          } catch (notifError) {
+            console.error("Error sending like notification:", notifError.message);
+          }
         }
       }
 
@@ -1437,7 +1636,9 @@ class FeedController {
                     as: "tag",
                     in: {
                       $toLower: {
-                        $substr: [{ $arrayElemAt: ["$$tag.match", 0] }, 1, -1],
+                        // $$tag.match is the full match string (e.g., "#farming")
+                        // $substr with index 1 removes the # prefix
+                        $substr: ["$$tag.match", 1, -1],
                       },
                     },
                   },

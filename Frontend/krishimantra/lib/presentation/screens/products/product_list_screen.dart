@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/responsive_utils.dart';
 import '../../../data/models/product_model.dart';
 import '../../controllers/product_controller.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 import 'product_detail_screen.dart';
 import '../../../core/utils/error_handler.dart';
 
@@ -11,15 +13,35 @@ class ProductListScreen extends GetView<ProductController> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+    final imageHeight = ResponsiveUtils.responsive(mobile: 120.0, tablet: 160.0);
+
     return Scaffold(
       backgroundColor: AppColors.faintGreen,
       appBar: AppBar(
-        title: const Text('Agricultural Products'),
+        title: Text(
+          'Agricultural Products',
+          style: TextStyle(fontSize: AppSizes.fontL),
+        ),
         backgroundColor: AppColors.green,
+        iconTheme: IconThemeData(size: AppSizes.iconM),
       ),
       body: Obx(() {
         if (controller.isLoading.value) {
-          return const Center(child: CircularProgressIndicator());
+          return GridView.builder(
+            padding: RPadding.all(16),
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: ResponsiveUtils.gridCrossAxisCount,
+              childAspectRatio: 0.75,
+              crossAxisSpacing: AppSizes.paddingL,
+              mainAxisSpacing: AppSizes.paddingL,
+            ),
+            itemCount: 6,
+            itemBuilder: (context, index) {
+              return const SkeletonProductGridItem();
+            },
+          );
         }
 
         if (controller.error.isNotEmpty) {
@@ -31,12 +53,12 @@ class ProductListScreen extends GetView<ProductController> {
         }
 
         return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+          padding: RPadding.all(16),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: ResponsiveUtils.gridCrossAxisCount,
             childAspectRatio: 0.75,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+            crossAxisSpacing: AppSizes.paddingL,
+            mainAxisSpacing: AppSizes.paddingL,
           ),
           itemCount: controller.products.length,
           itemBuilder: (context, index) {
@@ -49,48 +71,48 @@ class ProductListScreen extends GetView<ProductController> {
               child: Card(
                 elevation: 4,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXL)),
                       child: Image.network(
                         product.image,
-                        height: 120,
+                        height: imageHeight,
                         width: double.infinity,
                         fit: BoxFit.cover,
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.all(8.0),
+                      padding: RPadding.all(8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             product.name,
-                            style: const TextStyle(
-                              fontSize: 16,
+                            style: TextStyle(
+                              fontSize: AppSizes.fontL,
                               fontWeight: FontWeight.bold,
                               color: AppColors.textGrey,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: AppSizes.paddingS),
                           Row(
                             children: [
                               CircleAvatar(
-                                radius: 12,
+                                radius: ResponsiveUtils.responsive(mobile: 12.0, tablet: 16.0),
                                 backgroundImage: NetworkImage(product.company.logo),
                               ),
-                              const SizedBox(width: 4),
+                              SizedBox(width: AppSizes.paddingS),
                               Expanded(
                                 child: Text(
                                   product.company.name,
-                                  style: const TextStyle(
-                                    fontSize: 12,
+                                  style: TextStyle(
+                                    fontSize: AppSizes.fontS,
                                     color: AppColors.textGrey,
                                   ),
                                   maxLines: 1,

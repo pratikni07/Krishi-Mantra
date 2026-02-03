@@ -7,6 +7,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:krishimantra/data/services/UserService.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/responsive_utils.dart';
 import 'widgets/weather_section.dart';
 import '../../widgets/app_header.dart';
 import 'widgets/location_dialog.dart';
@@ -20,9 +22,16 @@ import '../../../core/utils/language_helper.dart';
 
 import '../../controllers/ads_controller.dart';
 import 'widgets/services.dart';
+import 'widgets/feature_highlights.dart';
+import 'widgets/trending_reels_section.dart';
+import 'widgets/hot_products_section.dart';
+import 'widgets/trending_hashtags.dart';
+import 'widgets/latest_schemes_section.dart';
 import '../../controllers/feed_controller.dart';
 import '../feed/widgets/feed_card.dart';
 import '../../../data/services/weather_service.dart';
+import '../../../data/models/feed_model.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -41,6 +50,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   int _cloudiness = 0;
   bool _isLoadingWeather = true;
   bool _hasLocationPermission = false;
+  bool _isLoadingAds = true;
+  bool _isLoadingSlider = true;
   final AdsController _adsController = Get.find<AdsController>();
   List<dynamic> _homeScreenAds = [];
   List<dynamic> _splashAds = [];
@@ -69,6 +80,10 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   static const String KEY_TESTIMONIALS = 'testimonials';
   static const String KEY_SHARE_APP = 'share_app';
   static const String KEY_FETCHING_LOCATION = 'fetching_location';
+  static const String KEY_WEATHER_REQUIRES_LOCATION = 'weather_requires_location';
+  static const String KEY_ALLOW_LOCATION_BTN = 'allow_location_btn';
+  static const String KEY_FAILED_TO_LOAD_IMAGE = 'failed_to_load_image';
+  static const String KEY_ADVERTISEMENT = 'advertisement';
 
   @override
   void initState() {
@@ -101,6 +116,10 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
     registerTranslation(KEY_SHARE_APP,
         "Share KrishiMantra with more farmers and enjoy our free services. Let's grow with technology together!");
     registerTranslation(KEY_FETCHING_LOCATION, "Fetching location...");
+    registerTranslation(KEY_WEATHER_REQUIRES_LOCATION, 'Weather data requires location');
+    registerTranslation(KEY_ALLOW_LOCATION_BTN, 'Allow Location');
+    registerTranslation(KEY_FAILED_TO_LOAD_IMAGE, 'Failed to load image');
+    registerTranslation(KEY_ADVERTISEMENT, 'Advertisement');
   }
 
   void _onScroll() {
@@ -148,9 +167,17 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   }
 
   Future<void> _translateTestimonials() async {
+    // Get language service directly to ensure it's initialized
+    final languageService = await LanguageService.getInstance();
+
     for (var i = 0; i < _testimonials.length; i++) {
+      // Translate the content
       _testimonials[i]['content'] =
-          await translate(_testimonials[i]['content'] ?? '');
+          await languageService.translate(_testimonials[i]['content'] ?? '');
+
+      // Also translate name format for display (e.g., "Rajesh Kumar" stays, but location can be translated)
+      final location = _testimonials[i]['location'] ?? '';
+      _testimonials[i]['location'] = await languageService.translate(location);
     }
     if (mounted) {
       setState(() {});
@@ -223,11 +250,17 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   }
 
   Future<void> _fetchLocation() async {
-    if (!_hasLocationPermission) return;
+    if (!_hasLocationPermission) {
+      logger.d('Location permission not granted, skipping fetch', tag: 'HomeScreen');
+      return;
+    }
 
     try {
+      logger.d('Fetching current position...', tag: 'HomeScreen');
       Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
+
+      logger.d('Got position: ${position.latitude}, ${position.longitude}', tag: 'HomeScreen');
 
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
@@ -248,15 +281,19 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
           locationName = place.administrativeArea!;
         }
 
+        logger.d('Location name: $locationName', tag: 'HomeScreen');
+
         setState(() {
           _currentPosition = position;
           _location = locationName;
         });
 
         // Fetch weather data after getting location
+        logger.d('Calling _fetchWeatherData...', tag: 'HomeScreen');
         await _fetchWeatherData();
       }
     } catch (e) {
+      logger.e('Error fetching location', tag: 'HomeScreen', error: e);
       if (mounted) {
         setState(() {
           _location = getTranslation(KEY_ERROR_FETCHING_LOCATION);
@@ -266,9 +303,13 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   }
 
   Future<void> _fetchWeatherData() async {
-    if (_currentPosition == null) return;
+    if (_currentPosition == null) {
+      logger.d('_currentPosition is null, skipping weather fetch', tag: 'HomeScreen');
+      return;
+    }
 
     try {
+      logger.d('Fetching weather data...', tag: 'HomeScreen');
       if (mounted) {
         setState(() => _isLoadingWeather = true);
       }
@@ -278,13 +319,20 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
 
       if (!mounted) return;
 
+      final temp = (weatherData['temperature'] ?? 0).toDouble();
+      final humidity = weatherData['humidity'] ?? 0;
+      final cloudiness = weatherData['cloudiness'] ?? 0;
+
+      logger.d('Weather data received: temp=$temp, humidity=$humidity, cloudiness=$cloudiness', tag: 'HomeScreen');
+
       setState(() {
-        _temperature = weatherData['temperature'];
-        _humidity = weatherData['humidity'];
-        _cloudiness = weatherData['cloudiness'];
+        _temperature = temp;
+        _humidity = humidity;
+        _cloudiness = cloudiness;
         _isLoadingWeather = false;
       });
     } catch (e) {
+      logger.e('Error fetching weather data', tag: 'HomeScreen', error: e);
       if (mounted) {
         setState(() {
           _isLoadingWeather = false;
@@ -303,11 +351,17 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       setState(() {
         _homeScreenAds = homeScreenAds;
         _splashAds = splashAds;
+        _isLoadingAds = false;
       });
 
       _checkAndShowSplashAd();
     } catch (e) {
       // Handle error silently
+      if (mounted) {
+        setState(() {
+          _isLoadingAds = false;
+        });
+      }
     }
   }
 
@@ -357,83 +411,105 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
+        ResponsiveUtils.init(context);
         return WillPopScope(
           onWillPop: () async => false,
           child: Dialog(
             backgroundColor: Colors.transparent,
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.9,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (imageUrl.isNotEmpty)
-                    Container(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.7,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.contain,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) {
-                              return child;
-                            }
-                            return SizedBox(
-                              height: 200,
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes !=
-                                          null
-                                      ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                      : null,
-                                ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: 200,
-                              color: Colors.grey[200],
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.error,
-                                      size: 40, color: Colors.red),
-                                  SizedBox(height: 8),
-                                  Text('Failed to load image',
-                                      style: TextStyle(color: Colors.red)),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.grey),
-                      ),
-                    ),
-                    child: Text(getTranslation(KEY_CLOSE)),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: ResponsiveUtils.wp(90),
+                  padding: RPadding.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                   ),
-                ],
-              ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (imageUrl.isNotEmpty)
+                        Container(
+                          constraints: BoxConstraints(
+                            maxHeight: ResponsiveUtils.hp(70),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.contain,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) {
+                                  return child;
+                                }
+                                return SizedBox(
+                                  height: ResponsiveUtils.hp(25),
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      value: loadingProgress.expectedTotalBytes !=
+                                              null
+                                          ? loadingProgress.cumulativeBytesLoaded /
+                                              loadingProgress.expectedTotalBytes!
+                                          : null,
+                                    ),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  height: ResponsiveUtils.hp(25),
+                                  color: AppColors.shimmerBase,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.error,
+                                          size: AppSizes.iconXL, color: AppColors.error),
+                                      SizedBox(height: AppSizes.paddingS),
+                                      Text(getTranslation(KEY_FAILED_TO_LOAD_IMAGE),
+                                          style: TextStyle(
+                                            color: AppColors.error,
+                                            fontSize: AppSizes.fontM,
+                                          )),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // X close button positioned at top right
+                Positioned(
+                  top: -12,
+                  right: -12,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.shadowLight,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.close,
+                        size: 20,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -459,7 +535,15 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       if (_homeScreenSlider.isNotEmpty && mounted) {
         _startAutoScroll();
       }
-    } catch (e) {}
+    } catch (e) {
+      // Error handled silently
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingSlider = false;
+        });
+      }
+    }
   }
 
   Future<void> _fetchSliderWithRetry() async {
@@ -521,6 +605,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
     // Reset flags
     setState(() {
       _isLoadingWeather = true;
+      _isLoadingAds = true;
+      _isLoadingSlider = true;
     });
 
     // Refresh all data
@@ -540,7 +626,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   // Loading weather widget
   Widget _buildLoadingWeather() {
     return Container(
-      height: 100,
+      height: ResponsiveUtils.hp(12),
       color: AppColors.green,
       child: Center(
         child: CircularProgressIndicator(
@@ -554,7 +640,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   // Location request widget
   Widget _buildLocationRequestWidget() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+      padding: RPadding.symmetric(vertical: 16, horizontal: 24),
       color: AppColors.green,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -562,31 +648,34 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.location_on, color: Colors.white, size: 24),
-              SizedBox(width: 8),
+              Icon(Icons.location_on, color: Colors.white, size: AppSizes.iconM),
+              SizedBox(width: AppSizes.paddingS),
               Text(
-                'Weather data requires location',
+                getTranslation(KEY_WEATHER_REQUIRES_LOCATION),
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: AppSizes.fontL,
                 ),
               ),
             ],
           ),
-          SizedBox(height: 8),
+          SizedBox(height: AppSizes.paddingS),
           ElevatedButton(
             onPressed: _requestLocationPermission,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: AppColors.green,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: RPadding.symmetric(horizontal: 16, vertical: 8),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppSizes.radiusXXL),
               ),
             ),
             child: Text(
-              'Allow Location',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              getTranslation(KEY_ALLOW_LOCATION_BTN),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: AppSizes.fontM,
+              ),
             ),
           ),
         ],
@@ -596,20 +685,18 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
 
   @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final screenWidth = mediaQuery.size.width;
-    final screenHeight = mediaQuery.size.height;
-    final statusBarHeight = mediaQuery.padding.top;
-    final isSmallScreen = screenWidth < 360;
+    ResponsiveUtils.init(context);
+    final statusBarHeight = MediaQuery.of(context).padding.top;
 
-    // Calculate dynamic sizes
-    final cardPadding = isSmallScreen ? 8.0 : 16.0;
-    final sectionSpacing = isSmallScreen ? 16.0 : 24.0;
-    final titleFontSize = isSmallScreen ? 18.0 : 22.0;
-    final textScaleFactor = mediaQuery.textScaleFactor;
+    // Dynamic sizes using ResponsiveUtils
+    final cardPadding = AppSizes.paddingL;
+    final sectionSpacing = ResponsiveUtils.responsive(mobile: 16.0, tablet: 24.0);
+    final titleFontSize = AppSizes.fontXL;
+    final appBarExpandedHeight = ResponsiveUtils.responsive(mobile: 200.0, tablet: 240.0);
+    final appBarCollapsedHeight = ResponsiveUtils.responsive(mobile: 100.0, tablet: 120.0);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       body: RefreshIndicator(
         color: AppColors.green,
         onRefresh: _refreshData,
@@ -618,7 +705,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
-              expandedHeight: _showWeather ? 200.0 : 100.0,
+              expandedHeight: _showWeather ? appBarExpandedHeight : appBarCollapsedHeight,
               floating: false,
               pinned: true,
               backgroundColor: AppColors.green,
@@ -627,7 +714,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                 background: _showWeather
                     ? WeatherSection(
                         statusBarHeight: statusBarHeight,
-                        screenWidth: screenWidth,
+                        screenWidth: ResponsiveUtils.screenWidth,
                         temperature: _temperature,
                         humidity: _humidity,
                         cloudiness: _cloudiness,
@@ -651,8 +738,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
               child: Column(
                 children: [
                   Container(
-                    margin:
-                        EdgeInsets.symmetric(vertical: sectionSpacing * 0.5),
+                    margin: EdgeInsets.only(top: sectionSpacing * 0.5, bottom: sectionSpacing * 0.25),
                     child: Text(
                       getTranslation(KEY_SERVICES),
                       style: TextStyle(
@@ -664,34 +750,56 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                     ),
                   ),
                   Container(
-                    margin: EdgeInsets.symmetric(horizontal: cardPadding),
+                    margin: EdgeInsets.only(left: cardPadding, right: cardPadding, bottom: sectionSpacing * 0.25),
                     child: Services(),
                   ),
                 ],
               ),
             ),
 
+            // Feature Highlights Section
+            const SliverToBoxAdapter(
+              child: FeatureHighlights(),
+            ),
+
+            // Trending Reels Section
+            const SliverToBoxAdapter(
+              child: TrendingReelsSection(),
+            ),
+
+            // Hot Products Section
+            const SliverToBoxAdapter(
+              child: HotProductsSection(),
+            ),
+
+            // Trending Hashtags Section
+            const SliverToBoxAdapter(
+              child: TrendingHashtags(),
+            ),
+
             // Ads and Feeds
             SliverToBoxAdapter(
               child: Column(
                 children: [
-                  // First Ad (if available)
-                  if (_homeScreenAds.isNotEmpty)
+                  // First Ad (show skeleton while loading, then actual ad)
+                  if (_isLoadingAds)
+                    const SkeletonAdBanner()
+                  else if (_homeScreenAds.isNotEmpty)
                     Container(
                       margin: EdgeInsets.symmetric(
                           horizontal: cardPadding, vertical: cardPadding * 0.5),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: BorderRadius.circular(AppSizes.radiusL),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black26,
+                            color: AppColors.shadowLight,
                             offset: Offset(0, 2),
                             blurRadius: 6.0,
                           ),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: BorderRadius.circular(AppSizes.radiusL),
                         child: Image.network(
                           ImageUtils.validateUrl(
                               _homeScreenAds[0]['dirURL'] ?? ''),
@@ -700,8 +808,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                             if (loadingProgress == null) return child;
                             return Center(
                               child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes !=
-                                        null
+                                value: loadingProgress.expectedTotalBytes != null
                                     ? loadingProgress.cumulativeBytesLoaded /
                                         loadingProgress.expectedTotalBytes!
                                     : null,
@@ -709,18 +816,21 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                             );
                           },
                           errorBuilder: (context, error, stackTrace) {
-                            print('❌ Error loading home screen ad: $error');
+                            logger.e('Error loading home screen ad', tag: 'HomeScreen', error: error);
                             return Container(
-                              height: isSmallScreen ? 150 : 200,
-                              color: Colors.grey[200],
+                              height: ResponsiveUtils.hp(25),
+                              color: AppColors.shimmerBase,
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.error, color: Colors.red),
-                                  SizedBox(height: 8),
+                                  Icon(Icons.error, color: AppColors.error, size: AppSizes.iconM),
+                                  SizedBox(height: AppSizes.paddingS),
                                   Text(
-                                    'Advertisement',
-                                    style: TextStyle(color: Colors.grey[700]),
+                                    getTranslation(KEY_ADVERTISEMENT),
+                                    style: TextStyle(
+                                      color: AppColors.textGrey,
+                                      fontSize: AppSizes.fontM,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -730,33 +840,40 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                       ),
                     ),
 
-                  // Top Feeds
-                  Obx(() {
-                    if (_feedController.isLoadingTopFeeds.value) {
-                      return Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: CircularProgressIndicator(
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(AppColors.green),
-                          ),
-                        ),
-                      );
-                    }
+                  // Top Feeds - Using GetBuilder to avoid RxList.length infinite recursion
+                  GetBuilder<FeedController>(
+                    init: _feedController,
+                    builder: (controller) {
+                      if (controller.isLoadingTopFeeds.value) {
+                        return Column(
+                          children: const [
+                            SkeletonFeedCard(),
+                            SkeletonFeedCard(),
+                          ],
+                        );
+                      }
 
-                    return Column(
-                      children: _feedController.topFeeds
-                          .map((feed) => FeedCard(
-                                feed: feed,
-                                onLike: () => _feedController.likeFeed(feed.id),
-                                onSave:
-                                    () {}, // Implement save functionality if needed
-                              ))
-                          .toList(),
-                    );
-                  }),
+                      // Create a non-reactive copy to avoid RxList issues
+                      final topFeedsList = List<FeedModel>.from(controller.topFeeds);
+
+                      return Column(
+                        children: topFeedsList
+                            .map((feed) => FeedCard(
+                                  feed: feed,
+                                  onLike: () => controller.likeFeed(feed.id),
+                                  onSave: () {},
+                                ))
+                            .toList(),
+                      );
+                    },
+                  ),
                 ],
               ),
+            ),
+
+            // Latest Schemes Section
+            const SliverToBoxAdapter(
+              child: LatestSchemesSection(),
             ),
 
             // Testimonials Section
@@ -777,7 +894,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                     ),
                   ),
                   Container(
-                    height: isSmallScreen ? 160 : 180,
+                    height: ResponsiveUtils.responsive(mobile: 160.0, tablet: 200.0),
                     margin: EdgeInsets.only(bottom: sectionSpacing * 0.5),
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
@@ -798,17 +915,17 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
               child: Container(
                 margin: EdgeInsets.symmetric(
                     horizontal: cardPadding * 1.5, vertical: sectionSpacing),
-                padding: EdgeInsets.all(16.0),
+                padding: RPadding.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10.0),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                   border: Border.all(color: AppColors.green, width: 1.0),
                 ),
                 child: Text(
                   getTranslation(KEY_SHARE_APP),
                   style: TextStyle(
                     color: AppColors.green,
-                    fontSize: isSmallScreen ? 14 : 16,
+                    fontSize: AppSizes.fontL,
                     fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
@@ -827,12 +944,23 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   }
 
   Widget _buildCarouselSlider() {
-    if (_homeScreenSlider.isEmpty) {
-      return Container();
+    final carouselHeight = ResponsiveUtils.responsive(mobile: 200.0, tablet: 280.0);
+
+    // Show skeleton while loading
+    if (_isLoadingSlider && _homeScreenSlider.isEmpty) {
+      return Container(
+        height: carouselHeight,
+        child: const SkeletonCarouselItem(),
+      );
     }
 
+    if (_homeScreenSlider.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final dotSize = ResponsiveUtils.responsive(mobile: 8.0, tablet: 10.0);
+
     return Container(
-      height: 200,
+      height: carouselHeight,
       child: Stack(
         children: [
           PageView.builder(
@@ -846,19 +974,19 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
             itemBuilder: (context, index) {
               final ad = _homeScreenSlider[index];
               return Container(
-                margin: EdgeInsets.symmetric(horizontal: 10.0),
+                margin: EdgeInsets.symmetric(horizontal: AppSizes.paddingM),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8.0),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black26,
+                      color: AppColors.shadowLight,
                       offset: Offset(0, 2),
                       blurRadius: 6.0,
                     ),
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8.0),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                   child: Image.network(
                     ad['dirURL'],
                     fit: BoxFit.cover,
@@ -875,8 +1003,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                     },
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
-                        color: Colors.grey[200],
-                        child: Icon(Icons.error, color: Colors.red),
+                        color: AppColors.shimmerBase,
+                        child: Icon(Icons.error, color: AppColors.error, size: AppSizes.iconM),
                       );
                     },
                   ),
@@ -886,7 +1014,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
           ),
           // Smooth page indicator
           Positioned(
-            bottom: 10,
+            bottom: AppSizes.paddingM,
             left: 0,
             right: 0,
             child: Center(
@@ -894,11 +1022,11 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                 controller: _pageController,
                 count: _homeScreenSlider.length,
                 effect: WormEffect(
-                  dotHeight: 8,
-                  dotWidth: 8,
-                  spacing: 8,
-                  dotColor: Colors.white.withOpacity(0.4),
-                  activeDotColor: Colors.white,
+                  dotHeight: dotSize,
+                  dotWidth: dotSize,
+                  spacing: dotSize,
+                  dotColor: AppColors.white.withOpacity(0.4),
+                  activeDotColor: AppColors.white,
                 ),
                 onDotClicked: (index) {
                   _pageController.animateToPage(
@@ -916,17 +1044,19 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   }
 
   Widget _buildHorizontalTestimonialCard(Map<String, String> testimonial) {
+    final cardWidth = ResponsiveUtils.responsive(mobile: 320.0, tablet: 400.0);
+
     return Container(
-      width: 320, // Increased width for each card
-      margin: EdgeInsets.only(right: 12.0),
-      padding: EdgeInsets.all(16.0),
+      width: cardWidth,
+      margin: EdgeInsets.only(right: AppSizes.paddingM),
+      padding: RPadding.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8.0),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppSizes.radiusL),
         border: Border.all(color: AppColors.green, width: 2.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
+            color: AppColors.shadowLight,
             offset: Offset(0, 2),
             blurRadius: 4.0,
           ),
@@ -941,19 +1071,19 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
             child: Icon(
               Icons.format_quote,
               color: AppColors.green,
-              size: 24,
+              size: AppSizes.iconM,
             ),
           ),
 
           // Content first (main testimonial text)
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              padding: RPadding.symmetric(vertical: 8),
               child: Text(
                 testimonial['content'] ?? '',
                 style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.black87,
+                  fontSize: AppSizes.fontM,
+                  color: AppColors.textDark,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 5,
@@ -968,9 +1098,9 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
               "- ${testimonial['name'] ?? ''} (${testimonial['location']?.split(',')[0] ?? ''})",
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 14,
+                fontSize: AppSizes.fontS,
                 fontStyle: FontStyle.italic,
-                color: Colors.black87,
+                color: AppColors.textDark,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

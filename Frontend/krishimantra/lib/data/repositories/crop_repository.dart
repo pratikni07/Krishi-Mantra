@@ -38,26 +38,35 @@ class CropRepository {
 
   Future<CropCalendarModel> getCropCalendar(String cropId) async {
     try {
+      print('[CropRepository] Fetching calendar for cropId: $cropId');
       final response =
           await _apiService.get('/api/main/crop-calendar/calendar/$cropId/6');
-          
+
+      print('[CropRepository] Response received: ${response.statusCode}');
+      print('[CropRepository] Response data type: ${response.data.runtimeType}');
+
       // Handle both formats
       if (response.data is Map && response.data.containsKey('data')) {
         // Response with success property
         if (response.data['success'] == true) {
           final data = response.data['data'];
           if (data == null) throw Exception('No crop data found');
+          print('[CropRepository] Parsing calendar data...');
           return CropCalendarModel.fromJson(data);
         }
         throw Exception(
             'Failed to fetch crop calendar: ${response.data['message'] ?? 'Unknown error'}');
       } else {
         // Direct response
+        print('[CropRepository] Parsing direct response...');
         return CropCalendarModel.fromJson(response.data);
       }
     } on DioException catch (e) {
+      print('[CropRepository] DioException: ${e.message}');
+      print('[CropRepository] Response: ${e.response?.data}');
       throw Exception('Network error: ${e.message}');
     } catch (e) {
+      print('[CropRepository] Exception: $e');
       rethrow;
     }
   }

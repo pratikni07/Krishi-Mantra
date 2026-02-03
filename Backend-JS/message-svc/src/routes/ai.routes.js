@@ -7,7 +7,7 @@ const multer = require("multer");
 // Create specific rate limiters for different endpoints
 const messageLimiter = createRateLimiter({
   windowMs: 60 * 1000, // 1 minute
-  max: 20, // 20 requests per minute
+  max: 200, // 200 requests per minute (increased significantly for development)
   message: {
     error:
       "Message rate limit exceeded. Please wait before sending more messages.",
@@ -41,14 +41,15 @@ const upload = multer({
 });
 
 // Apply rate limiters to routes
-router.post("/chat", messageLimiter, AIController.sendMessage);
+// Bind methods to preserve 'this' context
+router.post("/chat", messageLimiter, AIController.sendMessage.bind(AIController));
 
 // Single image upload route
 router.post(
   "/analyze-image",
   imageLimiter,
   upload.single("image"), // Field name must be "image"
-  AIController.analyzeCropImage
+  AIController.analyzeCropImage.bind(AIController)
 );
 
 // Multiple image upload route
@@ -56,20 +57,20 @@ router.post(
   "/analyze-multi-images",
   imageLimiter,
   upload.array("images", 5), // Field name must be "images", max 5 files
-  AIController.analyzeMultipleImages
+  AIController.analyzeMultipleImages.bind(AIController)
 );
 
-router.get("/history", defaultLimiter, AIController.getChatHistory);
-router.get("/chat/:chatId", defaultLimiter, AIController.getChatById);
+router.get("/history", defaultLimiter, AIController.getChatHistory.bind(AIController));
+router.get("/chat/:chatId", defaultLimiter, AIController.getChatById.bind(AIController));
 router.patch(
   "/chat/:chatId/title",
   defaultLimiter,
-  AIController.updateChatTitle
+  AIController.updateChatTitle.bind(AIController)
 );
-router.delete("/chat/:chatId", defaultLimiter, AIController.deleteChat);
+router.delete("/chat/:chatId", defaultLimiter, AIController.deleteChat.bind(AIController));
 
 // New endpoints for ChatGPT-like functionality
-router.get("/limit-info", defaultLimiter, AIController.getMessageLimitInfo);
-router.post("/new-chat", defaultLimiter, AIController.createNewChat);
+router.get("/limit-info", defaultLimiter, AIController.getMessageLimitInfo.bind(AIController));
+router.post("/new-chat", defaultLimiter, AIController.createNewChat.bind(AIController));
 
 module.exports = router;

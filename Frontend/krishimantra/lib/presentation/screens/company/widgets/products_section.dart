@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../data/models/company_model.dart';
 import '../../../../data/services/language_service.dart';
+import '../../../../core/utils/responsive_utils.dart';
+import '../../../../core/constants/colors.dart';
 
 class ProductsSection extends StatefulWidget {
   final CompanyModel company;
@@ -26,14 +28,14 @@ class _ProductsSectionState extends State<ProductsSection> {
 
   Future<void> _initializeTranslations() async {
     final languageService = await LanguageService.getInstance();
-    
+
     final translations = await Future.wait([
       languageService.translate('Products'),
       languageService.translate('No products available'),
       languageService.translate('Usage'),
       languageService.translate('Used For'),
     ]);
-    
+
     if (mounted) {
       setState(() {
         productsText = translations[0];
@@ -47,34 +49,36 @@ class _ProductsSectionState extends State<ProductsSection> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
     final products = widget.company.products;
-    
+
     return Card(
       elevation: 2,
-      color: Colors.grey[50], // Light off-white shade
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.scaffoldBackground,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusL)),
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: RPadding.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               productsText,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: AppSizes.fontL,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            Divider(height: 24),
+            Divider(height: AppSizes.paddingXL),
             if (products == null || products.isEmpty)
               Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
+                  padding: RPadding.symmetric(vertical: 16),
                   child: Text(
                     noProductsText,
                     style: TextStyle(
-                      color: Colors.grey[600],
+                      color: AppColors.textGrey,
                       fontStyle: FontStyle.italic,
+                      fontSize: AppSizes.fontM,
                     ),
                   ),
                 ),
@@ -88,8 +92,10 @@ class _ProductsSectionState extends State<ProductsSection> {
   }
 
   Widget _buildProductItem(Product product) {
+    final imageSize = ResponsiveUtils.responsive(mobile: 80.0, tablet: 100.0);
+
     return Padding(
-      padding: EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: AppSizes.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -97,23 +103,23 @@ class _ProductsSectionState extends State<ProductsSection> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppSizes.radiusM),
                 child: Image.network(
                   product.image,
-                  width: 80,
-                  height: 80,
+                  width: imageSize,
+                  height: imageSize,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      width: 80,
-                      height: 80,
+                      width: imageSize,
+                      height: imageSize,
                       color: Colors.grey[200],
-                      child: Icon(Icons.image_not_supported, color: Colors.grey),
+                      child: Icon(Icons.image_not_supported, color: Colors.grey, size: AppSizes.iconM),
                     );
                   },
                 ),
               ),
-              SizedBox(width: 16),
+              SizedBox(width: AppSizes.paddingL),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,7 +130,7 @@ class _ProductsSectionState extends State<ProductsSection> {
                         return Text(
                           snapshot.data ?? product.name,
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: AppSizes.fontL,
                             fontWeight: FontWeight.bold,
                           ),
                           maxLines: 2,
@@ -132,7 +138,7 @@ class _ProductsSectionState extends State<ProductsSection> {
                         );
                       }
                     ),
-                    SizedBox(height: 8),
+                    SizedBox(height: AppSizes.paddingS),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -140,7 +146,7 @@ class _ProductsSectionState extends State<ProductsSection> {
                           '$usageText: ',
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
-                            fontSize: 14,
+                            fontSize: AppSizes.fontM,
                           ),
                         ),
                         Expanded(
@@ -149,7 +155,7 @@ class _ProductsSectionState extends State<ProductsSection> {
                             builder: (context, snapshot) {
                               return Text(
                                 snapshot.data ?? product.usage,
-                                style: TextStyle(fontSize: 14),
+                                style: TextStyle(fontSize: AppSizes.fontM),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               );
@@ -158,7 +164,7 @@ class _ProductsSectionState extends State<ProductsSection> {
                         ),
                       ],
                     ),
-                    SizedBox(height: 4),
+                    SizedBox(height: AppSizes.paddingXS),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -166,7 +172,7 @@ class _ProductsSectionState extends State<ProductsSection> {
                           '$usedForText: ',
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
-                            fontSize: 14,
+                            fontSize: AppSizes.fontM,
                           ),
                         ),
                         Expanded(
@@ -175,7 +181,7 @@ class _ProductsSectionState extends State<ProductsSection> {
                             builder: (context, snapshot) {
                               return Text(
                                 snapshot.data ?? product.usedFor,
-                                style: TextStyle(fontSize: 14),
+                                style: TextStyle(fontSize: AppSizes.fontM),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               );
@@ -189,7 +195,7 @@ class _ProductsSectionState extends State<ProductsSection> {
               ),
             ],
           ),
-          if (product != widget.company.products!.last) Divider(height: 40),
+          if (product != widget.company.products!.last) Divider(height: AppSizes.paddingXXL + AppSizes.paddingL),
         ],
       ),
     );

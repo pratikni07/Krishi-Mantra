@@ -4,11 +4,15 @@ import 'package:flutter/services.dart';
 import 'package:krishimantra/routes/app_routes.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/responsive_utils.dart';
+import '../../../core/utils/language_helper.dart';
 import '../../../data/services/UserService.dart';
 import '../../../data/services/language_service.dart';
 import '../../controllers/ads_controller.dart';
 import '../../controllers/feed_controller.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 import 'widgets/feed_card.dart';
 import 'dart:math';
 import '../../../utils/image_utils.dart';
@@ -20,7 +24,7 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
+class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver, TranslationMixin {
   final FeedController _feedController = Get.find<FeedController>();
   final AdsController _adsController = Get.find<AdsController>();
   final UserService _userService = UserService();
@@ -29,15 +33,15 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   bool _showTrendingHashtags = true;
   bool _showCreatePost = false;
 
-  // Add properties for feed ads
   List<dynamic> _feedAds = [];
   final Random _random = Random();
-
-  // Add this property to track if the screen was inactive
   bool _wasInactive = false;
 
-  // Translatable text
-  String trendingHashtagsText = 'Trending Hashtags';
+  // Translation keys
+  static const String KEY_TRENDING_HASHTAGS = 'trending_hashtags';
+  static const String KEY_NO_POSTS = 'no_posts';
+  static const String KEY_REFRESH = 'refresh';
+  static const String KEY_ADVERTISEMENT = 'advertisement';
 
   @override
   void initState() {
@@ -46,9 +50,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     _feedController.fetchTrendingHashtags();
     _feedController.fetchRecommendedFeeds();
     _checkUserRole();
+    _registerTranslations();
     _initializeLanguage();
-    _loadFeedAds(); // Load feed ads
-    // Register for lifecycle events
+    _loadFeedAds();
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -58,21 +62,21 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _registerTranslations() {
+    registerTranslation(KEY_TRENDING_HASHTAGS, 'Trending Hashtags');
+    registerTranslation(KEY_NO_POSTS, 'No posts available');
+    registerTranslation(KEY_REFRESH, 'Refresh');
+    registerTranslation(KEY_ADVERTISEMENT, 'Advertisement');
+  }
+
   Future<void> _initializeLanguage() async {
     _languageService = await LanguageService.getInstance();
     await _updateTranslations();
   }
 
   Future<void> _updateTranslations() async {
-    final translations = await Future.wait([
-      _languageService.translate('Trending Hashtags'),
-    ]);
+    await updateTranslations();
 
-    setState(() {
-      trendingHashtagsText = translations[0];
-    });
-
-    // Translate existing feed content
     for (var feed in _feedController.recommendedFeeds) {
       final translatedFeed = feed.copyWith(
           description: await _languageService.translate(feed.description),
@@ -91,14 +95,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   }
 
   void _onScroll() {
-    // Hide trending hashtags when scrolling down, show when at top
     if (_scrollController.offset > 0 && _showTrendingHashtags) {
       setState(() => _showTrendingHashtags = false);
     } else if (_scrollController.offset <= 0 && !_showTrendingHashtags) {
       setState(() => _showTrendingHashtags = true);
     }
 
-    // Load more content when reaching 80% of the scroll length for better UX
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent * 0.8) {
       if (!_feedController.isRecommendedLoading.value &&
@@ -111,56 +113,82 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _scrollController.dispose();
-    // Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  // Add lifecycle method to detect when screen becomes visible again
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive) {
       _wasInactive = true;
     } else if (state == AppLifecycleState.resumed && _wasInactive) {
-      // Reset to recommended feeds when coming back to the app
       _resetToRecommendedFeeds();
       _wasInactive = false;
     }
     super.didChangeAppLifecycleState(state);
   }
 
-  // Add a method to handle resetting to recommended feeds
   void _resetToRecommendedFeeds() {
     if (_feedController.selectedTag.value.isNotEmpty) {
       _feedController.clearSelectedTag();
     }
   }
 
-  // Add method to load feed ads
   Future<void> _loadFeedAds() async {
     try {
       _feedAds = await _adsController.fetchFeedAds();
-      print('📊 Feed ads loaded: ${_feedAds.length}');
+      logger.d('Feed ads loaded: ${_feedAds.length}', tag: 'FeedScreen');
       if (_feedAds.isNotEmpty) {
-        print('📱 First ad URL: ${_feedAds[0]['content']}');
+        logger.d('First ad URL: ${_feedAds[0]['content']}', tag: 'FeedScreen');
       }
       setState(() {});
     } catch (e) {
-      print('❌ Error loading feed ads: $e');
+      logger.e('Error loading feed ads', tag: 'FeedScreen', error: e);
     }
   }
 
   Widget _buildTrendingHashtags() {
+    ResponsiveUtils.init(context);
+    final hashtagsHeight = ResponsiveUtils.responsive(
+      mobile: ResponsiveUtils.hp(10),
+      tablet: ResponsiveUtils.hp(8),
+    );
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      height: _showTrendingHashtags ? 80 : 0,
+      height: _showTrendingHashtags ? hashtagsHeight : 0,
       color: AppColors.green,
       child: Obx(() {
         if (_feedController.isLoadingHashtags.value) {
-          return const Center(
-            child: CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 2,
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: RPadding.only(left: 16, top: 8, bottom: 8),
+                  child: Text(
+                    getTranslation(KEY_TRENDING_HASHTAGS),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: AppSizes.fontL,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: ResponsiveUtils.hp(5),
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: RPadding.only(left: 16),
+                    itemCount: 5,
+                    itemBuilder: (context, index) {
+                      final widths = [80.0, 100.0, 70.0, 90.0, 85.0];
+                      return SkeletonHashtagChip(width: widths[index]);
+                    },
+                  ),
+                ),
+              ],
             ),
           );
         }
@@ -170,43 +198,40 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                padding: RPadding.only(left: 16, top: 8, bottom: 8),
                 child: Text(
-                  trendingHashtagsText,
-                  style: const TextStyle(
+                  getTranslation(KEY_TRENDING_HASHTAGS),
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: AppSizes.fontL,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
               SizedBox(
-                height: 40,
+                height: ResponsiveUtils.hp(5),
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.only(left: 16),
+                  padding: RPadding.only(left: 16),
                   itemCount: _feedController.trendingHashtags.length,
                   itemBuilder: (context, index) {
                     final hashtag = _feedController.trendingHashtags[index];
                     final tagName = hashtag['name'] as String;
 
                     return Padding(
-                      padding: const EdgeInsets.only(right: 8),
+                      padding: RPadding.only(right: 8),
                       child: GestureDetector(
                         onTap: () {
                           _feedController.fetchFeedsByTag(tagName,
                               refresh: true);
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
+                          padding: RPadding.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: _feedController.selectedTag.value == tagName
                                 ? Colors.white
                                 : Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(AppSizes.radiusXXL),
                           ),
                           child: Text(
                             '#$tagName',
@@ -215,7 +240,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                                   _feedController.selectedTag.value == tagName
                                       ? AppColors.green
                                       : Colors.white,
-                              fontSize: 14,
+                              fontSize: AppSizes.fontM,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -234,12 +259,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
       backgroundColor: AppColors.white,
       body: Focus(
         onFocusChange: (hasFocus) {
           if (hasFocus) {
-            // When screen gets focus again, reset to recommended feeds
             _resetToRecommendedFeeds();
           }
         },
@@ -248,43 +274,38 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           child: SafeArea(
             child: Column(
               children: [
-                // Header Section with green background
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: AppHeader(),
+                Padding(
+                  padding: RPadding.all(16),
+                  child: const AppHeader(),
                 ),
                 _buildTrendingHashtags(),
-                SizedBox(
-                  height: 20,
-                ),
+                SizedBox(height: AppSizes.paddingL),
 
-                // Content Section with white background and rounded corners at top
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: () =>
                         _feedController.fetchRecommendedFeeds(refresh: true),
                     color: AppColors.green,
                     child: Container(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(24),
-                          topRight: Radius.circular(24),
+                          topLeft: Radius.circular(AppSizes.radiusXXL),
+                          topRight: Radius.circular(AppSizes.radiusXXL),
                         ),
                       ),
                       child: Obx(() {
-                        // Show loading state
                         if (_feedController.isLoading &&
                             _feedController.recommendedFeeds.isEmpty) {
-                          return const Center(
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                  AppColors.green),
-                            ),
+                          return ListView.builder(
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: 3,
+                            itemBuilder: (context, index) {
+                              return const SkeletonFeedCard();
+                            },
                           );
                         }
 
-                        // Show error state
                         if (_feedController.hasError) {
                           return ErrorHandler.getErrorWidget(
                             errorType:
@@ -295,40 +316,46 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                           );
                         }
 
-                        // Show empty state
                         if (_feedController.recommendedFeeds.isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.article_outlined,
-                                    size: 64, color: Colors.grey[400]),
-                                const SizedBox(height: 16),
+                                    size: AppSizes.iconXL,
+                                    color: AppColors.textLight),
+                                SizedBox(height: AppSizes.paddingL),
                                 Text(
-                                  'No posts available',
+                                  getTranslation(KEY_NO_POSTS),
                                   style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.grey[600],
+                                    fontSize: AppSizes.fontXL,
+                                    color: AppColors.textGrey,
                                   ),
                                 ),
-                                const SizedBox(height: 24),
+                                SizedBox(height: AppSizes.paddingXL),
                                 ElevatedButton(
                                   onPressed: () => _feedController
                                       .fetchRecommendedFeeds(refresh: true),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.green,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
+                                    padding: RPadding.symmetric(
                                         horizontal: 16, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(AppSizes.radiusL),
+                                    ),
                                   ),
-                                  child: const Text('Refresh'),
+                                  child: Text(
+                                    getTranslation(KEY_REFRESH),
+                                    style: TextStyle(fontSize: AppSizes.fontM),
+                                  ),
                                 ),
                               ],
                             ),
                           );
                         }
 
-                        // Show content
                         return _buildFeedContent();
                       }),
                     ),
@@ -339,28 +366,23 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
-
-      // Show create post button for authorized users
       floatingActionButton: _showCreatePost
           ? FloatingActionButton(
               onPressed: () => Get.toNamed(AppRoutes.CREATE_POST),
               backgroundColor: AppColors.green,
-              child: const Icon(Icons.add),
+              child: Icon(Icons.add, size: AppSizes.iconM),
             )
           : null,
     );
   }
 
   Widget _buildFeedContent() {
-    // Calculate the number of posts to show between ads
     final postsWithAds = <Widget>[];
-    final postsPerAd = 4; // Show an ad after every 4 posts
+    final postsPerAd = 4;
 
     for (var i = 0; i < _feedController.recommendedFeeds.length; i++) {
-      // Add feed item
       postsWithAds.add(_buildFeedItem(_feedController.recommendedFeeds[i]));
 
-      // Insert an ad after every postsPerAd items if we have ads
       if (_feedAds.isNotEmpty &&
           (i + 1) % postsPerAd == 0 &&
           i < _feedController.recommendedFeeds.length - 1) {
@@ -373,21 +395,20 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
-      itemCount: postsWithAds.length + 1, // +1 for loading indicator
+      itemCount: postsWithAds.length + 1,
       itemBuilder: (context, index) {
         if (index < postsWithAds.length) {
           return postsWithAds[index];
         } else {
-          // Loading indicator at the bottom
           return Obx(() => _feedController.isRecommendedLoading.value
               ? Container(
-                  height: 100,
-                  padding: const EdgeInsets.all(16),
+                  height: ResponsiveUtils.hp(12),
+                  padding: RPadding.all(16),
                   alignment: Alignment.center,
                   child: Image.asset(
                     'assets/Images/krishimantraloading.gif',
-                    height: 50,
-                    width: 50,
+                    height: AppSizes.iconXL,
+                    width: AppSizes.iconXL,
                   ),
                 )
               : const SizedBox());
@@ -400,40 +421,49 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     return FeedCard(
       feed: feed,
       onLike: () => _feedController.likeFeed(feed.id),
+      onView: () => _feedController.trackFeedView(feed.id),
+      onShare: () => _feedController.trackFeedShare(feed.id),
+      onSave: () => _feedController.trackFeedSave(feed.id),
     );
   }
 
   Widget _buildAdCard(dynamic ad) {
-    // Validate and sanitize the URL
     final String validatedUrl = ImageUtils.validateUrl(ad['content'] ?? '');
+    final adHeight = ResponsiveUtils.responsive(
+      mobile: ResponsiveUtils.hp(25),
+      tablet: ResponsiveUtils.hp(20),
+    );
 
     if (validatedUrl.isEmpty) {
-      print('⚠️ Invalid ad URL: ${ad['content']}');
+      logger.w('Invalid ad URL: ${ad['content']}', tag: 'FeedScreen');
       return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        height: 200,
+        margin: RPadding.symmetric(horizontal: 16, vertical: 8),
+        height: adHeight,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(AppSizes.radiusL),
+          color: AppColors.shimmerBase,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: AppColors.shadowLight,
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppSizes.radiusL),
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.image_not_supported, color: Colors.grey, size: 48),
-                SizedBox(height: 8),
+                Icon(Icons.image_not_supported, color: AppColors.textGrey, size: AppSizes.iconXL),
+                SizedBox(height: AppSizes.paddingS),
                 Text(
-                  ad['title'] ?? 'Advertisement',
-                  style: TextStyle(color: Colors.grey[700]),
+                  ad['title'] ?? getTranslation(KEY_ADVERTISEMENT),
+                  style: TextStyle(
+                    color: AppColors.textGrey,
+                    fontSize: AppSizes.fontM,
+                  ),
                 ),
               ],
             ),
@@ -443,39 +473,41 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: RPadding.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSizes.radiusL),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: AppColors.shadowLight,
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSizes.radiusL),
         child: Image.network(
           validatedUrl,
-          height: 200,
+          height: adHeight,
           width: double.infinity,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
-            print('❌ Error loading ad image: $error');
+            logger.e('Error loading ad image', tag: 'FeedScreen', error: error);
             return Container(
-              height: 200,
-              color: Colors.grey[200],
+              height: adHeight,
+              color: AppColors.shimmerBase,
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline,
-                        color: Colors.grey, size: 48),
-                    SizedBox(height: 8),
+                    Icon(Icons.error_outline, color: AppColors.textGrey, size: AppSizes.iconXL),
+                    SizedBox(height: AppSizes.paddingS),
                     Text(
-                      ad['title'] ?? 'Advertisement',
-                      style: TextStyle(color: Colors.grey[700]),
+                      ad['title'] ?? getTranslation(KEY_ADVERTISEMENT),
+                      style: TextStyle(
+                        color: AppColors.textGrey,
+                        fontSize: AppSizes.fontM,
+                      ),
                     ),
                   ],
                 ),

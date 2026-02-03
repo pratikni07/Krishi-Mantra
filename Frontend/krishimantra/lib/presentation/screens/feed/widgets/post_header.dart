@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../../../utils/image_utils.dart';
+import '../../../../core/utils/app_logger.dart';
+import '../../../../core/constants/colors.dart';
 
 class PostHeader extends StatelessWidget {
   final Map<String, dynamic> feed;
@@ -14,7 +16,7 @@ class PostHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.white,
+      color: AppColors.white,
       child: Row(
         children: [
           _buildAvatar(),
@@ -28,13 +30,14 @@ class PostHeader extends StatelessWidget {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
+                    color: AppColors.textDark,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _getTimeAgo(),
-                  style: TextStyle(
-                    color: Colors.grey[600],
+                  style: const TextStyle(
+                    color: AppColors.textLight,
                     fontSize: 14,
                   ),
                 ),
@@ -56,8 +59,8 @@ class PostHeader extends StatelessWidget {
         return CircleAvatar(
           backgroundImage: NetworkImage(validatedUrl),
           radius: 24,
-          onBackgroundImageError: (_, __) {
-            print('Error loading profile image: $validatedUrl');
+          onBackgroundImageError: (error, stackTrace) {
+            logger.e('Error loading profile image: $validatedUrl', tag: 'PostHeader', error: error);
           },
         );
       }
@@ -69,11 +72,11 @@ class PostHeader extends StatelessWidget {
 
     return CircleAvatar(
       radius: 24,
-      backgroundColor: Colors.grey[300],
+      backgroundColor: AppColors.borderLight,
       child: Text(
         firstLetter,
         style: const TextStyle(
-          color: Colors.black54,
+          color: AppColors.textGrey,
           fontWeight: FontWeight.bold,
           fontSize: 18,
         ),

@@ -5,9 +5,11 @@ import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/responsive_utils.dart';
 import '../../controllers/reel_controller.dart';
 import '../../controllers/ads_controller.dart';
-import '../../controllers/feed_controller.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 import '../../../data/models/reel_model.dart';
 import '../../../data/services/UserService.dart';
 import '../../../data/repositories/feed_repository.dart';
@@ -42,8 +44,7 @@ class _ReelsPageState extends State<ReelsPage> {
 
   // Add variables for ad integration
   List<dynamic> _reelAds = [];
-  final RxList<Map<String, dynamic>> _combinedContent =
-      <Map<String, dynamic>>[].obs;
+  List<Map<String, dynamic>> _combinedContent = [];
   final int _reelsPerAd = 3; // Show an ad after every 3 reels
 
   @override
@@ -53,67 +54,84 @@ class _ReelsPageState extends State<ReelsPage> {
       initialPage: widget.initialIndex ?? 0,
     );
 
-    // Set the default active tag as 'trending'
-    activeTag.value = 'trending';
+    // Defer reactive updates to after the first frame to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Set the default active tag as 'for_you' (recommended)
+      activeTag.value = 'for_you';
 
-    if (widget.reels != null) {
-      // Use provided reels if available
-      _reelController.reels.value = widget.reels!;
-      _fetchReelAds();
-    } else {
-      // Otherwise fetch trending reels by default instead of regular reels
-      _fetchTrendingReelsWithAds();
-    }
-    _reelController.fetchTrendingTags();
+      if (widget.reels != null) {
+        // Use provided reels if available
+        _reelController.reels.value = widget.reels!;
+        _fetchReelAds();
+      } else {
+        // Fetch recommended reels by default (personalized for user)
+        _fetchRecommendedReelsWithAds();
+      }
+      _reelController.fetchTrendingTags();
+    });
+  }
+
+  Future<void> _fetchRecommendedReelsWithAds() async {
+    await _reelController.fetchRecommendedReels(refresh: true);
+    await _fetchReelAds();
   }
 
   Future<void> _fetchTrendingReelsWithAds() async {
-    await _reelController.fetchTrendingReels();
+    await _reelController.fetchTrendingReels(refresh: true);
     await _fetchReelAds();
   }
 
   Future<void> _fetchReelAds() async {
     try {
       _reelAds = await _adsController.fetchReelAds();
-      print('Fetched ${_reelAds.length} reel ads');
+      logger.d('Fetched ${_reelAds.length} reel ads', tag: 'ReelsPage');
       await _combineReelsAndAds();
     } catch (e) {
-      print('Error fetching reel ads: $e');
+      logger.e('Error fetching reel ads', tag: 'ReelsPage', error: e);
     }
   }
 
   Future<void> _combineReelsAndAds() async {
     if (_reelAds.isEmpty) {
-      print('No ads available to combine with reels');
+      logger.d('No ads available to combine with reels', tag: 'ReelsPage');
       return;
     }
 
-    if (_reelController.reels.isEmpty) {
-      print('No reels available to combine with ads');
+    // Create a non-reactive copy to avoid RxList.length infinite recursion
+    final reelsList = List<ReelModel>.from(_reelController.reels);
+
+    if (reelsList.isEmpty) {
+      logger.d('No reels available to combine with ads', tag: 'ReelsPage');
       return;
     }
 
-    print(
-        'Combining ${_reelController.reels.length} reels with ${_reelAds.length} ads');
+    logger.d(
+        'Combining ${reelsList.length} reels with ${_reelAds.length} ads', tag: 'ReelsPage');
 
-    _combinedContent.clear();
+    final List<Map<String, dynamic>> newCombinedContent = [];
 
     // Combine reels and ads
-    for (int i = 0; i < _reelController.reels.length; i++) {
-      _combinedContent
-          .add({'type': 'reel', 'content': _reelController.reels[i]});
+    for (int i = 0; i < reelsList.length; i++) {
+      newCombinedContent
+          .add({'type': 'reel', 'content': reelsList[i]});
 
       // Insert an ad after every _reelsPerAd reels
       if ((i + 1) % _reelsPerAd == 0 &&
-          i < _reelController.reels.length - 1 &&
+          i < reelsList.length - 1 &&
           _reelAds.isNotEmpty) {
         final adIndex = ((i + 1) / _reelsPerAd - 1).toInt() % _reelAds.length;
-        print('Adding ad at index $adIndex after reel ${i + 1}');
-        _combinedContent.add({'type': 'ad', 'content': _reelAds[adIndex]});
+        logger.d('Adding ad at index $adIndex after reel ${i + 1}', tag: 'ReelsPage');
+        newCombinedContent.add({'type': 'ad', 'content': _reelAds[adIndex]});
       }
     }
 
-    print('Combined content contains ${_combinedContent.length} items');
+    logger.d('Combined content contains ${newCombinedContent.length} items', tag: 'ReelsPage');
+
+    if (mounted) {
+      setState(() {
+        _combinedContent = newCombinedContent;
+      });
+    }
   }
 
   @override
@@ -124,39 +142,54 @@ class _ReelsPageState extends State<ReelsPage> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Reels Section (now full screen)
-          Obx(
-            () {
-              if (_reelController.isLoading) {
-                return const Center(child: CircularProgressIndicator());
-              } else if (_reelController.hasError) {
+          // Reels Section (now full screen) - Using GetBuilder to avoid RxList.length infinite recursion
+          GetBuilder<ReelController>(
+            init: _reelController,
+            builder: (controller) {
+              // Check loading state from base controller
+              if (controller.isLoading) {
+                return const SkeletonFullScreenVideo();
+              } else if (controller.hasError) {
                 // Use our error handler to show an appropriate error screen
                 return ErrorHandler.getErrorWidget(
-                  errorType: _reelController.errorType ?? ErrorType.unknown,
-                  onRetry: () => _reelController.fetchReels(refresh: true),
+                  errorType: controller.errorType ?? ErrorType.unknown,
+                  onRetry: () => controller.fetchReels(refresh: true),
                   showRetry: true,
                 );
-              } else if (_reelController.reels.isEmpty) {
+              }
+
+              // Create a non-reactive copy of the reels list to avoid RxList issues
+              final reelsList = List<ReelModel>.from(controller.reels);
+
+              if (reelsList.isEmpty) {
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.videocam_off,
-                          size: 48, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
+                          size: AppSizes.iconXL, color: Colors.grey[400]),
+                      SizedBox(height: AppSizes.paddingL),
                       Text(
                         'No reels available',
-                        style: TextStyle(color: Colors.grey[400]),
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: AppSizes.fontM,
+                        ),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: AppSizes.paddingXL),
                       ElevatedButton(
                         onPressed: () =>
-                            _reelController.fetchReels(refresh: true),
-                        child: const Text('Refresh'),
+                            controller.fetchReels(refresh: true),
+                        child: Text(
+                          'Refresh',
+                          style: TextStyle(fontSize: AppSizes.fontM),
+                        ),
                       ),
                     ],
                   ),
@@ -166,8 +199,8 @@ class _ReelsPageState extends State<ReelsPage> {
               // Use _combinedContent if available, otherwise use reels directly
               final List<Map<String, dynamic>> contentList =
                   _combinedContent.isNotEmpty
-                      ? _combinedContent.cast<Map<String, dynamic>>()
-                      : _reelController.reels
+                      ? _combinedContent
+                      : reelsList
                           .map((reel) => {'type': 'reel', 'content': reel})
                           .toList();
 
@@ -179,8 +212,8 @@ class _ReelsPageState extends State<ReelsPage> {
                   // Load more reels when approaching the end
                   if (contentList[index]['type'] == 'reel' &&
                       index == contentList.length - 2) {
-                    print('Near the end, loading more reels...');
-                    await _reelController.fetchReels();
+                    logger.d('Near the end, loading more reels...', tag: 'ReelsPage');
+                    await controller.fetchReels();
                     await _combineReelsAndAds();
                   }
 
@@ -190,13 +223,13 @@ class _ReelsPageState extends State<ReelsPage> {
 
                   if ((index - currentContext).abs() > 2) {
                     _ReelVideoCardState._videoCache
-                        .removeWhere((url, controller) {
-                      final shouldRemove = !_reelController.reels
+                        .removeWhere((url, ctrl) {
+                      final shouldRemove = !reelsList
                           .sublist(max(0, index - 2),
-                              min(_reelController.reels.length, index + 3))
+                              min(reelsList.length, index + 3))
                           .any((reel) => reel.mediaUrl == url);
                       if (shouldRemove) {
-                        controller.dispose();
+                        ctrl.dispose();
                       }
                       return shouldRemove;
                     });
@@ -225,13 +258,34 @@ class _ReelsPageState extends State<ReelsPage> {
             },
           ),
 
+          // Back Button
+          Positioned(
+            top: MediaQuery.of(context).padding.top + AppSizes.paddingS,
+            left: AppSizes.paddingS,
+            child: GestureDetector(
+              onTap: () => Get.back(),
+              child: Container(
+                padding: EdgeInsets.all(AppSizes.paddingS),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: AppSizes.iconM,
+                ),
+              ),
+            ),
+          ),
+
           // Updated Trending Tags Section
           Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 0,
+            top: MediaQuery.of(context).padding.top + AppSizes.paddingS,
+            left: AppSizes.paddingXL * 2.5, // Offset to account for back button
             right: 0,
             child: Container(
-              height: 35,
+              height: ResponsiveUtils.hp(4.5),
               child: Obx(() {
                 if (_reelController.trendingTags.isEmpty) {
                   return const SizedBox.shrink();
@@ -239,16 +293,52 @@ class _ReelsPageState extends State<ReelsPage> {
 
                 return ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: _reelController.trendingTags.length + 1,
+                  padding: RPadding.symmetric(horizontal: 8),
+                  itemCount: _reelController.trendingTags.length + 2, // +2 for For You and Trending
                   itemBuilder: (context, index) {
+                    // First button: For You (Recommended)
                     if (index == 0) {
                       return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        padding: RPadding.symmetric(horizontal: 4),
+                        child: Obx(() => ElevatedButton(
+                              onPressed: () {
+                                activeTag.value = 'for_you';
+                                _reelController.fetchRecommendedReels(refresh: true).then((_) {
+                                  _fetchReelAds();
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: activeTag.value == 'for_you'
+                                    ? Colors.white
+                                    : Colors.white.withOpacity(0.2),
+                                padding: RPadding.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                minimumSize: Size.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                                ),
+                              ),
+                              child: Text(
+                                'For You',
+                                style: TextStyle(
+                                  color: activeTag.value == 'for_you'
+                                      ? Colors.black
+                                      : Colors.white,
+                                  fontSize: AppSizes.fontS,
+                                ),
+                              ),
+                            )),
+                      );
+                    }
+
+                    // Second button: Trending
+                    if (index == 1) {
+                      return Padding(
+                        padding: RPadding.symmetric(horizontal: 4),
                         child: Obx(() => ElevatedButton(
                               onPressed: () {
                                 activeTag.value = 'trending';
-                                _reelController.fetchTrendingReels().then((_) {
+                                _reelController.fetchTrendingReels(refresh: true).then((_) {
                                   _fetchReelAds();
                                 });
                               },
@@ -256,31 +346,31 @@ class _ReelsPageState extends State<ReelsPage> {
                                 backgroundColor: activeTag.value == 'trending'
                                     ? Colors.white
                                     : Colors.white.withOpacity(0.2),
-                                padding: const EdgeInsets.symmetric(
+                                padding: RPadding.symmetric(
                                     horizontal: 12, vertical: 8),
                                 minimumSize: Size.zero,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                                 ),
                               ),
                               child: Text(
-                                '🔥 Trending',
+                                'Trending',
                                 style: TextStyle(
                                   color: activeTag.value == 'trending'
                                       ? Colors.black
                                       : Colors.white,
-                                  fontSize: 13,
+                                  fontSize: AppSizes.fontS,
                                 ),
                               ),
                             )),
                       );
                     }
 
-                    final tag = _reelController.trendingTags[index - 1];
+                    final tag = _reelController.trendingTags[index - 2]; // -2 for For You and Trending
                     final tagName = tag['name'] as String;
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: RPadding.symmetric(horizontal: 4),
                       child: Obx(() => ElevatedButton(
                             onPressed: () async {
                               activeTag.value = tagName;
@@ -290,7 +380,7 @@ class _ReelsPageState extends State<ReelsPage> {
                               try {
                                 final tagReels = await _reelController
                                     .getReelsByTag(tagName);
-                                if (_reelController.reels.isNotEmpty) {
+                                if (tagReels.isNotEmpty) {
                                   _reelController.reels.value = tagReels;
                                   await _combineReelsAndAds();
                                 }
@@ -302,11 +392,11 @@ class _ReelsPageState extends State<ReelsPage> {
                               backgroundColor: activeTag.value == tagName
                                   ? Colors.white
                                   : Colors.white.withOpacity(0.2),
-                              padding: const EdgeInsets.symmetric(
+                              padding: RPadding.symmetric(
                                   horizontal: 12, vertical: 8),
                               minimumSize: Size.zero,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                               ),
                             ),
                             child: Text(
@@ -315,7 +405,7 @@ class _ReelsPageState extends State<ReelsPage> {
                                 color: activeTag.value == tagName
                                     ? Colors.black
                                     : Colors.white,
-                                fontSize: 13,
+                                fontSize: AppSizes.fontS,
                               ),
                             ),
                           )),
@@ -349,7 +439,7 @@ class ReelAdCard extends StatefulWidget {
 }
 
 class _ReelAdCardState extends State<ReelAdCard> {
-  late VideoPlayerController _videoPlayerController;
+  VideoPlayerController? _videoPlayerController;
   bool _isVideoInitialized = false;
   bool _isPlaying = false;
   bool _canSkip = false;
@@ -357,10 +447,14 @@ class _ReelAdCardState extends State<ReelAdCard> {
   bool _hasRecordedImpression = false;
   int _viewDuration = 0;
   late String _userId;
+  bool _hasError = false;
+  String _errorMessage = '';
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _initializeVideoPlayer();
     _startTimer();
     _getUserId();
@@ -391,34 +485,48 @@ class _ReelAdCardState extends State<ReelAdCard> {
 
   Future<void> _initializeVideoPlayer() async {
     try {
-      if (!mounted) return;
+      if (!mounted || _isDisposed) return;
 
       final videoUrl = widget.ad['videoUrl'] ?? '';
-      print('Initializing ad video: $videoUrl');
+      logger.d('Initializing ad video: $videoUrl', tag: 'ReelAdCard');
 
       if (videoUrl.isEmpty) {
-        print('Empty video URL for ad');
+        logger.w('Empty video URL for ad', tag: 'ReelAdCard');
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _hasError = true;
+            _errorMessage = 'No video URL provided';
+          });
+        }
         return;
       }
 
       final uri = Uri.parse(videoUrl);
       if (!uri.isAbsolute) {
-        print('Invalid video URL: $videoUrl');
-        throw Exception('Invalid video URL');
+        logger.w('Invalid video URL: $videoUrl', tag: 'ReelAdCard');
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _hasError = true;
+            _errorMessage = 'Invalid video URL';
+          });
+        }
+        return;
       }
 
-      _videoPlayerController = VideoPlayerController.network(
-        videoUrl,
+      _videoPlayerController = VideoPlayerController.networkUrl(
+        Uri.parse(videoUrl),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-        httpHeaders: {
-          'Access-Control-Allow-Origin': '*',
-          'Range': 'bytes=0-',
+      );
+
+      // Add timeout for video initialization
+      await _videoPlayerController!.initialize().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Video load timeout - check network connection');
         },
       );
 
-      await _videoPlayerController.initialize();
-
-      if (_videoPlayerController.value.isInitialized && mounted) {
+      if (_videoPlayerController!.value.isInitialized && mounted && !_isDisposed) {
         setState(() {
           _isVideoInitialized = true;
           _isPlaying = true;
@@ -427,13 +535,19 @@ class _ReelAdCardState extends State<ReelAdCard> {
         // Start tracking view duration
         _startViewDurationTracking();
 
-        await _videoPlayerController.setPlaybackSpeed(1.0);
-        await _videoPlayerController.setLooping(true);
-        await _videoPlayerController.play();
-        print('Ad video started playing');
+        await _videoPlayerController!.setPlaybackSpeed(1.0);
+        await _videoPlayerController!.setLooping(true);
+        await _videoPlayerController!.play();
+        logger.d('Ad video started playing', tag: 'ReelAdCard');
       }
     } catch (e) {
-      print('Error initializing ad video: $e');
+      logger.e('Error initializing ad video', tag: 'ReelAdCard', error: e);
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = e.toString();
+        });
+      }
     }
   }
 
@@ -464,15 +578,16 @@ class _ReelAdCardState extends State<ReelAdCard> {
         await widget.adsController
             .trackReelAdView(widget.ad['_id'], _userId, _viewDuration);
       } catch (e) {
-        print('Error recording ad impression: $e');
+        logger.e('Error recording ad impression', tag: 'ReelAdCard', error: e);
       }
     }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     _recordImpression();
-    _videoPlayerController.dispose();
+    _videoPlayerController?.dispose();
     super.dispose();
   }
 
@@ -484,56 +599,108 @@ class _ReelAdCardState extends State<ReelAdCard> {
         // Video player or placeholder
         Container(
           color: Colors.black,
-          child: _isVideoInitialized
-              ? FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _videoPlayerController.value.size.width,
-                    height: _videoPlayerController.value.size.height,
-                    child: VideoPlayer(_videoPlayerController),
+          child: _hasError
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Failed to load ad',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          _errorMessage,
+                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _hasError = false;
+                            _errorMessage = '';
+                          });
+                          _initializeVideoPlayer();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
                 )
-              : const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
+              : _isVideoInitialized && _videoPlayerController != null
+                  ? FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: _videoPlayerController!.value.size.width,
+                        height: _videoPlayerController!.value.size.height,
+                        child: VideoPlayer(_videoPlayerController!),
+                      ),
+                    )
+                  : const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
         ),
 
         // Overlay with countdown
         Positioned(
-          top: MediaQuery.of(context).padding.top + 50,
-          right: 16,
+          top: MediaQuery.of(context).padding.top + ResponsiveUtils.hp(6),
+          right: AppSizes.paddingL,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: RPadding.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppSizes.radiusXL),
             ),
             child: _canSkip
-                ? const Text(
+                ? Text(
                     'Ad',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
+                      fontSize: AppSizes.fontM,
                     ),
                   )
                 : Text(
                     'Ad • $_remainingSeconds',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
+                      fontSize: AppSizes.fontM,
                     ),
                   ),
           ),
         ),
 
-        // Pop-up view at bottom if enabled
+        // Intercept user interaction to prevent scrolling during countdown
+        if (!_canSkip)
+          Positioned.fill(
+            child: GestureDetector(
+              onVerticalDragEnd: (_) {},
+              onVerticalDragStart: (_) {},
+              onVerticalDragUpdate: (_) {},
+              onTap: () {}, // Disable tapping on video area
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+          ),
+
+        // Pop-up view at bottom if enabled (placed AFTER gesture detector so it's clickable)
         if (_isPopUpViewEnabled())
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: RPadding.all(16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
@@ -550,10 +717,10 @@ class _ReelAdCardState extends State<ReelAdCard> {
                 children: [
                   // Left side - Image
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusL),
                     child: _buildPopupImage(),
                   ),
-                  const SizedBox(width: 16),
+                  SizedBox(width: AppSizes.paddingL),
                   // Right side - Text and Button
                   Expanded(
                     child: Column(
@@ -562,39 +729,47 @@ class _ReelAdCardState extends State<ReelAdCard> {
                       children: [
                         Text(
                           widget.ad['popUpView']['popupTitle'] ?? '',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
+                            fontSize: AppSizes.fontL,
                             fontWeight: FontWeight.bold,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: AppSizes.paddingS),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              widget.ad['title'] ?? 'Advertisement',
-                              style: TextStyle(
-                                color: Colors.grey[300],
-                                fontSize: 14,
+                            Expanded(
+                              child: Text(
+                                widget.ad['title'] ?? 'Advertisement',
+                                style: TextStyle(
+                                  color: Colors.grey[300],
+                                  fontSize: AppSizes.fontS,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            SizedBox(width: AppSizes.paddingS),
                             ElevatedButton(
                               onPressed: () => _navigateToContent(),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.green,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
+                                padding: RPadding.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
                                 ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                                 ),
                               ),
-                              child: const Text('View'),
+                              child: Text(
+                                'View',
+                                style: TextStyle(fontSize: AppSizes.fontS),
+                              ),
                             ),
                           ],
                         ),
@@ -607,32 +782,19 @@ class _ReelAdCardState extends State<ReelAdCard> {
           ),
 
         // Progress indicator
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: VideoProgressIndicator(
-            _videoPlayerController,
-            allowScrubbing: false,
-            padding: EdgeInsets.zero,
-            colors: VideoProgressColors(
-              playedColor: AppColors.green,
-              bufferedColor: Colors.white.withOpacity(0.5),
-              backgroundColor: Colors.white.withOpacity(0.2),
-            ),
-          ),
-        ),
-
-        // Intercept user interaction to prevent scrolling
-        if (!_canSkip)
-          Positioned.fill(
-            child: GestureDetector(
-              onVerticalDragEnd: (_) {},
-              onVerticalDragStart: (_) {},
-              onVerticalDragUpdate: (_) {},
-              onTap: () {}, // Disable tapping as well
-              child: Container(
-                color: Colors.transparent,
+        if (_videoPlayerController != null && _isVideoInitialized)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: VideoProgressIndicator(
+              _videoPlayerController!,
+              allowScrubbing: false,
+              padding: EdgeInsets.zero,
+              colors: VideoProgressColors(
+                playedColor: AppColors.green,
+                bufferedColor: Colors.white.withOpacity(0.5),
+                backgroundColor: Colors.white.withOpacity(0.2),
               ),
             ),
           ),
@@ -675,7 +837,7 @@ class _ReelAdCardState extends State<ReelAdCard> {
         width: 80,
         height: 80,
         errorBuilder: (context, error, stackTrace) {
-          print('Error loading popup image: $error');
+          logger.e('Error loading popup image', tag: 'ReelAdCard', error: error);
           return Container(
             width: 80,
             height: 80,
@@ -713,6 +875,77 @@ class _ReelAdCardState extends State<ReelAdCard> {
     final contentType = widget.ad['popUpView']['type'];
     final contentId = widget.ad['popUpView']['productId'];
 
+    logger.d('Navigating to $contentType: $contentId', tag: 'ReelAdCard');
+
+    // Handle different content types
+    switch (contentType) {
+      case 'marketplace':
+        if (contentId != null && contentId.toString().isNotEmpty) {
+          // Navigate to specific marketplace product detail
+          Get.toNamed('/marketplace-detail', arguments: contentId);
+        } else {
+          // Navigate to marketplace screen if no specific product
+          Get.toNamed('/marketplace');
+        }
+        break;
+
+      case 'posts':
+      case 'feed':
+        if (contentId != null && contentId.toString().isNotEmpty) {
+          // Navigate to specific feed post
+          _navigateToFeedPost(contentId);
+        } else {
+          // Navigate to main screen (feed tab is index 1)
+          Get.offAllNamed('/main');
+        }
+        break;
+
+      case 'schemes':
+        // Navigate to government schemes screen
+        Get.toNamed('/schemes');
+        break;
+
+      case 'companies':
+        // Navigate to companies screen
+        Get.toNamed('/companies');
+        break;
+
+      case 'products':
+      case 'fertilizers':
+        // Navigate to products/fertilizers screen
+        Get.toNamed('/fertilizers');
+        break;
+
+      case 'videos':
+        // Navigate to video tutorials
+        Get.toNamed('/krishi-videos');
+        break;
+
+      case 'ai':
+      case 'krishi-ai':
+        // Navigate to AI chat
+        Get.toNamed('/krishi-ai');
+        break;
+
+      case 'crop-calendar':
+        // Navigate to crop calendar
+        Get.toNamed('/crop-calendar');
+        break;
+
+      default:
+        // If no valid type, show a message
+        logger.w('Unknown content type: $contentType', tag: 'ReelAdCard');
+        Get.snackbar(
+          'Info',
+          'Content not available',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.grey.withOpacity(0.8),
+          colorText: Colors.white,
+        );
+    }
+  }
+
+  void _navigateToFeedPost(String contentId) {
     // Show loading dialog
     Get.dialog(
       Center(
@@ -723,85 +956,43 @@ class _ReelAdCardState extends State<ReelAdCard> {
       barrierDismissible: false,
     );
 
-    print('Navigating to $contentType: $contentId');
+    try {
+      final feedRepository = Get.find<FeedRepository>();
 
-    if (contentType == 'marketplace' && contentId != null) {
-      // Close dialog first
-      if (Get.isDialogOpen ?? false) {
-        Get.back();
-      }
-      // Navigate to marketplace detail
-      Get.toNamed('/marketplace-detail', arguments: contentId);
-    } else if (contentType == 'feed' && contentId != null) {
-      try {
-        // Try a more direct approach without route names
-        final feedController = Get.find<FeedController>();
-
-        // Use a direct class import from FeedRepository
-        try {
-          final feedRepository = Get.find<FeedRepository>();
-
-          feedRepository.getFeedById(contentId).then((feedData) {
-            // Close loading dialog
-            if (Get.isDialogOpen ?? false) {
-              Get.back();
-            }
-            // Navigate directly to the screen instead of using named route
-            Get.to(() => FeedDetailsScreen(feed: feedData.toJson()));
-          }).catchError((error) {
-            print('Error accessing feed repository: $error');
-            _fallbackNavigation(contentId);
-          });
-        } catch (error) {
-          print('Error finding feed repository: $error');
-          _fallbackNavigation(contentId);
-        }
-      } catch (e) {
+      feedRepository.getFeedById(contentId).then((feedData) {
         // Close loading dialog
         if (Get.isDialogOpen ?? false) {
           Get.back();
         }
-        print('Navigation error: $e');
+        // Navigate directly to the feed details screen
+        Get.to(() => FeedDetailsScreen(feed: feedData.toJson()));
+      }).catchError((error) {
+        // Close loading dialog
+        if (Get.isDialogOpen ?? false) {
+          Get.back();
+        }
+        logger.e('Error loading feed post', tag: 'ReelAdCard', error: error);
         Get.snackbar(
           'Error',
-          'Could not navigate to the post',
+          'Could not load the post',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.red.withOpacity(0.6),
           colorText: Colors.white,
         );
-      }
-    } else {
-      // Close dialog if no valid navigation
+      });
+    } catch (e) {
+      // Close loading dialog
       if (Get.isDialogOpen ?? false) {
         Get.back();
       }
-    }
-  }
-
-  void _fallbackNavigation(String contentId) {
-    // Close loading dialog
-    if (Get.isDialogOpen ?? false) {
-      Get.back();
-    }
-
-    // Try using the simplest possible navigation with arguments
-    try {
-      Get.toNamed('/feed/${contentId}');
-    } catch (e) {
-      print('Fallback navigation failed: $e');
-      // Last resort - pass the ID as a simple argument
-      try {
-        Get.toNamed('/feed-detail', arguments: contentId);
-      } catch (e) {
-        print('All navigation attempts failed: $e');
-        Get.snackbar(
-          'Error',
-          'Could not open the post',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red.withOpacity(0.6),
-          colorText: Colors.white,
-        );
-      }
+      logger.e('Navigation error', tag: 'ReelAdCard', error: e);
+      Get.snackbar(
+        'Error',
+        'Could not navigate to the post',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withOpacity(0.6),
+        colorText: Colors.white,
+      );
     }
   }
 }
@@ -823,24 +1014,29 @@ class ReelVideoCard extends StatefulWidget {
 class _ReelVideoCardState extends State<ReelVideoCard> {
   final ReelController _reelController = Get.find<ReelController>();
   late VideoPlayerController _videoPlayerController;
-  static const int PRELOAD_AHEAD =
-      2; // Number of videos to preload ahead and behind
-  static final Map<String, VideoPlayerController> _videoCache =
-      {}; // Cache for video controllers
-  static const int MAX_CACHE_SIZE =
-      7; // Increased cache size to accommodate both directions
+  static const int PRELOAD_AHEAD = 1; // Reduced to prevent memory issues
+  static final Map<String, VideoPlayerController> _videoCache = {};
+  static const int MAX_CACHE_SIZE = 3; // Reduced cache size for stability
   bool _isVideoInitialized = false;
   bool _isPlaying = false;
+  bool _hasError = false;
+  String _errorMessage = '';
   final RxBool _isDescriptionExpanded = false.obs;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
+    _cleanupCache(); // Clean cache on init to prevent memory buildup
     _initializeVideoPlayer();
   }
 
   Future<void> _preloadVideos() async {
     try {
+      // Create a non-reactive copy to avoid RxList issues
+      final reelsLength = List<ReelModel>.from(_reelController.reels).length;
+
       // Preload previous videos
       for (int i = 1; i <= PRELOAD_AHEAD; i++) {
         final prevIndex = widget.index - i;
@@ -852,7 +1048,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
       // Preload next videos
       for (int i = 1; i <= PRELOAD_AHEAD; i++) {
         final nextIndex = widget.index + i;
-        if (nextIndex >= _reelController.reels.length) break;
+        if (nextIndex >= reelsLength) break;
 
         await _preloadSingleVideo(nextIndex);
       }
@@ -860,8 +1056,14 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
   }
 
   Future<void> _preloadSingleVideo(int index) async {
-    final reel = _reelController.reels[index];
-    if (_videoCache.containsKey(reel.mediaUrl)) return;
+    // Create a non-reactive copy to avoid RxList issues
+    final reelsList = List<ReelModel>.from(_reelController.reels);
+    if (index >= reelsList.length) return;
+
+    final reel = reelsList[index];
+    // Use bestVideoUrl for HLS streaming support
+    final videoUrl = reel.bestVideoUrl;
+    if (_videoCache.containsKey(videoUrl)) return;
 
     // Check cache size and remove oldest entries if needed
     if (_videoCache.length >= MAX_CACHE_SIZE) {
@@ -870,22 +1072,21 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
       _videoCache.remove(oldestUrl);
     }
 
-    final uri = Uri.parse(reel.mediaUrl);
+    final uri = Uri.parse(videoUrl);
     if (!uri.isAbsolute) return;
 
     try {
-      final controller = VideoPlayerController.network(
-        reel.mediaUrl,
+      final controller = VideoPlayerController.networkUrl(
+        uri,
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-        httpHeaders: {
-          'Access-Control-Allow-Origin': '*',
-          'Range': 'bytes=0-',
-        },
       );
 
       await controller.initialize();
-      _videoCache[reel.mediaUrl] = controller;
-    } catch (e) {}
+      _videoCache[videoUrl] = controller;
+      logger.d('Preloaded video: ${reel.isHlsStreaming ? "HLS" : "MP4"}', tag: 'ReelVideoCard');
+    } catch (e) {
+      logger.e('Error preloading video: $e', tag: 'ReelVideoCard');
+    }
   }
 
   Future<void> _initializeVideoPlayer() async {
@@ -893,29 +1094,43 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
       // Check if widget is still mounted before initializing
       if (!mounted) return;
 
+      // Use bestVideoUrl which prefers HLS for adaptive streaming
+      final videoUrl = widget.reel.bestVideoUrl;
+      final isHls = widget.reel.isHlsStreaming;
+
+      logger.d('Initializing video: $videoUrl (HLS: $isHls)', tag: 'ReelVideoCard');
+
       // Check cache first
-      if (_videoCache.containsKey(widget.reel.mediaUrl)) {
-        _videoPlayerController = _videoCache[widget.reel.mediaUrl]!;
-        _videoCache.remove(widget.reel.mediaUrl);
+      if (_videoCache.containsKey(videoUrl)) {
+        _videoPlayerController = _videoCache[videoUrl]!;
+        _videoCache.remove(videoUrl);
+        logger.d('Using cached video controller', tag: 'ReelVideoCard');
       } else {
-        final uri = Uri.parse(widget.reel.mediaUrl);
+        final uri = Uri.parse(videoUrl);
         if (!uri.isAbsolute) {
+          logger.e('Invalid video URL: $videoUrl', tag: 'ReelVideoCard');
           throw Exception('Invalid video URL');
         }
 
-        _videoPlayerController = VideoPlayerController.network(
-          widget.reel.mediaUrl,
+        _videoPlayerController = VideoPlayerController.networkUrl(
+          uri,
           videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-          httpHeaders: {
-            'Access-Control-Allow-Origin': '*',
-            'Range': 'bytes=0-',
-          },
+          // HLS streaming is automatically supported by video_player
         );
 
-        await _videoPlayerController.initialize();
+        logger.d('Starting video initialization (${isHls ? "HLS adaptive" : "direct"})...', tag: 'ReelVideoCard');
+
+        // Add timeout for video initialization
+        await _videoPlayerController.initialize().timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            throw Exception('Video load timeout - check network connection');
+          },
+        );
+        logger.d('Video initialized successfully', tag: 'ReelVideoCard');
       }
 
-      if (_videoPlayerController.value.isInitialized && mounted) {
+      if (_videoPlayerController.value.isInitialized && mounted && !_isDisposed) {
         setState(() {
           _isVideoInitialized = true;
           _isPlaying = true;
@@ -924,22 +1139,51 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
         await _videoPlayerController.setPlaybackSpeed(1.0);
         await _videoPlayerController.setLooping(true);
         await _videoPlayerController.play();
+        logger.d('Video playing', tag: 'ReelVideoCard');
 
-        // Start preloading videos in both directions
-        _preloadVideos();
+        // Disable preloading to prevent memory issues
+        // _preloadVideos();
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.e('Error initializing video: $e', tag: 'ReelVideoCard', error: e);
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = e.toString();
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     try {
+      // Always pause the video first
+      _videoPlayerController.pause();
+
+      // Dispose if not in cache
       if (!_videoCache.containsValue(_videoPlayerController)) {
-        _videoPlayerController.pause();
         _videoPlayerController.dispose();
       }
-    } catch (e) {}
+
+      // Clean up old cache entries to prevent memory buildup
+      _cleanupCache();
+    } catch (e) {
+      logger.e('Error disposing video: $e', tag: 'ReelVideoCard');
+    }
     super.dispose();
+  }
+
+  void _cleanupCache() {
+    // Keep only MAX_CACHE_SIZE entries
+    while (_videoCache.length > MAX_CACHE_SIZE) {
+      final oldestUrl = _videoCache.keys.first;
+      try {
+        _videoCache[oldestUrl]?.dispose();
+      } catch (e) {}
+      _videoCache.remove(oldestUrl);
+    }
   }
 
   void _togglePlay() {
@@ -1212,6 +1456,8 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
             if (_videoPlayerController.value.isInitialized) {
               _videoPlayerController.play();
             }
+            // Record view for recommendation engine (once per session)
+            _reelController.recordReelView(widget.reel.id);
           } else if (visiblePercentage < 10) {
             if (_videoPlayerController.value.isInitialized) {
               _videoPlayerController.pause();
@@ -1224,7 +1470,47 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (_isVideoInitialized) ...[
+            if (_hasError) ...[
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        'Failed to load video',
+                        style: const TextStyle(color: Colors.white, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        _errorMessage,
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                        textAlign: TextAlign.center,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _hasError = false;
+                          _errorMessage = '';
+                        });
+                        _initializeVideoPlayer();
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (_isVideoInitialized) ...[
               GestureDetector(
                 onTap: _togglePlay,
                 child: FittedBox(
@@ -1375,31 +1661,40 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _buildInteractionButton(
-                            widget.reel.like['isLiked'] == true
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                            widget.reel.like['count'].toString(),
-                            onTap: () async {
-                              try {
-                                await _reelController
-                                    .toggleLike(widget.reel.id);
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Failed to update like'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
-                            },
-                          ),
+                          // Like button wrapped in Obx for immediate UI updates
+                          Obx(() {
+                            // Get the current reel from controller's reactive list
+                            final currentReel = _reelController.reels.firstWhere(
+                              (r) => r.id == widget.reel.id,
+                              orElse: () => widget.reel,
+                            );
+                            final isLiked = currentReel.like['isLiked'] == true;
+                            final likeCount = currentReel.like['count'] ?? 0;
+
+                            return _buildInteractionButton(
+                              isLiked ? Icons.favorite : Icons.favorite_border,
+                              likeCount.toString(),
+                              onTap: () async {
+                                await _reelController.toggleLike(widget.reel.id);
+                              },
+                              isLiked: isLiked,
+                            );
+                          }),
                           const SizedBox(height: 16),
-                          _buildInteractionButton(
-                            Icons.chat_bubble_outline,
-                            widget.reel.comment['count'].toString(),
-                            onTap: () => _showCommentsModal(context),
-                          ),
+                          // Comment button wrapped in Obx for immediate UI updates
+                          Obx(() {
+                            final currentReel = _reelController.reels.firstWhere(
+                              (r) => r.id == widget.reel.id,
+                              orElse: () => widget.reel,
+                            );
+                            final commentCount = currentReel.comment['count'] ?? 0;
+
+                            return _buildInteractionButton(
+                              Icons.chat_bubble_outline,
+                              commentCount.toString(),
+                              onTap: () => _showCommentsModal(context),
+                            );
+                          }),
                           const SizedBox(height: 16),
                           _buildInteractionButton(
                             _videoPlayerController.value.volume > 0
@@ -1422,6 +1717,8 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                             Icons.share,
                             'Share',
                             onTap: () {
+                              // Record share interaction for recommendations
+                              _reelController.recordShare(widget.reel.id);
                               showModalBottomSheet(
                                 context: context,
                                 backgroundColor: Colors.transparent,
@@ -1692,10 +1989,9 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
   }
 
   Widget _buildInteractionButton(IconData icon, String label,
-      {VoidCallback? onTap}) {
+      {VoidCallback? onTap, bool isLiked = false}) {
     // Special handling for like button
     if (icon == Icons.favorite || icon == Icons.favorite_border) {
-      final isLiked = widget.reel.like['isLiked'] == true;
       return GestureDetector(
         onTap: onTap,
         child: Column(

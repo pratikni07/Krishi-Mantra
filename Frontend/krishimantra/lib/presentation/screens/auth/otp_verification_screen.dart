@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:krishimantra/core/constants/colors.dart';
+import 'package:krishimantra/core/utils/responsive_utils.dart';
 import 'package:krishimantra/presentation/controllers/auth_controller.dart';
 import 'package:krishimantra/presentation/screens/auth/signup_screen.dart';
 import 'package:krishimantra/routes/app_routes.dart';
@@ -45,22 +46,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     super.initState();
     _initializeLanguage();
     _startCountdown();
-
-    // Setup focus node listeners
-    for (int i = 0; i < 6; i++) {
-      _focusNodes[i].addListener(() {
-        _handleFocusChange(i);
-      });
-    }
-  }
-
-  void _handleFocusChange(int index) {
-    if (_focusNodes[index].hasFocus && _otpControllers[index].text.isNotEmpty) {
-      if (index < 5) {
-        _focusNodes[index].unfocus();
-        _focusNodes[index + 1].requestFocus();
-      }
-    }
   }
 
   Future<void> _initializeLanguage() async {
@@ -115,19 +100,28 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
+    // Calculate OTP field size based on screen width
+    final otpFieldWidth = ResponsiveUtils.responsive(
+      mobile: (ResponsiveUtils.screenWidth - 48 - 40) / 6, // 48 padding, 40 spacing
+      tablet: 56.0,
+    );
+    final otpFieldHeight = otpFieldWidth * 1.2;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.green),
+          icon: Icon(Icons.arrow_back, color: AppColors.green, size: AppSizes.iconM),
           onPressed: () => Get.back(),
         ),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: RPadding.all(24),
           child: Form(
             key: _formKey,
             child: Column(
@@ -136,28 +130,28 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 Text(
                   verificationCodeText,
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: AppSizes.fontTitle,
                     fontWeight: FontWeight.bold,
                     color: AppColors.green,
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: AppSizes.paddingM),
                 Text(
                   enterCodeText,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: AppSizes.fontL,
                     color: AppColors.textGrey,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: AppSizes.paddingS),
                 Text(
                   '$sentToText +91 ${widget.phoneNumber}',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: AppSizes.fontM,
                     color: AppColors.textGrey.withOpacity(0.7),
                   ),
                 ),
-                const SizedBox(height: 40),
+                SizedBox(height: ResponsiveUtils.hp(5)),
 
                 // OTP Input Fields
                 Row(
@@ -165,46 +159,69 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                   children: List.generate(
                     6,
                     (index) => SizedBox(
-                      width: 45,
-                      height: 56,
-                      child: TextFormField(
-                        controller: _otpControllers[index],
-                        focusNode: _focusNodes[index],
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        inputFormatters: [
-                          LengthLimitingTextInputFormatter(1),
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        decoration: InputDecoration(
-                          contentPadding: EdgeInsets.zero,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: AppColors.green, width: 2),
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
-                        onChanged: (value) {
-                          if (value.length == 1 && index < 5) {
-                            FocusScope.of(context).nextFocus();
+                      width: otpFieldWidth,
+                      height: otpFieldHeight,
+                      child: KeyboardListener(
+                        focusNode: FocusNode(),
+                        onKeyEvent: (event) {
+                          if (event is KeyDownEvent &&
+                              event.logicalKey == LogicalKeyboardKey.backspace) {
+                            if (_otpControllers[index].text.isEmpty && index > 0) {
+                              _focusNodes[index - 1].requestFocus();
+                              _otpControllers[index - 1].clear();
+                            }
                           }
                         },
+                        child: TextFormField(
+                          controller: _otpControllers[index],
+                          focusNode: _focusNodes[index],
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: AppSizes.fontXL,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          inputFormatters: [
+                            LengthLimitingTextInputFormatter(1),
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: InputDecoration(
+                            contentPadding: EdgeInsets.zero,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                              borderSide: const BorderSide(color: AppColors.borderLight),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                              borderSide: const BorderSide(color: AppColors.borderLight),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                              borderSide: const BorderSide(color: AppColors.green, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: AppColors.white,
+                          ),
+                          onChanged: (value) {
+                            if (value.length == 1 && index < 5) {
+                              _focusNodes[index + 1].requestFocus();
+                            } else if (value.isEmpty && index > 0) {
+                              _focusNodes[index - 1].requestFocus();
+                            }
+                          },
+                          onTap: () {
+                            _otpControllers[index].selection = TextSelection(
+                              baseOffset: 0,
+                              extentOffset: _otpControllers[index].text.length,
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 40),
+                SizedBox(height: ResponsiveUtils.hp(5)),
 
                 // Resend Code Section
                 Center(
@@ -214,16 +231,15 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         didntReceiveText,
                         style: TextStyle(
                           color: AppColors.textGrey,
-                          fontSize: 14,
+                          fontSize: AppSizes.fontM,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: AppSizes.paddingS),
                       TextButton(
                         onPressed: _canResend
                             ? () {
                                 _resetCountdown();
-                                _authController
-                                    .initiateAuth(widget.phoneNumber);
+                                _authController.initiateAuth(widget.phoneNumber);
                               }
                             : null,
                         child: Text(
@@ -231,8 +247,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                               ? resendText
                               : '$resendInText ${_secondsRemaining}s',
                           style: TextStyle(
-                            color: _canResend ? AppColors.green : Colors.grey,
+                            color: _canResend ? AppColors.green : AppColors.textGrey,
                             fontWeight: FontWeight.bold,
+                            fontSize: AppSizes.fontM,
                           ),
                         ),
                       ),
@@ -245,37 +262,40 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 // Verify Button
                 Obx(() => SizedBox(
                       width: double.infinity,
-                      height: 56,
+                      height: AppSizes.buttonHeight,
                       child: ElevatedButton(
                         onPressed: _authController.isLoading.value
                             ? null
                             : () => _handleVerifyOTP(),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.green,
+                          disabledBackgroundColor: AppColors.green.withOpacity(0.5),
+                          foregroundColor: AppColors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppSizes.radiusL),
                           ),
                           elevation: 2,
                         ),
                         child: _authController.isLoading.value
                             ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
+                                height: AppSizes.iconS,
+                                width: AppSizes.iconS,
+                                child: const CircularProgressIndicator(
+                                  color: AppColors.white,
                                   strokeWidth: 2,
                                 ),
                               )
                             : Text(
                                 verifyText,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: AppSizes.fontL,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                       ),
                     )),
+                SizedBox(height: AppSizes.paddingL),
               ],
             ),
           ),
@@ -297,10 +317,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
       if (result != null) {
         if (result.isRegistered) {
-          // User exists and is logged in, go to main screen
           Get.offAllNamed(AppRoutes.MAIN);
         } else {
-          // User needs to complete registration
           Get.to(() => SignupScreen(phoneNumber: widget.phoneNumber));
         }
       }
@@ -309,6 +327,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         'Error',
         'Please enter a valid 6-digit code',
         snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.error,
+        colorText: AppColors.white,
       );
     }
   }

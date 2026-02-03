@@ -6,35 +6,80 @@ import 'package:krishimantra/presentation/controllers/video_tutorial_controller.
 import 'package:krishimantra/presentation/controllers/reel_controller.dart';
 import 'package:krishimantra/presentation/screens/video_tutorial/video_detail_screen.dart';
 import 'package:krishimantra/presentation/screens/reel/reels_page.dart';
+import 'package:krishimantra/presentation/widgets/skeleton/skeleton_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/responsive_utils.dart';
 import 'package:video_player/video_player.dart';
 import '../../../data/services/language_service.dart';
 import 'package:krishimantra/core/utils/error_handler.dart';
+import '../../../presentation/widgets/translated_text.dart';
 
-class VideoListScreen extends GetView<VideoTutorialController> {
-  final ReelController _reelController = Get.find<ReelController>();
-
-  VideoListScreen({Key? key}) : super(key: key);
+class VideoListScreen extends StatefulWidget {
+  const VideoListScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
+  State<VideoListScreen> createState() => _VideoListScreenState();
+}
+
+class _VideoListScreenState extends State<VideoListScreen> {
+  final VideoTutorialController controller = Get.find<VideoTutorialController>();
+  final ReelController _reelController = Get.find<ReelController>();
+  late LanguageService _languageService;
+
+  String _mantraVideosText = 'Mantra Videos';
+  String _noVideosText = 'No videos found';
+  String _shortsText = 'Shorts';
+  String _viewAllText = 'View All';
+  String _viewsText = 'views';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeTranslations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       controller.fetchVideos(refresh: true);
       _reelController.fetchReels(refresh: true);
     });
+  }
+
+  Future<void> _initializeTranslations() async {
+    _languageService = await LanguageService.getInstance();
+    final translations = await Future.wait([
+      _languageService.translate('Mantra Videos'),
+      _languageService.translate('No videos found'),
+      _languageService.translate('Shorts'),
+      _languageService.translate('View All'),
+      _languageService.translate('views'),
+    ]);
+    if (mounted) {
+      setState(() {
+        _mantraVideosText = translations[0];
+        _noVideosText = translations[1];
+        _shortsText = translations[2];
+        _viewAllText = translations[3];
+        _viewsText = translations[4];
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Mantra Videos',
+        title: Text(
+          _mantraVideosText,
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: AppSizes.fontL,
           ),
         ),
         backgroundColor: AppColors.green,
+        iconTheme: IconThemeData(size: AppSizes.iconM),
         actions: [
           // IconButton(
           //   icon: const Icon(Icons.search),
@@ -43,9 +88,10 @@ class VideoListScreen extends GetView<VideoTutorialController> {
           //   },
           // ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.refresh,
               color: Colors.white,
+              size: AppSizes.iconM,
             ),
             onPressed: () => controller.fetchVideos(refresh: true),
           ),
@@ -62,19 +108,25 @@ class VideoListScreen extends GetView<VideoTutorialController> {
           }
 
           if (controller.isLoading.value && controller.videos.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return ListView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 4,
+              itemBuilder: (context, index) {
+                return const SkeletonVideoCard();
+              },
+            );
           }
 
           if (controller.videos.isEmpty) {
-            return const Center(
-              child: Text('No videos found'),
+            return Center(
+              child: Text(_noVideosText, style: TextStyle(fontSize: AppSizes.fontM)),
             );
           }
 
           return RefreshIndicator(
             onRefresh: () => controller.fetchVideos(refresh: true),
             child: ListView.builder(
-              padding: const EdgeInsets.all(8),
+              padding: RPadding.all(8),
               itemCount: _calculateItemCount(),
               itemBuilder: (context, index) {
                 // Check if this is a reel section
@@ -103,6 +155,7 @@ class VideoListScreen extends GetView<VideoTutorialController> {
                 final video = controller.videos[videoIndex];
                 return VideoCard(
                   video: video,
+                  viewsText: _viewsText,
                   onTap: () =>
                       Get.to(() => VideoDetailScreen(videoId: video.id)),
                 );
@@ -132,36 +185,37 @@ class VideoListScreen extends GetView<VideoTutorialController> {
       return const SizedBox.shrink();
     }
 
+    final reelHeight = ResponsiveUtils.responsive(mobile: 240.0, tablet: 300.0);
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+      padding: EdgeInsets.only(bottom: AppSizes.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+            padding: RPadding.symmetric(horizontal: 8, vertical: 12),
             child: Row(
               children: [
-                const Text(
-                  'Shorts',
+                Text(
+                  _shortsText,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: AppSizes.fontL,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Get.to(() => const ReelsPage()),
-                  child: const Text('View All'),
+                  child: Text(_viewAllText, style: TextStyle(fontSize: AppSizes.fontM)),
                 ),
               ],
             ),
           ),
           SizedBox(
-            height: 240,
+            height: reelHeight,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: RPadding.symmetric(horizontal: 4),
               itemCount: _reelController.reels.length,
               itemBuilder: (context, index) {
                 final reel = _reelController.reels[index];
@@ -205,6 +259,10 @@ class _ReelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+    final cardWidth = ResponsiveUtils.responsive(mobile: 150.0, tablet: 180.0);
+    final playIconSize = ResponsiveUtils.responsive(mobile: 40.0, tablet: 50.0);
+
     return GestureDetector(
       onTap: () {
         Get.to(
@@ -215,24 +273,24 @@ class _ReelCard extends StatelessWidget {
         );
       },
       child: Container(
-        width: 150,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
+        width: cardWidth,
+        margin: RPadding.symmetric(horizontal: 4),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppSizes.radiusM),
           color: Colors.grey[200],
         ),
         child: Stack(
           fit: StackFit.expand,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppSizes.radiusM),
               child: VideoThumbnail(videoUrl: reel.mediaUrl),
             ),
-            const Center(
+            Center(
               child: Icon(
                 Icons.play_circle_fill,
                 color: Colors.white,
-                size: 40,
+                size: playIconSize,
               ),
             ),
             Positioned(
@@ -254,9 +312,9 @@ class _ReelCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              bottom: 8,
-              left: 8,
-              right: 8,
+              bottom: AppSizes.paddingS,
+              left: AppSizes.paddingS,
+              right: AppSizes.paddingS,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -264,26 +322,26 @@ class _ReelCard extends StatelessWidget {
                     reel.description ?? '',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 12,
+                      fontSize: AppSizes.fontS,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: AppSizes.paddingXS),
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.favorite,
                         color: Colors.white70,
-                        size: 12,
+                        size: AppSizes.fontS,
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: AppSizes.paddingXS),
                       Text(
                         _formatLikeCount(reel.like['count'] ?? 0),
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white70,
-                          fontSize: 11,
+                          fontSize: AppSizes.fontXS,
                         ),
                       ),
                     ],
@@ -370,9 +428,14 @@ class _VideoThumbnailState extends State<VideoThumbnail> {
 class VideoCard extends StatefulWidget {
   final VideoTutorial video;
   final VoidCallback onTap;
+  final String viewsText;
 
-  const VideoCard({Key? key, required this.video, required this.onTap})
-      : super(key: key);
+  const VideoCard({
+    Key? key,
+    required this.video,
+    required this.onTap,
+    this.viewsText = 'views',
+  }) : super(key: key);
 
   @override
   State<VideoCard> createState() => _VideoCardState();
@@ -403,14 +466,17 @@ class _VideoCardState extends State<VideoCard> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+    final avatarRadius = ResponsiveUtils.responsive(mobile: 20.0, tablet: 25.0);
+
     return GestureDetector(
       onTap: widget.onTap,
       child: Card(
         clipBehavior: Clip.antiAlias,
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: EdgeInsets.only(bottom: AppSizes.paddingL),
         elevation: 0.5,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppSizes.radiusM),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,22 +506,19 @@ class _VideoCardState extends State<VideoCard> {
                   ),
                   if (widget.video.duration != null)
                     Positioned(
-                      bottom: 8,
-                      right: 8,
+                      bottom: AppSizes.paddingS,
+                      right: AppSizes.paddingS,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
+                        padding: RPadding.symmetric(horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(AppSizes.radiusXS),
                         ),
                         child: Text(
                           _formatDuration(widget.video.duration!),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 12,
+                            fontSize: AppSizes.fontS,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -467,13 +530,13 @@ class _VideoCardState extends State<VideoCard> {
 
             // Video info with profile picture, title and stats
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: RPadding.all(12),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Channel profile picture
                   CircleAvatar(
-                    radius: 20,
+                    radius: avatarRadius,
                     backgroundColor: Colors.grey[200],
                     backgroundImage: widget.video.profilePhoto != null &&
                             widget.video.profilePhoto!.isNotEmpty
@@ -486,11 +549,12 @@ class _VideoCardState extends State<VideoCard> {
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontWeight: FontWeight.bold,
+                              fontSize: AppSizes.fontM,
                             ),
                           )
                         : null,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: AppSizes.paddingM),
 
                   // Title and stats
                   Expanded(
@@ -499,10 +563,10 @@ class _VideoCardState extends State<VideoCard> {
                       children: [
                         // Video title with translation
                         if (_isTranslating)
-                          const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(
+                          SizedBox(
+                            height: AppSizes.iconS,
+                            width: AppSizes.iconS,
+                            child: const CircularProgressIndicator(
                               strokeWidth: 2,
                             ),
                           )
@@ -513,13 +577,13 @@ class _VideoCardState extends State<VideoCard> {
                                 : widget.video.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              fontSize: 16,
+                              fontSize: AppSizes.fontL,
                               height: 1.3,
                             ),
                           ),
-                        const SizedBox(height: 6),
+                        SizedBox(height: AppSizes.paddingS),
                         // Channel name, views and date in one row
                         Row(
                           children: [
@@ -530,29 +594,29 @@ class _VideoCardState extends State<VideoCard> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: Colors.grey[600],
-                                  fontSize: 13,
+                                  fontSize: AppSizes.fontS,
                                 ),
                               ),
                             ),
                             Text(
-                              '${_formatViews(widget.video.views.count)} views',
+                              '${_formatViews(widget.video.views.count)} ${widget.viewsText}',
                               style: TextStyle(
                                 color: Colors.grey[600],
-                                fontSize: 13,
+                                fontSize: AppSizes.fontS,
                               ),
                             ),
                             Text(
                               ' • ',
                               style: TextStyle(
                                 color: Colors.grey[600],
-                                fontSize: 13,
+                                fontSize: AppSizes.fontS,
                               ),
                             ),
                             Text(
                               timeago.format(widget.video.createdAt),
                               style: TextStyle(
                                 color: Colors.grey[600],
-                                fontSize: 13,
+                                fontSize: AppSizes.fontS,
                               ),
                             ),
                           ],

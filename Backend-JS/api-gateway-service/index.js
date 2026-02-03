@@ -61,6 +61,7 @@ console.log("Environment Variables:", {
   MESSAGE_SERVICE_URL: process.env.MESSAGE_SERVICE_URL,
   FEED_SERVICE_URL: process.env.FEED_SERVICE_URL,
   REEL_SERVICE_URL: process.env.REEL_SERVICE_URL,
+  ENGAGEMENT_SERVICE_URL: process.env.ENGAGEMENT_SERVICE_URL,
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
 });
 
@@ -81,14 +82,28 @@ const createServiceProxy = (serviceName, serviceUrl, pathRewrite) => {
     target: serviceUrl.trim(),
     changeOrigin: true,
     pathRewrite: pathRewrite,
+    // Don't parse body for multipart requests - let them pass through as-is
+    selfHandleResponse: false,
     on: {
       proxyReq: (proxyReq, req, res) => {
         console.log("--------------------------------");
-        console.log("Request received:", req.method, req.url);
+        console.log(`[${serviceName}] Request:`, req.method, req.url);
+        console.log(`[${serviceName}] Content-Type:`, req.headers['content-type']);
 
-        if (["POST", "PUT", "PATCH"].includes(req.method) && req.body) {
+        // Check if this is a multipart request - don't modify these
+        const contentType = req.headers['content-type'] || '';
+        const isMultipart = contentType.includes('multipart/form-data');
+
+        if (isMultipart) {
+          // For multipart requests, just set forwarding headers and let it pass through
+          console.log(`[${serviceName}] Multipart request detected - passing through unchanged`);
+          proxyReq.setHeader("x-forwarded-for", req.ip);
+          proxyReq.setHeader("x-forwarded-host", req.headers.host);
+          proxyReq.setHeader("x-forwarded-proto", req.protocol);
+          // Don't modify body or content-type for multipart
+        } else if (["POST", "PUT", "PATCH"].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
           const bodyData = JSON.stringify(req.body);
-          console.log("Body data:", bodyData);
+          console.log(`[${serviceName}] JSON body:`, bodyData.substring(0, 200));
           proxyReq.setHeader("Content-Type", "application/json");
           proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
           proxyReq.setHeader("x-forwarded-for", req.ip);
@@ -140,23 +155,85 @@ try {
     { "^/api/feed": "" }
   );
 
-  const reelServiceProxy = createServiceProxy(
-    "Reel Service",
-    process.env.REEL_SERVICE_URL,
-    { "^/api/reels": "" }
-  );
+  // Reel service proxy with custom path handling for both reels and videos
+  const reelServiceProxy = createProxyMiddleware({
+    target: process.env.REEL_SERVICE_URL.trim(),
+    changeOrigin: true,
+    pathRewrite: (path, req) => {
+      // Path is already stripped of /api/reels mount point
+      // /videos/... -> /videos/... (keep as is for video tutorials)
+      if (path.startsWith('/videos')) {
+        console.log(`[Reel Service] Path rewrite: ${path} -> ${path}`);
+        return path;
+      }
+      // Everything else: /... -> /reels/... (prepend /reels)
+      const newPath = '/reels' + path;
+      console.log(`[Reel Service] Path rewrite: ${path} -> ${newPath}`);
+      return newPath;
+    },
+    on: {
+      proxyReq: (proxyReq, req, res) => {
+        console.log("--------------------------------");
+        console.log("[Reel Service] Original URL:", req.originalUrl);
+        console.log("[Reel Service] Proxied path:", proxyReq.path);
+
+        if (["POST", "PUT", "PATCH"].includes(req.method) && req.body) {
+          const bodyData = JSON.stringify(req.body);
+          proxyReq.setHeader("Content-Type", "application/json");
+          proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+          proxyReq.setHeader("x-forwarded-for", req.ip);
+          proxyReq.setHeader("x-forwarded-host", req.headers.host);
+          proxyReq.setHeader("x-forwarded-proto", req.protocol);
+          proxyReq.write(bodyData);
+        } else {
+          proxyReq.setHeader("x-forwarded-for", req.ip);
+          proxyReq.setHeader("x-forwarded-host", req.headers.host);
+          proxyReq.setHeader("x-forwarded-proto", req.protocol);
+        }
+      },
+      proxyRes: (proxyRes, req, res) => {
+        console.log(`[Reel Service] Response status: ${proxyRes.statusCode}`);
+      },
+      error: (err, req, res) => {
+        console.error(`[Reel Service] Proxy Error: ${err.message}`);
+        res.status(502).json({
+          status: "error",
+          message: "Reel Service unavailable",
+          error: process.env.NODE_ENV === "development" ? err.message : undefined,
+        });
+      },
+    },
+  });
+
   const notificationServiceProxy = createServiceProxy(
     "Notification Service",
     process.env.NOTIFICATION_SERVICE_URL,
     { "^/api/notification": "" }
   );
 
+  // AI Service proxy - routes to message-svc which handles AI endpoints
+  // Express strips /api/ai when mounted, so we need to add it back for message-svc
+  const aiServiceProxy = createServiceProxy(
+    "AI Service",
+    process.env.MESSAGE_SERVICE_URL,
+    { "^/": "/api/ai/" } // Prepend /api/ai to the path
+  );
+
+  // Engagement Service proxy - user activity tracking and analytics
+  const engagementServiceProxy = createServiceProxy(
+    "Engagement Service",
+    process.env.ENGAGEMENT_SERVICE_URL,
+    { "^/": "/api/engagement/" }
+  );
+
   // Routes
   app.use("/api/main", mainServiceProxy);
   app.use("/api/messages", messageServiceProxy);
+  app.use("/api/ai", aiServiceProxy);
   app.use("/api/feed", feedServiceProxy);
   app.use("/api/reels", reelServiceProxy);
   app.use("/api/notification", notificationServiceProxy);
+  app.use("/api/engagement", engagementServiceProxy);
   app.use("/api/upload", uploadRoutes);
 } catch (error) {
   console.error("Error setting up proxies:", error.message);

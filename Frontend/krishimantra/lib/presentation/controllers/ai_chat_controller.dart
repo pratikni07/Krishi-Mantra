@@ -13,7 +13,9 @@ import '../../data/services/language_service.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/services/api_service.dart';
+import '../../data/services/engagement_service.dart';
 import '../widgets/error_widgets.dart';
+import 'presigned_url_controller.dart';
 
 class AIChatController extends GetxController {
   final AIChatRepository _repository;
@@ -63,6 +65,21 @@ class AIChatController extends GetxController {
     super.onInit();
     _setupSocketListeners();
     loadChats();
+    _fetchMessageLimitInfo();
+  }
+
+  Future<void> _fetchMessageLimitInfo() async {
+    try {
+      final userId = await _userService.getUserId();
+      if (userId == null) return;
+
+      final limitInfo = await _repository.getMessageLimitInfo(userId);
+      if (limitInfo != null && limitInfo['remainingMessages'] != null) {
+        remainingMessages.value = limitInfo['remainingMessages'];
+      }
+    } catch (e) {
+      print('Error fetching message limit info: $e');
+    }
   }
 
   void _setupSocketListeners() {
@@ -121,6 +138,8 @@ class AIChatController extends GetxController {
       isLoadingMore.value = true;
 
       final userId = await _userService.getUserId();
+      print('[AIChatController] Loading chats for userId: $userId');
+
       if (userId != null) {
         final result = await _repository.getChatHistory(
           userId: userId,
@@ -129,6 +148,8 @@ class AIChatController extends GetxController {
 
         final newChats = (result['chats'] as List<AIChat>);
         final pagination = result['pagination'] as Map<String, dynamic>;
+
+        print('[AIChatController] Loaded ${newChats.length} chats, total: ${pagination['total']}');
 
         if (refresh) {
           chats.value = newChats;
@@ -139,8 +160,11 @@ class AIChatController extends GetxController {
         totalPages.value = pagination['pages'];
         hasMoreChats.value = currentPage.value < pagination['pages'];
         currentPage.value++;
+      } else {
+        print('[AIChatController] userId is null, cannot load chats');
       }
     } catch (e) {
+      print('[AIChatController] Error loading chats: $e');
       hasError.value = true;
       errorMessage.value = 'Failed to load chats';
     } finally {
@@ -206,6 +230,9 @@ class AIChatController extends GetxController {
       );
       messages.add(userMessage);
 
+      // Track AI chat message
+      _engagementService.trackAIChatMessage(isUserMessage: true);
+
       isTyping.value = true;
 
       final location = await _getLocationData();
@@ -232,10 +259,12 @@ class AIChatController extends GetxController {
           if (response != null) {
             final aiResponse = response['message'] ?? '';
             final context = response['context'];
-            final rateLimit = response['rateLimit'];
+            final limitInfo = response['limitInfo'];
+            final serverChatId = response['chatId'];
 
-            if (rateLimit != null) {
-              _handleRateLimit(rateLimit);
+            // Update remaining messages from backend response
+            if (limitInfo != null && limitInfo['remainingMessages'] != null) {
+              remainingMessages.value = limitInfo['remainingMessages'];
             }
 
             if (aiResponse.isNotEmpty) {
@@ -246,8 +275,26 @@ class AIChatController extends GetxController {
               );
               messages.add(aiMessage);
 
-              // Update current chat with new context
-              if (currentChat.value != null && context != null) {
+              // Update current chat with server-assigned chatId and new context
+              if (serverChatId != null) {
+                if (currentChat.value != null) {
+                  // Update existing chat with server ID and new context
+                  _updateCurrentChatWithServerId(
+                    serverChatId,
+                    userMessage,
+                    aiMessage,
+                    context,
+                  );
+                } else {
+                  // Create new chat object with server ID
+                  await _createChatFromResponse(
+                    serverChatId,
+                    userMessage,
+                    aiMessage,
+                    context,
+                  );
+                }
+              } else if (currentChat.value != null && context != null) {
                 _updateCurrentChat(userMessage, aiMessage, context);
               }
               break; // Success, exit retry loop
@@ -318,10 +365,10 @@ class AIChatController extends GetxController {
   }
 
   void _updateCurrentChat(AIChatMessage userMessage, AIChatMessage aiMessage,
-      Map<String, dynamic> context) {
+      Map<String, dynamic>? context) {
     final updatedChat = currentChat.value!.copyWith(
       messages: [...currentChat.value!.messages, userMessage, aiMessage],
-      context: AIContext.fromJson(context),
+      context: context != null ? AIContext.fromJson(context) : null,
       lastMessageAt: DateTime.now(),
     );
     currentChat.value = updatedChat;
@@ -331,6 +378,115 @@ class AIChatController extends GetxController {
     if (index != -1) {
       chats[index] = updatedChat;
     }
+  }
+
+  /// Update current chat with server-assigned ID (important for conversation continuity)
+  void _updateCurrentChatWithServerId(
+    String serverChatId,
+    AIChatMessage userMessage,
+    AIChatMessage aiMessage,
+    Map<String, dynamic>? context,
+  ) {
+    final oldId = currentChat.value?.id;
+
+    // Generate a proper title from the first user message
+    String chatTitle = currentChat.value?.title ?? 'New Chat';
+    if (chatTitle == 'New Chat' && userMessage.content.isNotEmpty) {
+      chatTitle = userMessage.content.length > 30
+          ? '${userMessage.content.substring(0, 30)}...'
+          : userMessage.content;
+    }
+
+    // Create updated chat with server ID
+    final updatedChat = AIChat(
+      id: serverChatId,  // Use server-assigned ID
+      userId: currentChat.value!.userId,
+      userName: currentChat.value!.userName,
+      userProfilePhoto: currentChat.value!.userProfilePhoto,
+      title: chatTitle,
+      messages: [...currentChat.value!.messages, userMessage, aiMessage],
+      metadata: currentChat.value!.metadata,
+      context: context != null ? AIContext.fromJson(context) : currentChat.value!.context,
+      lastMessageAt: DateTime.now(),
+      isActive: currentChat.value!.isActive,
+      createdAt: currentChat.value!.createdAt,
+      updatedAt: DateTime.now(),
+    );
+
+    currentChat.value = updatedChat;
+
+    // Always ensure the chat is in the list
+    // First, remove any chat with the old temporary ID
+    if (oldId != null && oldId != serverChatId) {
+      chats.removeWhere((chat) => chat.id == oldId);
+    }
+
+    // Then update or add the chat with the server ID
+    final index = chats.indexWhere((chat) => chat.id == serverChatId);
+    if (index != -1) {
+      chats[index] = updatedChat;
+    } else {
+      chats.insert(0, updatedChat);
+    }
+
+    // Force refresh to ensure UI updates
+    chats.refresh();
+
+    print('[AIChatController] Updated chat ${serverChatId}, total chats: ${chats.length}');
+  }
+
+  /// Create a new chat from server response when no current chat exists
+  Future<void> _createChatFromResponse(
+    String serverChatId,
+    AIChatMessage userMessage,
+    AIChatMessage aiMessage,
+    Map<String, dynamic>? context,
+  ) async {
+    final userId = await _userService.getUserId();
+    final userName = await _userService.getFirstName();
+    final userPhoto = await _userService.getImage();
+    final preferredLanguage = await _getPreferredLanguage();
+
+    final newChat = AIChat(
+      id: serverChatId,
+      userId: userId ?? '',
+      userName: userName ?? '',
+      userProfilePhoto: userPhoto ?? '',
+      title: userMessage.content.length > 30
+          ? '${userMessage.content.substring(0, 30)}...'
+          : userMessage.content,
+      messages: [userMessage, aiMessage],
+      metadata: AIMetadata(
+        preferredLanguage: preferredLanguage,
+        location: null,
+        weather: null,
+      ),
+      context: context != null ? AIContext.fromJson(context) : AIContext(
+        currentTopic: '',
+        lastContext: '',
+        identifiedIssues: [],
+        suggestedSolutions: [],
+      ),
+      lastMessageAt: DateTime.now(),
+      isActive: true,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    currentChat.value = newChat;
+
+    // Check if chat already exists (edge case)
+    final existingIndex = chats.indexWhere((chat) => chat.id == serverChatId);
+    if (existingIndex == -1) {
+      chats.insert(0, newChat);
+    } else {
+      chats[existingIndex] = newChat;
+    }
+
+    // Force refresh to ensure UI updates
+    chats.refresh();
+
+    print('[AIChatController] Created new chat ${serverChatId}, total chats: ${chats.length}');
   }
 
   Future<void> loadChat(String chatId) async {
@@ -458,7 +614,10 @@ class AIChatController extends GetxController {
 
       if (userId == null || userName == null) return;
 
-      // Create a new empty chat
+      // Track AI chat start
+      _engagementService.trackAIChatStart();
+
+      // Create a new empty chat (client-side only until first message is sent)
       currentChat.value = AIChat(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         userId: userId,
@@ -483,12 +642,16 @@ class AIChatController extends GetxController {
         updatedAt: DateTime.now(),
       );
 
-      // Clear messages
+      // Clear messages for the new chat
       messages.clear();
 
-      // Add new chat to the list
-      chats.insert(0, currentChat.value!);
+      // Note: Don't add to chats list here - the chat will be added
+      // when the first message is sent and we get a server-assigned ID.
+      // This prevents empty chats from cluttering the history.
+
+      print('[AIChatController] Created new chat (pending first message)');
     } catch (e) {
+      print('[AIChatController] Error creating new chat: $e');
       Get.snackbar(
         'Error',
         'Failed to create new chat',
@@ -599,6 +762,12 @@ class AIChatController extends GetxController {
   Future<void> processSelectedImages([String? text]) async {
     if (selectedImages.isEmpty) return;
 
+    // Prevent double-processing
+    if (isAnalyzing.value) {
+      print('[AIChatController] Already analyzing, ignoring duplicate call');
+      return;
+    }
+
     isAnalyzing.value = true;
     final messageString = text ?? '';
     hasNetworkError.value = false; // Reset error state
@@ -629,6 +798,15 @@ class AIChatController extends GetxController {
           throw Exception('User not authenticated');
         }
 
+        // Upload all images to S3 first for display in chat
+        _uploadedImageUrls.clear();
+        for (final image in selectedImages) {
+          final uploadedUrl = await _uploadImageToS3(image);
+          if (uploadedUrl != null) {
+            _uploadedImageUrls.add(uploadedUrl);
+          }
+        }
+
         // Get location and weather data
         final location = await _getLocationData();
         final weather = await _getWeatherData();
@@ -647,7 +825,7 @@ class AIChatController extends GetxController {
         );
 
         // Process successful response
-        _handleSuccessfulImageResponse(response);
+        await _handleSuccessfulImageResponse(response);
       }
     } catch (error) {
       // Don't clear selected images on error, to allow for retry
@@ -681,6 +859,30 @@ class AIChatController extends GetxController {
     }
   }
 
+  // Temporary storage for uploaded image URLs during processing
+  final _uploadedImageUrls = <String>[].obs;
+  final EngagementService _engagementService = EngagementService();
+
+  // Upload image to S3 and return the URL
+  Future<String?> _uploadImageToS3(File image) async {
+    try {
+      final presignedUrlController = Get.find<PresignedUrlController>();
+      final userId = await _userService.getUserId();
+
+      final imageUrl = await presignedUrlController.uploadImage(
+        imageFile: image,
+        contentType: 'chat_image',
+        userId: userId,
+        isVideo: false,
+      );
+
+      return imageUrl;
+    } catch (e) {
+      print('Error uploading image to S3: $e');
+      return null;
+    }
+  }
+
   // Process a single image with proper error handling
   Future<void> _processSingleImage(File image, String messageString) async {
     try {
@@ -691,6 +893,13 @@ class AIChatController extends GetxController {
 
       if (userId == null || userName == null) {
         throw Exception('User not authenticated');
+      }
+
+      // Upload image to S3 first for display in chat
+      final uploadedUrl = await _uploadImageToS3(image);
+      if (uploadedUrl != null) {
+        _uploadedImageUrls.clear();
+        _uploadedImageUrls.add(uploadedUrl);
       }
 
       // Get location and weather data
@@ -709,9 +918,10 @@ class AIChatController extends GetxController {
         weather: Weather.fromJson(weather),
       );
 
-      // Process successful response
-      _handleSuccessfulImageResponse(response);
+      // Process successful response with uploaded URLs
+      await _handleSuccessfulImageResponse(response);
     } catch (error) {
+      _uploadedImageUrls.clear();
       if (error is ConnectionResetException ||
           error is ServiceUnavailableException) {
         // For these specific errors, propagate to UI for better handling
@@ -724,20 +934,29 @@ class AIChatController extends GetxController {
   }
 
   // Helper method to handle successful image analysis response
-  void _handleSuccessfulImageResponse(Map<String, dynamic> response) {
+  Future<void> _handleSuccessfulImageResponse(Map<String, dynamic> response) async {
     // Update chat if response contains data
     if (response['analysis'] != null) {
       final aiResponse = response['analysis'];
       final context = response['context'];
       final limitInfo = response['limitInfo'];
+      final serverChatId = response['chatId'];
 
-      // Add the real message with image information
+      // Get the first uploaded image URL for display (or use placeholder)
+      final String? displayImageUrl =
+          _uploadedImageUrls.isNotEmpty ? _uploadedImageUrls.first : null;
+
+      // Create user message with image URL for display
       final imageMessage = AIChatMessage(
         role: 'user',
-        content:
-            'Uploaded ${selectedImages.length} ${selectedImages.length == 1 ? 'image' : 'images'} for analysis',
+        content: selectedImages.length == 1
+            ? 'Analyzing crop image...'
+            : 'Uploaded ${selectedImages.length} images for analysis',
         timestamp: DateTime.now(),
-        imageUrl: 'images_uploaded', // Marker to show this was an image message
+        imageUrl: displayImageUrl,
+        localImagePaths: _uploadedImageUrls.isNotEmpty
+            ? List<String>.from(_uploadedImageUrls)
+            : null,
       );
 
       final aiMessage = AIChatMessage(
@@ -748,21 +967,25 @@ class AIChatController extends GetxController {
 
       messages.addAll([imageMessage, aiMessage]);
 
-      // Update chat with new context
-      if (currentChat.value != null && context != null) {
-        final updatedChat = currentChat.value!.copyWith(
-          messages: [...currentChat.value!.messages, imageMessage, aiMessage],
-          context: AIContext.fromJson(context),
-          lastMessageAt: DateTime.now(),
-        );
-
-        currentChat.value = updatedChat;
-
-        // Update chat in the list
-        final index = chats.indexWhere((chat) => chat.id == updatedChat.id);
-        if (index != -1) {
-          chats[index] = updatedChat;
+      // Update chat with server-assigned chatId and new context
+      if (serverChatId != null) {
+        if (currentChat.value != null) {
+          _updateCurrentChatWithServerId(
+            serverChatId,
+            imageMessage,
+            aiMessage,
+            context,
+          );
+        } else {
+          await _createChatFromResponse(
+            serverChatId,
+            imageMessage,
+            aiMessage,
+            context,
+          );
         }
+      } else if (currentChat.value != null && context != null) {
+        _updateCurrentChat(imageMessage, aiMessage, context);
       }
 
       // Handle rate limit if provided
@@ -774,8 +997,9 @@ class AIChatController extends GetxController {
       }
     }
 
-    // Clear selected images after successful processing
+    // Clear selected images and uploaded URLs after successful processing
     selectedImages.clear();
+    _uploadedImageUrls.clear();
   }
 
   // Retry mechanism for image processing

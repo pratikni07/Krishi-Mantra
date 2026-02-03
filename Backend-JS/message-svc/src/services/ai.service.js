@@ -17,6 +17,12 @@ class AIService {
     this.geminiLastFailure = null;
     this.geminiResetTimeout = null;
 
+    // Initialize model configurations with latest available models (Jan 2026)
+    // See: https://console.groq.com/docs/models
+    this.groqPrimaryModel = "llama-3.3-70b-versatile"; // Latest Llama 3.3 model
+    this.groqFallbackModel = "llama-3.1-70b-versatile"; // Fallback to Llama 3.1 70B
+    this.geminiModelName = "gemini-2.0-flash"; // Model name for reference (updated Jan 2026)
+
     this.initializeGeminiClient();
 
     // Set health check interval
@@ -24,11 +30,6 @@ class AIService {
       () => this.checkGeminiHealth(),
       5 * 60 * 1000
     ); // Check every 5 minutes
-
-    // Initialize model configurations with latest available models
-    this.groqPrimaryModel = "llama3-70b-8192"; // Top tier model
-    this.groqFallbackModel = "llama3-8b-8192"; // Lightweight fallback
-    this.geminiModel = "gemini-1.5-pro-vision-latest";
 
     this.rateLimitConfig = {
       maxRetries: 3,
@@ -52,9 +53,10 @@ class AIService {
 
       this.googleGenAI = new GoogleGenerativeAI(currentKey);
 
-      // Updated model name from gemini-pro-vision to gemini-1.5-pro-vision
+      // Use gemini-2.0-flash for vision tasks (supports images natively)
+      // Note: gemini-1.5-flash is deprecated, using gemini-2.0-flash as of Jan 2026
       this.geminiModel = this.googleGenAI.getGenerativeModel({
-        model: "gemini-1.5-pro-vision",
+        model: "gemini-2.0-flash",
         generationConfig: {
           temperature: 0.4,
           topP: 0.95,
@@ -627,7 +629,7 @@ Focus on agricultural topics:
 - Sustainable and organic farming methods
 - Seasonal farming advice
 
-Respond in ${preferredLanguage}.`;
+IMPORTANT: You MUST respond in ${this._getLanguageName(preferredLanguage)} language. All your responses should be written entirely in ${this._getLanguageName(preferredLanguage)}.`;
 
         const cleanedMessages = [
           {
@@ -681,28 +683,38 @@ Respond in ${preferredLanguage}.`;
         ) {
           console.error("Model error:", error.error?.error?.message);
 
-          // Try with fallback model
+          // Try with fallback model - use full conversation history for context
           console.log(`Trying fallback model: ${this.groqFallbackModel}`);
           try {
-            const systemPrompt = `You are an agricultural expert AI assistant. Provide helpful farming advice.`;
+            const systemPrompt = `You are an agricultural expert AI assistant. Provide helpful farming advice.
+IMPORTANT: You MUST respond in ${this._getLanguageName(preferredLanguage)} language.
+IMPORTANT: Reference previous messages in the conversation to maintain context and continuity.`;
+
+            // Include the full conversation history, not just the last message
+            const fallbackMessages = [
+              { role: "system", content: systemPrompt },
+              ...this._getLimitedMessages(messages, 15),
+            ];
 
             const completion = await this.groq.chat.completions.create({
-              messages: [
-                { role: "system", content: systemPrompt },
-                {
-                  role: "user",
-                  content: messages[messages.length - 1].content,
-                },
-              ],
+              messages: fallbackMessages,
               model: this.groqFallbackModel,
               temperature: 0.7,
               max_tokens: 2048,
             });
 
             const response = completion.choices[0]?.message?.content;
+
+            // Update context based on the response
+            const updatedContext = this._updateContext(
+              context,
+              messages[messages.length - 1].content,
+              response
+            );
+
             return {
               response,
-              context: context,
+              context: updatedContext,
             };
           } catch (fallbackError) {
             console.error("Fallback model also failed:", fallbackError);
@@ -715,6 +727,25 @@ Respond in ${preferredLanguage}.`;
       }
     }
     throw new Error("Max retries exceeded for rate limit");
+  }
+
+  _getLanguageName(code) {
+    const languageMap = {
+      'en': 'English',
+      'hi': 'Hindi (हिंदी)',
+      'mr': 'Marathi (मराठी)',
+      'gu': 'Gujarati (ગુજરાતી)',
+      'pa': 'Punjabi (ਪੰਜਾਬੀ)',
+      'bn': 'Bengali (বাংলা)',
+      'ta': 'Tamil (தமிழ்)',
+      'te': 'Telugu (తెలుగు)',
+      'kn': 'Kannada (ಕನ್ನಡ)',
+      'ml': 'Malayalam (മലയാളം)',
+      'or': 'Odia (ଓଡ଼ିଆ)',
+      'as': 'Assamese (অসমীয়া)',
+      'ur': 'Urdu (اردو)',
+    };
+    return languageMap[code] || 'English';
   }
 
   _getLimitedMessages(messages, maxMessages = 15) {

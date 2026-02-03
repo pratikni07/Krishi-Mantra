@@ -3,10 +3,12 @@ import 'package:krishimantra/data/models/video_tutorial.dart';
 
 import 'package:krishimantra/data/repositories/video_tutorial_repository.dart';
 import 'package:krishimantra/data/services/UserService.dart';
+import 'package:krishimantra/data/services/engagement_service.dart';
 
 class VideoTutorialController extends GetxController {
   final VideoTutorialRepository _repository;
   final UserService _userService;
+  final EngagementService _engagementService = EngagementService();
 
   VideoTutorialController(this._repository, this._userService);
 
@@ -157,7 +159,10 @@ class VideoTutorialController extends GetxController {
       }
       
       currentVideo.value = video;
-      
+
+      // Track video tutorial view engagement
+      _engagementService.trackVideoTutorialView(videoId);
+
       // Fetch related videos
       final related = await _repository.getRelatedVideos(videoId);
       relatedVideos.value = related;

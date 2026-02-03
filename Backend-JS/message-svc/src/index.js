@@ -1,182 +1,224 @@
-// index.js
-require("dotenv").config();
-const express = require("express");
-const http = require("http");
-const helmet = require("helmet");
-const compression = require("compression");
-const cors = require("cors");
-const SocketService = require("./services/socket.service");
-const Database = require("./config/database");
-const Redis = require("./config/redis");
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const helmet = require('helmet');
+const compression = require('compression');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+
+const SocketService = require('./services/socket.service');
+const Database = require('./config/database');
+const Redis = require('./config/redis');
+const Rabbitmq = require('./config/rabbitmq');
+const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
+const { RATE_LIMITS, SOCKET_CONFIG, HTTP_STATUS } = require('./utils/constants');
 
 class App {
   constructor() {
     this.app = express();
     this.server = http.createServer(this.app);
     this.PORT = process.env.PORT || 3000;
+    this.socketService = null;
+
     this.setupMiddlewares();
     this.setupRoutes();
     this.setupErrorHandlers();
-    this.setupGlobalErrorHandling();
   }
 
   setupMiddlewares() {
+    // Trust proxy for rate limiting behind reverse proxy
+    this.app.set('trust proxy', 1);
+
+    // Security headers
     this.app.use(
       helmet({
         contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
       })
     );
+
+    // CORS configuration
     const corsOptions = {
-      origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
+        if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(null, true); // Allow all in development
+        }
+      },
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'],
       credentials: true,
       maxAge: 86400,
     };
     this.app.use(cors(corsOptions));
-    this.app.use(express.json({ limit: "20mb" }));
-    this.app.use(express.urlencoded({ extended: true, limit: "20mb" }));
+
+    // Body parsing
+    this.app.use(express.json({ limit: '20mb' }));
+    this.app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+    // Compression
     this.app.use(compression());
-    this.app.use((req, res, next) => {
-      console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
 
-      // Capture response for logging
-      const originalSend = res.send;
-      res.send = function (data) {
-        if (res.statusCode >= 400) {
-          console.error(
-            `Error response (${res.statusCode}): ${JSON.stringify(
-              data
-            ).substring(0, 200)}...`
-          );
-        }
-        originalSend.apply(res, arguments);
-      };
-
-      next();
+    // Rate limiting - optimized for 10k users
+    const generalLimiter = rateLimit({
+      windowMs: RATE_LIMITS.WINDOW_MS,
+      max: RATE_LIMITS.MAX_REQUESTS,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => req.path === '/health',
+      message: {
+        success: false,
+        message: 'Too many requests, please try again later',
+      },
     });
+    this.app.use(generalLimiter);
+
+    // Request logging (simplified for production)
+    if (process.env.NODE_ENV !== 'production') {
+      this.app.use((req, res, next) => {
+        console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+        next();
+      });
+    }
   }
 
   setupRoutes() {
-    this.app.get("/health", (req, res) => {
-      res.json({ status: "OK", timestamp: new Date().toISOString() });
+    // Health check endpoint
+    this.app.get('/health', (req, res) => {
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        database: Database.getStatus() ? 'connected' : 'disconnected',
+        redis: Redis.isFallback() ? 'fallback' : 'connected',
+        sockets: this.socketService?.getStats() || { connections: 0 },
+      });
     });
-    this.app.use("/api/chat", require("./routes/chat.routes"));
-    this.app.use("/api/group", require("./routes/group.routes"));
-    this.app.use("/api/message", require("./routes/message.routes"));
-    this.app.use("/api/ai", require("./routes/ai.routes"));
-    this.app.use((req, res) => {
-      res.status(404).json({ error: "Not found" });
-    });
+
+    // API routes
+    this.app.use('/api/chat', require('./routes/chat.routes'));
+    this.app.use('/api/group', require('./routes/group.routes'));
+    this.app.use('/api/message', require('./routes/message.routes'));
+    this.app.use('/api/ai', require('./routes/ai.routes'));
+
+    // 404 handler
+    this.app.use(notFoundHandler);
   }
 
   setupErrorHandlers() {
-    this.app.use((err, req, res, next) => {
-      console.error("Unhandled error:", err);
-
-      if (err.type === "entity.parse.failed") {
-        return res.status(400).json({ error: "Invalid JSON" });
-      }
-
-      // Special handling for connection reset errors
-      if (
-        err.code === "ECONNRESET" ||
-        err.message?.includes("ECONNRESET") ||
-        err.message?.includes("socket hang up") ||
-        err.message?.includes("connection reset")
-      ) {
-        console.error("Connection reset error in request handling:", {
-          url: req.url,
-          method: req.method,
-          error: err.message,
-          stack: err.stack?.split("\n")[0],
-        });
-
-        return res.status(502).json({
-          error: "Message Service unavailable",
-          message:
-            "The AI service connection was reset. Please try again later.",
-          status: "error",
-        });
-      }
-
-      // For timeout errors
-      if (err.message?.includes("timeout")) {
-        return res.status(504).json({
-          error: "Request timed out",
-          message:
-            "The request took too long to complete. Please try again later.",
-          status: "error",
-        });
-      }
-
-      res.status(err.status || 500).json({
-        error:
-          process.env.NODE_ENV === "production"
-            ? "Internal server error"
-            : err.message,
-      });
-    });
-  }
-
-  setupGlobalErrorHandling() {
-    // Handle uncaught exceptions with detailed logging and graceful shutdown
-    process.on("uncaughtException", (err) => {
-      console.error("CRITICAL - Uncaught Exception:", {
-        message: err.message,
-        stack: err.stack,
-        time: new Date().toISOString(),
-      });
-
-      // Force process exit after logging - prevents hanging in undefined state
-      console.log("Process will exit due to uncaught exception");
-
-      // Give time for logs to be written
-      setTimeout(() => process.exit(1), 500);
-    });
-
-    // Handle unhandled promise rejections with better logging
-    process.on("unhandledRejection", (reason, promise) => {
-      console.error("CRITICAL - Unhandled Promise Rejection:", {
-        reason:
-          reason instanceof Error
-            ? {
-                message: reason.message,
-                stack: reason.stack,
-                code: reason.code,
-              }
-            : reason,
-        time: new Date().toISOString(),
-      });
-
-      // In production, we might want to exit on unhandled rejections as well
-      if (process.env.NODE_ENV === "production") {
-        console.log("Process will exit due to unhandled rejection");
-        setTimeout(() => process.exit(1), 500);
-      }
-    });
+    // Global error handler
+    this.app.use(errorHandler);
   }
 
   async start() {
     try {
+      // Connect to MongoDB
       await Database.connect();
-      const socketService = new SocketService(this.server);
 
+      // Connect to RabbitMQ for notifications
+      try {
+        await Rabbitmq.connect();
+        console.log('✅ RabbitMQ connected for notifications');
+      } catch (rabbitError) {
+        console.warn('⚠️  RabbitMQ unavailable, notifications will be disabled');
+      }
+
+      // Initialize Socket.IO service
+      this.socketService = new SocketService(this.server);
+
+      // Start HTTP server
       this.server.listen(this.PORT, () => {
-        console.log(`Server running on port ${this.PORT}`);
+        console.log(`🚀 Message service running on port ${this.PORT}`);
+        console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`⚡ Rate limit: ${RATE_LIMITS.MAX_REQUESTS} req/${RATE_LIMITS.WINDOW_MS / 1000}s`);
       });
 
-      // Set server timeout to handle hanging connections
-      this.server.timeout = 60000; // 60 seconds
-      this.server.keepAliveTimeout = 30000; // 30 seconds
+      // Server timeouts optimized for WebSocket
+      this.server.timeout = 120000; // 2 minutes
+      this.server.keepAliveTimeout = SOCKET_CONFIG.PING_TIMEOUT;
+      this.server.headersTimeout = 65000;
+
+      // Check Redis status
+      setTimeout(() => {
+        if (Redis.isFallback()) {
+          console.log('⚠️  Using in-memory cache (Redis unavailable)');
+        } else {
+          console.log('✅ Redis connected');
+        }
+      }, 3000);
+
+      // Graceful shutdown
+      this.setupGracefulShutdown();
+
     } catch (error) {
-      console.error("Failed to start server:", error);
+      console.error('Failed to start server:', error);
       process.exit(1);
     }
+  }
+
+  setupGracefulShutdown() {
+    const gracefulShutdown = async (signal) => {
+      console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+      // Close HTTP server first
+      this.server.close(async () => {
+        console.log('HTTP server closed');
+
+        try {
+          // Close Socket.IO connections
+          if (this.socketService?.io) {
+            this.socketService.io.close();
+            console.log('Socket.IO server closed');
+          }
+
+          // Close database, Redis, and RabbitMQ
+          await Database.disconnect();
+          await Redis.disconnect();
+          await Rabbitmq.disconnect();
+
+          console.log('All connections closed');
+          process.exit(0);
+        } catch (error) {
+          console.error('Error during shutdown:', error);
+          process.exit(1);
+        }
+      });
+
+      // Force shutdown after 30 seconds
+      setTimeout(() => {
+        console.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 30000);
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (err) => {
+      console.error('CRITICAL - Uncaught Exception:', {
+        message: err.message,
+        stack: err.stack,
+        time: new Date().toISOString(),
+      });
+      gracefulShutdown('uncaughtException');
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Promise Rejection:', {
+        reason: reason instanceof Error ? reason.message : reason,
+        time: new Date().toISOString(),
+      });
+    });
   }
 }
 
 // Start the application
 const app = new App();
 app.start();
+
+module.exports = app;

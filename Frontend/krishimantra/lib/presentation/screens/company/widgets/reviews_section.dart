@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../data/models/company_model.dart';
 import '../../../../data/services/language_service.dart';
+import '../../../../core/utils/responsive_utils.dart';
+import '../../../../core/constants/colors.dart';
 
 class ReviewsSection extends StatefulWidget {
   final CompanyModel company;
@@ -25,12 +27,12 @@ class _ReviewsSectionState extends State<ReviewsSection> {
 
   Future<void> _initializeTranslations() async {
     final languageService = await LanguageService.getInstance();
-    
+
     final translations = await Future.wait([
       languageService.translate('Reviews'),
       languageService.translate('No reviews yet'),
     ]);
-    
+
     if (mounted) {
       setState(() {
         reviewsText = translations[0];
@@ -42,34 +44,36 @@ class _ReviewsSectionState extends State<ReviewsSection> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
     final reviews = widget.company.reviews;
-    
+
     return Card(
       elevation: 2,
-      color: Colors.grey[50], // Light off-white shade
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.scaffoldBackground,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusL)),
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: RPadding.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               reviewsText,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: AppSizes.fontL,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            Divider(height: 24),
+            Divider(height: AppSizes.paddingXL),
             if (reviews == null || reviews.isEmpty)
               Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
+                  padding: RPadding.symmetric(vertical: 16),
                   child: Text(
                     noReviewsText,
                     style: TextStyle(
-                      color: Colors.grey[600],
+                      color: AppColors.textGrey,
                       fontStyle: FontStyle.italic,
+                      fontSize: AppSizes.fontM,
                     ),
                   ),
                 ),
@@ -83,8 +87,10 @@ class _ReviewsSectionState extends State<ReviewsSection> {
   }
 
   Widget _buildReviewItem(Review review) {
+    final starSize = ResponsiveUtils.responsive(mobile: 18.0, tablet: 22.0);
+
     return Padding(
-      padding: EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.only(bottom: AppSizes.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -96,30 +102,30 @@ class _ReviewsSectionState extends State<ReviewsSection> {
                   return Icon(
                     index < review.rating ? Icons.star : Icons.star_border,
                     color: Colors.amber,
-                    size: 18,
+                    size: starSize,
                   );
                 }),
               ),
               Text(
                 DateFormat('MMM dd, yyyy').format(review.createdAt),
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
+                  fontSize: AppSizes.fontS,
+                  color: AppColors.textGrey,
                 ),
               ),
             ],
           ),
-          SizedBox(height: 8),
+          SizedBox(height: AppSizes.paddingS),
           FutureBuilder<String>(
             future: review.getTranslatedComment(),
             builder: (context, snapshot) {
               return Text(
                 snapshot.data ?? review.comment,
-                style: TextStyle(fontSize: 14),
+                style: TextStyle(fontSize: AppSizes.fontM),
               );
             }
           ),
-          if (review != widget.company.reviews!.last) Divider(height: 32),
+          if (review != widget.company.reviews!.last) Divider(height: AppSizes.paddingXXL),
         ],
       ),
     );

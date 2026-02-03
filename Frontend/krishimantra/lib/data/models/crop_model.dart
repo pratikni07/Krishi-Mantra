@@ -59,18 +59,24 @@ class CropModel {
 
   factory CropModel.fromJson(Map<String, dynamic> json) {
     return CropModel(
-      id: json['_id'] as String,
-      name: json['name'] as String,
-      scientificName: json['scientificName'] as String,
-      description: json['description'] as String,
-      growingPeriod: json['growingPeriod'] as int,
-      seasons: (json['seasons'] as List)
-          .map((season) => Season.fromJson(season))
-          .toList(),
-      imageUrl: json['imageUrl'] as String,
-      status: json['status'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      id: json['_id'] ?? '',
+      name: json['name'] ?? '',
+      scientificName: json['scientificName'] ?? '',
+      description: json['description'] ?? '',
+      growingPeriod: json['growingPeriod'] ?? 0,
+      seasons: json['seasons'] != null
+          ? (json['seasons'] as List)
+              .map((season) => Season.fromJson(season))
+              .toList()
+          : [],
+      imageUrl: json['imageUrl'] ?? '',
+      status: json['status'] ?? '',
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
+          : DateTime.now(),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
+          : DateTime.now(),
     );
   }
 
@@ -105,10 +111,10 @@ class Season {
 
   factory Season.fromJson(Map<String, dynamic> json) {
     return Season(
-      type: json['type'] as String,
-      startMonth: json['startMonth'] as int,
-      endMonth: json['endMonth'] as int,
-      id: json['_id'] as String,
+      type: json['type'] ?? '',
+      startMonth: json['startMonth'] ?? 1,
+      endMonth: json['endMonth'] ?? 12,
+      id: json['_id'] ?? '',
     );
   }
 

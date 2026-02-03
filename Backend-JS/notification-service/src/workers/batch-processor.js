@@ -15,13 +15,33 @@ class BatchProcessor {
       // Process individual notifications
       await channel.consume(config.rabbitmq.queues.notification, async (msg) => {
         if (!msg) return;
-        
+
         try {
-          const notification = JSON.parse(msg.content.toString());
-          logger.debug(`Processing notification: ${notification._id}`);
-          
+          const notificationData = JSON.parse(msg.content.toString());
+
+          // Check if notification already exists in DB (has _id) or needs to be created
+          let notification;
+          if (notificationData._id) {
+            notification = notificationData;
+            logger.debug(`Processing existing notification: ${notification._id}`);
+          } else {
+            // Create notification in database (from feed-service or message-svc)
+            notification = await Notification.create({
+              userId: notificationData.userId,
+              type: notificationData.type || 'in_app',
+              title: notificationData.title,
+              body: notificationData.body,
+              data: notificationData.data,
+              category: notificationData.category || 'system',
+              priority: notificationData.priority || 'medium',
+              status: 'pending',
+              scheduledFor: new Date(),
+            });
+            logger.debug(`Created new notification: ${notification._id} from ${notificationData.source || 'unknown'}`);
+          }
+
           await processor.processNotification(notification);
-          
+
           // Acknowledge message
           channel.ack(msg);
         } catch (error) {

@@ -21,18 +21,21 @@ class BaseController extends GetxController {
     _loadingState.value = LoadingState.loading;
     _errorMessage.value = '';
     _errorType.value = null;
+    update(); // Notify GetBuilder listeners
   }
 
   void setLoaded() {
     _loadingState.value = LoadingState.loaded;
     _errorMessage.value = '';
     _errorType.value = null;
+    update(); // Notify GetBuilder listeners
   }
 
   void setError(dynamic error) {
     _loadingState.value = LoadingState.error;
     _errorType.value = ErrorHandler.handleApiError(error);
     _errorMessage.value = ErrorHandler.getErrorMessage(_errorType.value!);
+    update(); // Notify GetBuilder listeners
   }
 
   void setRefreshing(bool value) {

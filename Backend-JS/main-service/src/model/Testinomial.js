@@ -1,4 +1,6 @@
 const mongoose = require("mongoose");
+const Schema = mongoose.Schema;
+
 const testinomialSchema = new Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,

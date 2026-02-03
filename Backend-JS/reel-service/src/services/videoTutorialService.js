@@ -6,6 +6,21 @@ const VideoComment = require("../models/VideoComment");
 const CACHE_TTL = 3600; // 1 hour
 
 class VideoTutorialService {
+  /**
+   * Helper method to clear cache keys matching a pattern
+   * Uses KEYS to find matching keys, then DEL to remove them
+   */
+  static async clearCacheByPattern(pattern) {
+    try {
+      const keys = await redis.keys(pattern);
+      if (keys && keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch (error) {
+      console.warn('Cache clear by pattern error:', error.message);
+    }
+  }
+
   static async createVideo(videoData) {
     try {
       const video = new VideoTutorial(videoData);
@@ -270,8 +285,8 @@ class VideoTutorialService {
       });
     }
 
-    // Clear cache
-    await redis.del(`video:${videoId}:comments:*`);
+    // Clear cache (pattern-based deletion)
+    this.clearCacheByPattern(`video:${videoId}:comments:*`).catch(() => {});
 
     return VideoComment.findById(comment._id)
       .populate({
@@ -340,8 +355,8 @@ class VideoTutorialService {
       });
     }
 
-    // Clear cache
-    await redis.del(`video:${comment.videoId}:comments:*`);
+    // Clear cache (pattern-based deletion)
+    this.clearCacheByPattern(`video:${comment.videoId}:comments:*`).catch(() => {});
 
     return true;
   }
@@ -365,8 +380,8 @@ class VideoTutorialService {
 
     await comment.save();
 
-    // Clear cache
-    await redis.del(`video:${comment.videoId}:comments:*`);
+    // Clear cache (pattern-based deletion)
+    this.clearCacheByPattern(`video:${comment.videoId}:comments:*`).catch(() => {});
 
     return {
       liked: !userLiked,

@@ -1,130 +1,130 @@
-const Product = require("../model/Products");
-const Company = require("../model/Company");
+const Product = require('../model/Products');
+const Company = require('../model/Company');
+const { asyncHandler } = require('../utils');
+const { HTTP_STATUS } = require('../utils/constants');
 
-exports.createProduct = async (req, res) => {
-  try {
-    // Create the product
-    const product = new Product({
-      ...req.body,
-      company: req.body.companyId,
-    });
-    await product.save();
+/**
+ * Create a new product
+ */
+exports.createProduct = asyncHandler(async (req, res) => {
+  const { companyId, ...productData } = req.body;
 
-    // Add product to company's products array
+  // Create product
+  const product = new Product({
+    ...productData,
+    company: companyId,
+  });
+  await product.save();
+
+  // Add product to company's products array
+  if (companyId) {
     await Company.findByIdAndUpdate(
-      req.body.companyId,
+      companyId,
       { $push: { products: product._id } },
       { new: true }
     );
+  }
 
-    res.status(201).json({
-      status: "success",
-      data: product,
-    });
-  } catch (error) {
-    res.status(400).json({
-      status: "error",
-      message: error.message,
+  return res.status(HTTP_STATUS.CREATED).json({
+    success: true,
+    status: 'success',
+    data: product,
+  });
+});
+
+/**
+ * Get all products
+ */
+exports.getAllProducts = asyncHandler(async (req, res) => {
+  const products = await Product.find()
+    .populate('company', 'name logo')
+    .populate('usedFor', 'name imageUrl')
+    .select('-__v')
+    .lean();
+
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    status: 'success',
+    results: products.length,
+    data: products,
+  });
+});
+
+/**
+ * Get product by ID
+ */
+exports.getProductById = asyncHandler(async (req, res) => {
+  const product = await Product.findById(req.params.id)
+    .populate('company', 'name logo')
+    .populate('usedFor', 'name imageUrl')
+    .select('-__v')
+    .lean();
+
+  if (!product) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
+      success: false,
+      status: 'error',
+      message: 'Product not found',
     });
   }
-};
 
-exports.getAllProducts = async (req, res) => {
-  try {
-    const products = await Product.find()
-      .populate("company", "name logo")
-      .populate("usedFor", "name imageUrl")
-      .select("-__v");
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    status: 'success',
+    data: product,
+  });
+});
 
-    res.status(200).json({
-      status: "success",
-      results: products.length,
-      data: products,
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error.message,
-    });
-  }
-};
+/**
+ * Update product
+ */
+exports.updateProduct = asyncHandler(async (req, res) => {
+  const product = await Product.findByIdAndUpdate(
+    req.params.id,
+    req.body,
+    { new: true, runValidators: true }
+  );
 
-exports.getProductById = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id)
-      .populate("company", "name logo")
-      .populate("usedFor", "name imageUrl")
-      .select("-__v");
-
-    if (!product) {
-      return res.status(404).json({
-        status: "error",
-        message: "Product not found",
-      });
-    }
-
-    res.status(200).json({
-      status: "success",
-      data: product,
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error.message,
+  if (!product) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
+      success: false,
+      status: 'error',
+      message: 'Product not found',
     });
   }
-};
 
-exports.updateProduct = async (req, res) => {
-  try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    status: 'success',
+    data: product,
+  });
+});
 
-    if (!product) {
-      return res.status(404).json({
-        status: "error",
-        message: "Product not found",
-      });
-    }
+/**
+ * Delete product
+ */
+exports.deleteProduct = asyncHandler(async (req, res) => {
+  const product = await Product.findByIdAndDelete(req.params.id);
 
-    res.status(200).json({
-      status: "success",
-      data: product,
-    });
-  } catch (error) {
-    res.status(400).json({
-      status: "error",
-      message: error.message,
+  if (!product) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
+      success: false,
+      status: 'error',
+      message: 'Product not found',
     });
   }
-};
 
-exports.deleteProduct = async (req, res) => {
-  try {
-    const product = await Product.findByIdAndDelete(req.params.id);
-
-    if (!product) {
-      return res.status(404).json({
-        status: "error",
-        message: "Product not found",
-      });
-    }
-
-    // Remove product reference from company
+  // Remove product reference from company
+  if (product.company) {
     await Company.findByIdAndUpdate(product.company, {
       $pull: { products: product._id },
     });
-
-    res.status(204).json({
-      status: "success",
-      data: null,
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error.message,
-    });
   }
-};
+
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    status: 'success',
+    message: 'Product deleted successfully',
+    data: null,
+  });
+});

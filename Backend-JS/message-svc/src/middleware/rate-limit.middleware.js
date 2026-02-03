@@ -2,9 +2,15 @@ const rateLimit = require("express-rate-limit");
 const Redis = require("../config/redis");
 
 const createRateLimiter = (options = {}) => {
+  // Use options first, then fall back to env vars, then defaults
   const windowMs =
-    parseInt(process.env.RATE_LIMIT_WINDOW) * 60 * 1000 || 15 * 60 * 1000; // 15 minutes default
-  const maxRequests = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100; // Limit each IP to 100 requests per windowMs
+    options.windowMs ||
+    parseInt(process.env.RATE_LIMIT_WINDOW) * 60 * 1000 ||
+    15 * 60 * 1000; // 15 minutes default
+  const maxRequests =
+    options.max ||
+    parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) ||
+    100; // Limit each IP to 100 requests per windowMs
 
   // Create a Redis-based store with proper implementation
   const RedisStore = {
@@ -56,13 +62,12 @@ const createRateLimiter = (options = {}) => {
     // Custom handler for when rate limit is exceeded
     handler: (req, res) => {
       res.status(429).json({
-        error: "Too many requests, please try again later",
-        retryAfter: Math.ceil(windowMs / 1000),
+        error: options.message?.error || "Too many requests, please try again later",
+        retryAfter: options.message?.retryAfter || Math.ceil(windowMs / 1000),
       });
     },
     // Use Redis to store rate limit data
     store: RedisStore,
-    ...options,
   });
 };
 

@@ -9,8 +9,11 @@ const axios = require("axios");
 // Move the function outside the class as a standalone function
 async function trackUserLocation(ip, userAgent, userId) {
   try {
-    // Skip for localhost IPs
-    if (ip === '127.0.0.1' || ip === '::1' || ip.includes('192.168.')) {
+    // Clean up IPv6-mapped IPv4 addresses (e.g., ::ffff:127.0.0.1 -> 127.0.0.1)
+    const cleanIp = ip?.replace(/^::ffff:/, '') || ip;
+
+    // Skip for localhost/private IPs
+    if (!cleanIp || cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp.includes('192.168.') || cleanIp.includes('10.') || cleanIp.includes('172.')) {
       // For local testing, you can use a mock location
       const mockLocation = {
         ipAddress: ip,
@@ -28,7 +31,7 @@ async function trackUserLocation(ip, userAgent, userId) {
     }
     
     // Call IP geolocation service
-    const geoResponse = await axios.get(`https://ipapi.co/${ip}/json/`);
+    const geoResponse = await axios.get(`https://ipapi.co/${cleanIp}/json/`);
     
     if (geoResponse.data) {
       const locationData = {

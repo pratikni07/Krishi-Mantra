@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../data/models/crop_model.dart';
 import '../../controllers/crop_controller.dart';
+import '../../widgets/cached_image.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 
 class CropsScreen extends StatelessWidget {
   const CropsScreen({super.key});
@@ -17,8 +19,8 @@ class CropsScreen extends StatelessWidget {
     final screenHeight = mediaQuery.size.height;
     final topPadding = mediaQuery.padding.top;
 
-    // Calculate appropriate height for app bar
-    final appBarHeight = screenHeight * 0.28;
+    // Calculate appropriate height for app bar - reduced for less spacing
+    final appBarHeight = screenHeight * 0.20;
 
     // Ensure fresh data when returning to this screen
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -29,23 +31,52 @@ class CropsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          _buildAppBar(context, searchController, cropController, appBarHeight, topPadding),
-          SliverToBoxAdapter(
-            child: Obx(
-              () => cropController.isLoading.value
-                  ? _buildLoadingIndicator()
-                  : cropController.error.value.isNotEmpty
-                      ? _buildErrorWidget(cropController)
-                      : cropController.searchResults.isNotEmpty
-                          ? _buildCropGrid(cropController.searchResults, context)
-                          : cropController.crops.isEmpty
-                              ? _buildEmptyState()
-                              : _buildCropGrid(cropController.crops, context),
-            ),
+      body: Stack(
+        children: [
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              _buildAppBar(context, searchController, cropController, appBarHeight, topPadding),
+              SliverToBoxAdapter(
+                child: Obx(
+                  () => cropController.isLoading.value
+                      ? _buildLoadingIndicator()
+                      : cropController.error.value.isNotEmpty
+                          ? _buildErrorWidget(cropController)
+                          : cropController.searchResults.isNotEmpty
+                              ? _buildCropGrid(cropController.searchResults, context)
+                              : cropController.crops.isEmpty
+                                  ? _buildEmptyState()
+                                  : _buildCropGrid(cropController.crops, context),
+                ),
+              ),
+            ],
           ),
+          // Loading overlay when fetching calendar
+          Obx(() => cropController.isLoadingCalendar.value
+              ? Container(
+                  color: Colors.black.withOpacity(0.5),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading crop calendar...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink()),
         ],
       ),
       // Add a floating refresh button
@@ -71,7 +102,13 @@ class CropsScreen extends StatelessWidget {
       collapsedHeight: kToolbarHeight + 10,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () => Get.back(),
+        onPressed: () {
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          } else {
+            Get.back();
+          }
+        },
       ),
       flexibleSpace: LayoutBuilder(
         builder: (context, constraints) {
@@ -95,19 +132,17 @@ class CropsScreen extends StatelessWidget {
               ),
               child: SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Spacer to push content down
-                      SizedBox(height: topPadding * 0.5),
                       if (!isCollapsed) ... [
-                        const SizedBox(height: 16),
                         Text(
                           'Crop Calendar',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                             shadows: [
                               Shadow(
@@ -123,10 +158,10 @@ class CropsScreen extends StatelessWidget {
                           'Find the best time to grow your crops',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.9),
-                            fontSize: 14,
+                            fontSize: 13,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                       ],
                       if (availableHeight > 60) _buildSearchBar(controller, cropController),
                     ],
@@ -183,26 +218,21 @@ class CropsScreen extends StatelessWidget {
   }
 
   Widget _buildLoadingIndicator() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Loading crops...',
-              style: TextStyle(
-                color: AppColors.textGrey,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        shrinkWrap: true,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          childAspectRatio: 0.8,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
         ),
+        itemCount: 9,
+        itemBuilder: (context, index) {
+          return const SkeletonCropCard();
+        },
       ),
     );
   }
@@ -319,24 +349,28 @@ class CropsScreen extends StatelessWidget {
   }
 
   Widget _buildCropCard(CropModel crop, BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () {
-          Get.find<CropController>().fetchCropCalendar(crop.id);
-        },
-        splashColor: AppColors.green.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
+    // Format the image URL properly
+    String imageUrl = crop.imageUrl;
+    if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
+      imageUrl = '${ApiConstants.IMAGE_BASE_URL}/$imageUrl';
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Get.find<CropController>().fetchCropCalendar(crop.id);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -350,20 +384,11 @@ class CropsScreen extends StatelessWidget {
                     child: ClipRRect(
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(20)),
-                      child: CachedNetworkImage(
-                        imageUrl: crop.imageUrl,
+                      child: CachedImage(
+                        imageUrl: imageUrl,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: AppColors.faintGreen,
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                  AppColors.green.withOpacity(0.5)),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
+                        placeholderColor: AppColors.faintGreen,
+                        errorWidget: Container(
                           color: AppColors.faintGreen,
                           child: const Icon(
                             Icons.image_not_supported,

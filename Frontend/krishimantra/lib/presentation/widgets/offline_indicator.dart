@@ -23,21 +23,22 @@ class OfflineIndicator extends StatelessWidget {
         return Container(
           width: double.infinity,
           color: Colors.red,
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: const Row(
+          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
+              const Icon(
                 Icons.wifi_off,
                 color: Colors.white,
-                size: 16,
+                size: 14,
               ),
-              SizedBox(width: 8),
-              Text(
-                'You are currently offline',
+              const SizedBox(width: 6),
+              const Text(
+                'You are offline',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
               ),
             ],

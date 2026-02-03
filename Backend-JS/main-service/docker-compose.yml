@@ -34,7 +34,7 @@ services:
     volumes:
       - mongo-data:/data/db
     ports:
-      - "27017:27017"
+      - "27018:27017"
     networks:
       - krishi-network
     healthcheck:
@@ -51,7 +51,7 @@ services:
     volumes:
       - redis-data:/data
     ports:
-      - "6379:6379"
+      - "6380:6379"
     networks:
       - krishi-network
     command: redis-server --appendonly yes

@@ -1,88 +1,306 @@
-const jwt = require("jsonwebtoken");
-require("dotenv").config();
-const User = require("../model/User");
+const jwt = require('jsonwebtoken');
+const { ACCOUNT_TYPES, HTTP_STATUS } = require('../utils/constants');
 
-//auth
-exports.auth = async (req, res, next) => {
+/**
+ * Extract token from request
+ * @param {Request} req - Express request object
+ * @returns {string|null} - JWT token or null
+ */
+const extractToken = (req) => {
+  // Check Authorization header first (preferred method)
+  const authHeader = req.header('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+
+  // Fallback to cookie
+  if (req.cookies && req.cookies.token) {
+    return req.cookies.token;
+  }
+
+  return null;
+};
+
+/**
+ * Authentication middleware
+ * Verifies JWT token and attaches user to request
+ */
+const auth = async (req, res, next) => {
   try {
-    const token =
-      req.cookies.token ||
-      req.body.token ||
-      req.header("Authorisation").replace("Bearer ", "");
+    const token = extractToken(req);
+
     if (!token) {
-      return res.status(401).json({
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
-        message: "TOken is missing",
+        message: 'Authentication required. Please provide a valid token.',
       });
     }
+
     try {
-      const decode = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decode;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = decoded;
+      next();
     } catch (err) {
-      return res.status(401).json({
+      if (err.name === 'TokenExpiredError') {
+        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          success: false,
+          message: 'Token has expired. Please login again.',
+        });
+      }
+
+      if (err.name === 'JsonWebTokenError') {
+        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          success: false,
+          message: 'Invalid token. Please login again.',
+        });
+      }
+
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
-        message: "token is invalid",
+        message: 'Token validation failed.',
       });
     }
-    next();
   } catch (error) {
-    return res.status(401).json({
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: "Something went wrong while validating the token",
+      message: 'Authentication error. Please try again.',
     });
   }
 };
 
-//isCustomer
-exports.isConsultant = async (req, res, next) => {
-  try {
-    if (req.user.accountType !== "consultant") {
-      return res.status(401).json({
+/**
+ * Role-based authorization middleware factory
+ * @param {...string} allowedRoles - Roles allowed to access the route
+ * @returns {Function} - Express middleware
+ */
+const authorize = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
-        message: "This is a protected route for Customer only",
+        message: 'Authentication required.',
       });
     }
+
+    if (!allowedRoles.includes(req.user.accountType)) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        success: false,
+        message: `Access denied. This route requires ${allowedRoles.join(' or ')} role.`,
+      });
+    }
+
+    next();
+  };
+};
+
+/**
+ * Consultant role middleware
+ */
+const isConsultant = (req, res, next) => {
+  if (!req.user) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+
+  if (req.user.accountType !== ACCOUNT_TYPES.CONSULTANT) {
+    return res.status(HTTP_STATUS.FORBIDDEN).json({
+      success: false,
+      message: 'This route is accessible to consultants only.',
+    });
+  }
+
+  next();
+};
+
+/**
+ * User role middleware
+ */
+const isUser = (req, res, next) => {
+  if (!req.user) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+
+  if (req.user.accountType !== ACCOUNT_TYPES.USER) {
+    return res.status(HTTP_STATUS.FORBIDDEN).json({
+      success: false,
+      message: 'This route is accessible to users only.',
+    });
+  }
+
+  next();
+};
+
+/**
+ * Admin role middleware
+ */
+const isAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+
+  if (req.user.accountType !== ACCOUNT_TYPES.ADMIN) {
+    return res.status(HTTP_STATUS.FORBIDDEN).json({
+      success: false,
+      message: 'This route is accessible to administrators only.',
+    });
+  }
+
+  next();
+};
+
+/**
+ * Marketplace role middleware
+ */
+const isMarketplace = (req, res, next) => {
+  if (!req.user) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+
+  if (req.user.accountType !== ACCOUNT_TYPES.MARKETPLACE) {
+    return res.status(HTTP_STATUS.FORBIDDEN).json({
+      success: false,
+      message: 'This route is accessible to marketplace users only.',
+    });
+  }
+
+  next();
+};
+
+/**
+ * Optional authentication middleware
+ * Attaches user to request if valid token exists, but doesn't require it
+ * Also supports X-User-Id header for internal service calls
+ */
+const optionalAuth = async (req, res, next) => {
+  try {
+    // Check for internal service request with X-User-Id header
+    const internalUserId = req.header('X-User-Id');
+    const isInternalRequest = req.header('X-Internal-Request') === 'true';
+
+    if (isInternalRequest && internalUserId) {
+      req.user = { _id: internalUserId };
+      return next();
+    }
+
+    const token = extractToken(req);
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+      } catch (err) {
+        // Token is invalid but we continue anyway
+        req.user = null;
+      }
+    } else {
+      req.user = null;
+    }
+
     next();
   } catch (error) {
-    return res.status(500).json({
+    req.user = null;
+    next();
+  }
+};
+
+/**
+ * Admin authentication middleware (combines auth + isAdmin)
+ * Verifies JWT token and checks for admin role
+ */
+const adminAuth = async (req, res, next) => {
+  try {
+    const token = extractToken(req);
+
+    if (!token) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        message: 'Authentication required. Please provide a valid token.',
+      });
+    }
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = decoded;
+
+      // Check for admin role
+      if (decoded.accountType !== ACCOUNT_TYPES.ADMIN) {
+        return res.status(HTTP_STATUS.FORBIDDEN).json({
+          success: false,
+          message: 'This route is accessible to administrators only.',
+        });
+      }
+
+      next();
+    } catch (err) {
+      if (err.name === 'TokenExpiredError') {
+        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          success: false,
+          message: 'Token has expired. Please login again.',
+        });
+      }
+
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        message: 'Invalid token. Please login again.',
+      });
+    }
+  } catch (error) {
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: "User role cannot be verified, please try again",
+      message: 'Authentication error. Please try again.',
     });
   }
 };
 
-// isSeller
-exports.isUser = async (req, res, next) => {
+/**
+ * Internal service authentication middleware
+ * Validates requests from other microservices
+ */
+const internalAuth = async (req, res, next) => {
   try {
-    if (req.user.accountType !== "user") {
-      return res.status(401).json({
+    const isInternalRequest = req.header('X-Internal-Request') === 'true';
+
+    if (!isInternalRequest) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
         success: false,
-        message: "This is a protected route for Seller only",
+        message: 'This endpoint is for internal service use only.',
       });
     }
+
+    // For internal requests, we trust the X-User-Id header
+    const userId = req.header('X-User-Id') || req.body?.userId;
+    if (userId) {
+      req.user = { _id: userId };
+    }
+
     next();
   } catch (error) {
-    return res.status(500).json({
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: "User role cannot be verified, please try again",
+      message: 'Internal authentication error.',
     });
   }
 };
 
-//isAdmin
-exports.isAdmin = async (req, res, next) => {
-  try {
-    if (req.user.accountType !== "admin") {
-      return res.status(401).json({
-        success: false,
-        message: "This is a protected route for Admin only",
-      });
-    }
-    next();
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "User role cannot be verified, please try again",
-    });
-  }
+module.exports = {
+  auth,
+  authorize,
+  isConsultant,
+  isUser,
+  isAdmin,
+  isMarketplace,
+  optionalAuth,
+  internalAuth,
+  adminAuth,
 };

@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Build
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+
+# Misc
+.DS_Store
+
+# Debug
+npm-debug.log*
+
+# Lock files in subdirectories (keep root ones if needed)
+*/package-lock.json

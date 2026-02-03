@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:krishimantra/data/models/ai_chat_message.dart';
@@ -169,14 +170,16 @@ class AIChatRepository {
     required Location location,
     required Weather weather,
   }) async {
+    // Read image bytes BEFORE retry loop to avoid "File closed" errors
+    print('Preparing to upload image from path: ${image.path}');
+    print('File exists: ${image.existsSync()}, file size: ${await image.length()} bytes');
+
+    final imageBytes = await image.readAsBytes();
+    final filename = 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
     return _retryWithBackoff(() async {
       try {
-        // Log the upload attempt to help with debugging
-        print('Preparing to upload image from path: ${image.path}');
-        print(
-            'File exists: ${image.existsSync()}, file size: ${await image.length()} bytes');
-
-        // Create FormData with image
+        // Create FormData with image bytes (not file handle)
         final formData = FormData.fromMap({
           'userId': userId,
           'userName': userName,
@@ -188,10 +191,10 @@ class AIChatRepository {
             'temperature': weather.temperature,
             'humidity': weather.humidity
           }),
-          'image': await MultipartFile.fromFile(
-            image.path,
+          'image': MultipartFile.fromBytes(
+            imageBytes,
             contentType: MediaType('image', 'jpeg'),
-            filename: 'image_${DateTime.now().millisecondsSinceEpoch}.jpg',
+            filename: filename,
           ),
         });
 
@@ -254,20 +257,28 @@ class AIChatRepository {
     required Location location,
     required Weather weather,
   }) async {
+    // Check if images are provided
+    if (images.isEmpty) {
+      throw Exception('No images provided');
+    }
+
+    // Read all image bytes BEFORE retry loop to avoid "File closed" errors
+    final List<Map<String, dynamic>> imageDataList = [];
+    for (int i = 0; i < images.length; i++) {
+      final image = images[i];
+      if (!image.existsSync() || await image.length() == 0) {
+        throw Exception('Invalid image file: ${image.path}');
+      }
+      final imageSize = await image.length();
+      print('Reading image ${i + 1}/${images.length} - path: ${image.path}, size: $imageSize bytes');
+      imageDataList.add({
+        'bytes': await image.readAsBytes(),
+        'filename': 'image_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      });
+    }
+
     return _retryWithBackoff(() async {
       try {
-        // Check if images are provided
-        if (images.isEmpty) {
-          throw Exception('No images provided');
-        }
-
-        // Check if all image files exist and have content
-        for (var image in images) {
-          if (!image.existsSync() || await image.length() == 0) {
-            throw Exception('Invalid image file: ${image.path}');
-          }
-        }
-
         // Create form data
         final formData = FormData();
 
@@ -287,17 +298,14 @@ class AIChatRepository {
               'humidity': weather.humidity
             })));
 
-        // Add all images to form data
-        for (int i = 0; i < images.length; i++) {
-          print(
-              'Adding image ${i + 1}/${images.length} - path: ${images[i].path}, size: ${await images[i].length()} bytes');
+        // Add all images to form data using bytes (not file handles)
+        for (final imageData in imageDataList) {
           formData.files.add(MapEntry(
             'images',
-            await MultipartFile.fromFile(
-              images[i].path,
+            MultipartFile.fromBytes(
+              imageData['bytes'],
               contentType: MediaType('image', 'jpeg'),
-              filename:
-                  'image_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+              filename: imageData['filename'],
             ),
           ));
         }
@@ -394,6 +402,24 @@ class AIChatRepository {
       }
     } catch (error) {
       throw _handleError(error);
+    }
+  }
+
+  // Get message limit info from the server
+  Future<Map<String, dynamic>?> getMessageLimitInfo(String userId) async {
+    try {
+      final response = await _apiService.get(
+        '/api/ai/limit-info',
+        queryParameters: {'userId': userId},
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        return response.data['limitInfo'];
+      }
+      return null;
+    } catch (error) {
+      print('Error fetching limit info: $error');
+      return null;
     }
   }
 

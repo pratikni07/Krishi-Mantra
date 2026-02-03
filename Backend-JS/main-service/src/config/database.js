@@ -1,53 +1,78 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
+const logger = require('../utils/logger');
+const { DB_CONFIG } = require('../utils/constants');
 
-require("dotenv").config();
-
-const connect = () => {
-  mongoose
-    .connect(process.env.MONGODB_URL, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      // // Connection pooling settings
-      // maxPoolSize: 10, // Maintain up to 10 socket connections
-      // minPoolSize: 5,  // Maintain at least 5 socket connections
-      // socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-      // // Handle retries automatically
-      // serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-      // retryWrites: true,
-      // // Log slow queries (over 100ms)
-      // slowTime: 100
-    })
-    .then(() => console.log("DB Connected Successfully"))
-    .catch((error) => {
-      console.log("DB Connection Failed");
-      console.error(error);
-      process.exit(1);
-    });
-    
-    // Handle connection events
-    mongoose.connection.on('error', err => {
-      console.error('MongoDB connection error:', err);
-    });
-    
-    mongoose.connection.on('disconnected', () => {
-      console.warn('MongoDB disconnected. Attempting to reconnect...');
-    });
-    
-    mongoose.connection.on('reconnected', () => {
-      console.info('MongoDB reconnected successfully');
-    });
-    
-    // Graceful shutdown
-    process.on('SIGINT', async () => {
-      try {
-        await mongoose.connection.close();
-        console.log('MongoDB connection closed due to app termination');
-        process.exit(0);
-      } catch (err) {
-        console.error('Error during MongoDB connection closure:', err);
-        process.exit(1);
-      }
-    });
+/**
+ * MongoDB connection configuration
+ * Optimized for 10k concurrent users
+ */
+const dbConfig = {
+  maxPoolSize: DB_CONFIG.MAX_POOL_SIZE,
+  minPoolSize: DB_CONFIG.MIN_POOL_SIZE,
+  socketTimeoutMS: DB_CONFIG.SOCKET_TIMEOUT_MS,
+  serverSelectionTimeoutMS: DB_CONFIG.SERVER_SELECTION_TIMEOUT_MS,
+  heartbeatFrequencyMS: DB_CONFIG.HEARTBEAT_FREQUENCY_MS,
+  maxIdleTimeMS: DB_CONFIG.MAX_IDLE_TIME_MS,
+  retryWrites: true,
 };
 
-module.exports = connect;
+/**
+ * Connect to MongoDB
+ * @returns {Promise<void>}
+ */
+const connect = async () => {
+  try {
+    const mongoUrl = process.env.MONGODB_URL;
+
+    if (!mongoUrl) {
+      throw new Error('MONGODB_URL environment variable is not set');
+    }
+
+    await mongoose.connect(mongoUrl, dbConfig);
+    logger.info('MongoDB connected successfully');
+
+    // Connection event handlers
+    mongoose.connection.on('error', (err) => {
+      logger.error('MongoDB connection error:', err);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      logger.warn('MongoDB disconnected. Attempting to reconnect...');
+    });
+
+    mongoose.connection.on('reconnected', () => {
+      logger.info('MongoDB reconnected successfully');
+    });
+
+  } catch (error) {
+    logger.error('MongoDB connection failed:', error.message);
+    process.exit(1);
+  }
+};
+
+/**
+ * Close MongoDB connection gracefully
+ * @returns {Promise<void>}
+ */
+const disconnect = async () => {
+  try {
+    await mongoose.connection.close();
+    logger.info('MongoDB connection closed');
+  } catch (error) {
+    logger.error('Error closing MongoDB connection:', error.message);
+  }
+};
+
+/**
+ * Get connection status
+ * @returns {boolean}
+ */
+const isConnected = () => {
+  return mongoose.connection.readyState === 1;
+};
+
+module.exports = {
+  connect,
+  disconnect,
+  isConnected,
+};

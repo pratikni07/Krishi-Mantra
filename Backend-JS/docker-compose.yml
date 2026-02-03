@@ -5,7 +5,7 @@ services:
     image: mongo:latest
     container_name: microservices-mongodb
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongodb_data:/data/db
     environment:
@@ -13,7 +13,7 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=secure-password
 
   api-gateway:
-    build: 
+    build:
       context: ./api-gateway
       dockerfile: Dockerfile
     container_name: api-gateway
@@ -31,7 +31,7 @@ services:
       - feed-service
 
   main-service:
-    build: 
+    build:
       context: ./main-service
       dockerfile: Dockerfile
     container_name: main-service
@@ -44,7 +44,7 @@ services:
       - mongodb
 
   notification-service:
-    build: 
+    build:
       context: ./notification-service
       dockerfile: Dockerfile
     container_name: notification-service

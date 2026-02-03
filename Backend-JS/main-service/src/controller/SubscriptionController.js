@@ -1,0 +1,2610 @@
+/**
+ * Subscription Controller
+ * Handles all subscription-related operations for Krishi Mantra
+ */
+
+const { SubscriptionPlan, UserSubscription, PaymentHistory, UsageTracking, IotAddon, UserIotAddon } = require('../model/Subscription');
+const User = require('../model/User');
+const UserDetail = require('../model/UserDetail');
+const stripeConfig = require('../config/stripe');
+const logger = require('../utils/logger');
+const redis = require('../config/redis');
+
+const { HTTP_STATUS, CACHE_TTL } = require('../utils/constants');
+
+/**
+ * Get all subscription plans
+ */
+const getPlans = async (req, res) => {
+  try {
+    // Try cache first
+    const cacheKey = 'subscription:plans';
+    const cachedPlans = await redis.get(cacheKey);
+
+    if (cachedPlans) {
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'Subscription plans retrieved from cache',
+        data: JSON.parse(cachedPlans),
+      });
+    }
+
+    // Get from database
+    let plans = await SubscriptionPlan.find({ isActive: true }).sort({ order: 1 }).lean();
+
+    // If no plans in DB, seed them
+    if (plans.length === 0) {
+      await seedSubscriptionPlans();
+      plans = await SubscriptionPlan.find({ isActive: true }).sort({ order: 1 }).lean();
+    }
+
+    // Cache for 1 hour
+    await redis.set(cacheKey, JSON.stringify(plans), CACHE_TTL.VERY_LONG);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Subscription plans retrieved successfully',
+      data: plans,
+    });
+  } catch (error) {
+    logger.error('Error getting subscription plans:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get subscription plans',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get current user's subscription
+ */
+const getCurrentSubscription = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Get active subscription
+    const subscription = await UserSubscription.findOne({
+      userId,
+      status: { $in: ['active', 'trialing'] },
+      endDate: { $gt: new Date() },
+    })
+      .populate('planId')
+      .lean();
+
+    if (!subscription) {
+      // Return default free plan
+      const freePlan = await SubscriptionPlan.findOne({ name: 'KISAN', isDefault: true }).lean();
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'User is on free plan',
+        data: {
+          subscription: null,
+          currentPlan: freePlan || stripeConfig.SUBSCRIPTION_PLANS.KISAN,
+          isFreePlan: true,
+        },
+      });
+    }
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Subscription retrieved successfully',
+      data: {
+        subscription,
+        currentPlan: subscription.planId,
+        isFreePlan: false,
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting current subscription:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get subscription',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Create checkout session for subscription
+ */
+const createCheckoutSession = async (req, res) => {
+  try {
+    const { planName, billingCycle } = req.body;
+    const user = req.user;
+
+    if (!planName || !billingCycle) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Plan name and billing cycle are required',
+      });
+    }
+
+    if (!['KISAN_PRO', 'KISAN_PLUS', 'KISAN_MEGA'].includes(planName)) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Invalid plan name. Choose from KISAN_PRO, KISAN_PLUS, or KISAN_MEGA',
+      });
+    }
+
+    if (!['monthly', 'yearly'].includes(billingCycle)) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Billing cycle must be monthly or yearly',
+      });
+    }
+
+    // Check if user already has an active subscription
+    const existingSubscription = await UserSubscription.findOne({
+      userId: user._id,
+      status: 'active',
+      endDate: { $gt: new Date() },
+    });
+
+    if (existingSubscription) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'You already have an active subscription. Please cancel it first or upgrade.',
+        currentPlan: existingSubscription.planName,
+      });
+    }
+
+    const session = await stripeConfig.createCheckoutSession({
+      user,
+      planName,
+      billingCycle,
+      successUrl: `${process.env.FRONTEND_URL || 'krishimantra://'}subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${process.env.FRONTEND_URL || 'krishimantra://'}subscription/cancel`,
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Checkout session created',
+      data: {
+        sessionId: session.id,
+        url: session.url,
+      },
+    });
+  } catch (error) {
+    logger.error('Error creating checkout session:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to create checkout session',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Create payment intent for mobile apps
+ */
+const createPaymentIntent = async (req, res) => {
+  try {
+    const { planName, billingCycle } = req.body;
+    const user = req.user;
+
+    if (!planName || !billingCycle) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Plan name and billing cycle are required',
+      });
+    }
+
+    const paymentIntent = await stripeConfig.createPaymentIntent({
+      user,
+      planName,
+      billingCycle,
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Payment intent created',
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+      },
+    });
+  } catch (error) {
+    logger.error('Error creating payment intent:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to create payment intent',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Confirm payment and activate subscription (for mobile)
+ */
+const confirmPayment = async (req, res) => {
+  try {
+    const { paymentIntentId, planName, billingCycle } = req.body;
+    const user = req.user;
+
+    if (!paymentIntentId || !planName || !billingCycle) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Payment intent ID, plan name, and billing cycle are required',
+      });
+    }
+
+    // Verify payment intent
+    const paymentIntent = await stripeConfig.stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: `Payment not successful. Status: ${paymentIntent.status}`,
+      });
+    }
+
+    // Get plan
+    const plan = await SubscriptionPlan.findOne({ name: planName });
+    if (!plan) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'Plan not found',
+      });
+    }
+
+    // Calculate end date
+    const startDate = new Date();
+    const endDate = new Date();
+    if (billingCycle === 'yearly') {
+      endDate.setFullYear(endDate.getFullYear() + 1);
+    } else {
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
+
+    // Create or update subscription
+    const subscription = await UserSubscription.findOneAndUpdate(
+      { userId: user._id },
+      {
+        userId: user._id,
+        planId: plan._id,
+        planName: plan.name,
+        stripeCustomerId: paymentIntent.customer,
+        billingCycle,
+        status: 'active',
+        startDate,
+        endDate,
+        lastPaymentAmount: paymentIntent.amount,
+        lastPaymentDate: new Date(),
+        nextPaymentDate: endDate,
+        autoRenew: true,
+      },
+      { upsert: true, new: true }
+    );
+
+    // Create payment history
+    await PaymentHistory.create({
+      userId: user._id,
+      subscriptionId: subscription._id,
+      stripePaymentIntentId: paymentIntentId,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: 'succeeded',
+      description: `${plan.displayName} - ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} Subscription`,
+    });
+
+    // Update user detail
+    await UserDetail.findOneAndUpdate(
+      { userId: user._id },
+      {
+        'subscription.type': plan.name,
+        'subscription.endDate': endDate,
+        'subscription.purchasedDate': startDate,
+        'subscription.transactionDetails': {
+          paymentIntentId,
+          amount: paymentIntent.amount,
+          billingCycle,
+        },
+      },
+      { upsert: true }
+    );
+
+    // Clear cache
+    await redis.del(`subscription:user:${user._id}`);
+
+    logger.info(`Subscription activated for user ${user._id}: ${plan.name}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Subscription activated successfully',
+      data: {
+        subscription,
+        plan,
+      },
+    });
+  } catch (error) {
+    logger.error('Error confirming payment:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to confirm payment',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Cancel subscription
+ */
+const cancelSubscription = async (req, res) => {
+  try {
+    const { cancelImmediately, reason } = req.body;
+    const userId = req.user._id;
+
+    const subscription = await UserSubscription.findOne({
+      userId,
+      status: 'active',
+    });
+
+    if (!subscription) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'No active subscription found',
+      });
+    }
+
+    // If Stripe subscription exists, cancel it
+    if (subscription.stripeSubscriptionId) {
+      await stripeConfig.cancelSubscription(
+        subscription.stripeSubscriptionId,
+        !cancelImmediately
+      );
+    }
+
+    // Update subscription status
+    subscription.status = cancelImmediately ? 'cancelled' : 'active';
+    subscription.cancelledAt = new Date();
+    subscription.cancellationReason = reason;
+    subscription.autoRenew = false;
+
+    if (cancelImmediately) {
+      subscription.endDate = new Date();
+    }
+
+    await subscription.save();
+
+    // Update user detail
+    if (cancelImmediately) {
+      await UserDetail.findOneAndUpdate(
+        { userId },
+        {
+          'subscription.type': 'FREE',
+          'subscription.endDate': null,
+        }
+      );
+    }
+
+    // Clear cache
+    await redis.del(`subscription:user:${userId}`);
+
+    logger.info(`Subscription cancelled for user ${userId}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: cancelImmediately
+        ? 'Subscription cancelled immediately'
+        : 'Subscription will be cancelled at the end of the billing period',
+      data: subscription,
+    });
+  } catch (error) {
+    logger.error('Error cancelling subscription:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to cancel subscription',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Resume cancelled subscription
+ */
+const resumeSubscription = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const subscription = await UserSubscription.findOne({
+      userId,
+      status: 'active',
+      autoRenew: false,
+    });
+
+    if (!subscription) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'No subscription to resume',
+      });
+    }
+
+    if (subscription.stripeSubscriptionId) {
+      await stripeConfig.resumeSubscription(subscription.stripeSubscriptionId);
+    }
+
+    subscription.autoRenew = true;
+    subscription.cancelledAt = null;
+    subscription.cancellationReason = null;
+    await subscription.save();
+
+    // Clear cache
+    await redis.del(`subscription:user:${userId}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Subscription resumed successfully',
+      data: subscription,
+    });
+  } catch (error) {
+    logger.error('Error resuming subscription:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to resume subscription',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get usage stats for current user
+ */
+const getUsageStats = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        message: 'User ID is required',
+      });
+    }
+
+    // Get today's usage
+    const usage = await UsageTracking.getTodayUsage(userId);
+
+    // Get user's subscription/plan limits
+    const subscription = await UserSubscription.findOne({
+      userId,
+      status: { $in: ['active', 'trialing'] },
+      endDate: { $gt: new Date() },
+    }).populate('planId');
+
+    let limits;
+    if (subscription?.planId) {
+      limits = subscription.planId.features;
+    } else {
+      // Default free plan limits
+      limits = stripeConfig.SUBSCRIPTION_PLANS.KISAN.features;
+    }
+
+    // Calculate remaining
+    const remaining = {
+      aiMessages: limits.aiMessagesPerDay === -1 ? -1 : Math.max(0, limits.aiMessagesPerDay - usage.aiMessagesUsed),
+      imageAnalysis: limits.imageAnalysisPerDay === -1 ? -1 : Math.max(0, limits.imageAnalysisPerDay - usage.imageAnalysisUsed),
+      consultantChats: limits.consultantChatsPerDay === -1 ? -1 : Math.max(0, limits.consultantChatsPerDay - usage.consultantChatsUsed),
+      videoConsultations: limits.videoConsultationsPerMonth === -1 ? -1 : Math.max(0, limits.videoConsultationsPerMonth - usage.videoConsultationsUsed),
+    };
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Usage stats retrieved',
+      data: {
+        usage: {
+          aiMessagesUsed: usage.aiMessagesUsed,
+          imageAnalysisUsed: usage.imageAnalysisUsed,
+          consultantChatsUsed: usage.consultantChatsUsed,
+          videoConsultationsUsed: usage.videoConsultationsUsed,
+        },
+        limits: {
+          aiMessagesPerDay: limits.aiMessagesPerDay,
+          imageAnalysisPerDay: limits.imageAnalysisPerDay,
+          consultantChatsPerDay: limits.consultantChatsPerDay,
+          videoConsultationsPerMonth: limits.videoConsultationsPerMonth,
+        },
+        remaining,
+        planName: subscription?.planName || 'KISAN',
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting usage stats:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get usage stats',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get payment history
+ */
+const getPaymentHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { page = 1, limit = 10 } = req.query;
+
+    const payments = await PaymentHistory.find({ userId })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await PaymentHistory.countDocuments({ userId });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Payment history retrieved',
+      data: {
+        payments,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting payment history:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get payment history',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Check feature access
+ */
+const checkFeatureAccess = async (req, res) => {
+  try {
+    const { feature } = req.params;
+    const userId = req.user._id;
+
+    const access = await checkUserFeatureAccess(userId, feature);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Feature access checked',
+      data: access,
+    });
+  } catch (error) {
+    logger.error('Error checking feature access:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to check feature access',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Stripe webhook handler
+ */
+const handleWebhook = async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+
+  let event;
+
+  try {
+    event = stripeConfig.constructWebhookEvent(req.body, sig);
+  } catch (err) {
+    logger.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object);
+        break;
+
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(event.data.object);
+        break;
+
+      case 'customer.subscription.deleted':
+        await handleSubscriptionDeleted(event.data.object);
+        break;
+
+      case 'invoice.paid':
+        await handleInvoicePaid(event.data.object);
+        break;
+
+      case 'invoice.payment_failed':
+        await handlePaymentFailed(event.data.object);
+        break;
+
+      default:
+        logger.info(`Unhandled webhook event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    logger.error('Error handling webhook:', error);
+    res.status(500).json({ error: 'Webhook handler failed' });
+  }
+};
+
+// Webhook handlers
+async function handleCheckoutCompleted(session) {
+  const { userId, planName, billingCycle } = session.metadata;
+
+  logger.info(`Checkout completed for user ${userId}: ${planName}`);
+
+  const plan = await SubscriptionPlan.findOne({ name: planName });
+  if (!plan) {
+    logger.error(`Plan not found: ${planName}`);
+    return;
+  }
+
+  // Calculate dates
+  const startDate = new Date();
+  const endDate = new Date();
+  if (billingCycle === 'yearly') {
+    endDate.setFullYear(endDate.getFullYear() + 1);
+  } else {
+    endDate.setMonth(endDate.getMonth() + 1);
+  }
+
+  // Create subscription
+  await UserSubscription.findOneAndUpdate(
+    { userId },
+    {
+      userId,
+      planId: plan._id,
+      planName: plan.name,
+      stripeCustomerId: session.customer,
+      stripeSubscriptionId: session.subscription,
+      billingCycle,
+      status: 'active',
+      startDate,
+      endDate,
+      lastPaymentAmount: session.amount_total,
+      lastPaymentDate: new Date(),
+      autoRenew: true,
+    },
+    { upsert: true, new: true }
+  );
+
+  // Update user detail
+  await UserDetail.findOneAndUpdate(
+    { userId },
+    {
+      'subscription.type': plan.name,
+      'subscription.endDate': endDate,
+      'subscription.purchasedDate': startDate,
+    },
+    { upsert: true }
+  );
+
+  // Clear cache
+  await redis.del(`subscription:user:${userId}`);
+}
+
+async function handleSubscriptionUpdated(subscription) {
+  const userId = subscription.metadata?.userId;
+  if (!userId) return;
+
+  const status = subscription.status;
+  const cancelAtPeriodEnd = subscription.cancel_at_period_end;
+
+  await UserSubscription.findOneAndUpdate(
+    { stripeSubscriptionId: subscription.id },
+    {
+      status: cancelAtPeriodEnd ? 'active' : status,
+      autoRenew: !cancelAtPeriodEnd,
+      endDate: new Date(subscription.current_period_end * 1000),
+      nextPaymentDate: cancelAtPeriodEnd ? null : new Date(subscription.current_period_end * 1000),
+    }
+  );
+
+  await redis.del(`subscription:user:${userId}`);
+}
+
+async function handleSubscriptionDeleted(subscription) {
+  const userId = subscription.metadata?.userId;
+  if (!userId) return;
+
+  await UserSubscription.findOneAndUpdate(
+    { stripeSubscriptionId: subscription.id },
+    {
+      status: 'cancelled',
+      endDate: new Date(),
+    }
+  );
+
+  // Downgrade to free
+  await UserDetail.findOneAndUpdate(
+    { userId },
+    {
+      'subscription.type': 'FREE',
+      'subscription.endDate': null,
+    }
+  );
+
+  await redis.del(`subscription:user:${userId}`);
+}
+
+async function handleInvoicePaid(invoice) {
+  const subscriptionId = invoice.subscription;
+
+  const userSub = await UserSubscription.findOne({ stripeSubscriptionId: subscriptionId });
+  if (!userSub) return;
+
+  await PaymentHistory.create({
+    userId: userSub.userId,
+    subscriptionId: userSub._id,
+    stripeInvoiceId: invoice.id,
+    stripeChargeId: invoice.charge,
+    amount: invoice.amount_paid,
+    currency: invoice.currency,
+    status: 'succeeded',
+    invoiceUrl: invoice.hosted_invoice_url,
+    receiptUrl: invoice.receipt_url,
+  });
+
+  userSub.lastPaymentAmount = invoice.amount_paid;
+  userSub.lastPaymentDate = new Date();
+  await userSub.save();
+}
+
+async function handlePaymentFailed(invoice) {
+  const subscriptionId = invoice.subscription;
+
+  const userSub = await UserSubscription.findOne({ stripeSubscriptionId: subscriptionId });
+  if (!userSub) return;
+
+  userSub.status = 'past_due';
+  await userSub.save();
+
+  await PaymentHistory.create({
+    userId: userSub.userId,
+    subscriptionId: userSub._id,
+    stripeInvoiceId: invoice.id,
+    amount: invoice.amount_due,
+    currency: invoice.currency,
+    status: 'failed',
+  });
+
+  await redis.del(`subscription:user:${userSub.userId}`);
+}
+
+/**
+ * Seed subscription plans
+ */
+async function seedSubscriptionPlans() {
+  try {
+    const plans = Object.values(stripeConfig.SUBSCRIPTION_PLANS);
+
+    for (const plan of plans) {
+      await SubscriptionPlan.findOneAndUpdate(
+        { name: plan.name },
+        plan,
+        { upsert: true, new: true }
+      );
+    }
+
+    logger.info('Subscription plans seeded successfully');
+
+    // Clear plans cache
+    await redis.del('subscription:plans');
+  } catch (error) {
+    logger.error('Error seeding subscription plans:', error);
+    throw error;
+  }
+}
+
+/**
+ * Helper function to check user feature access
+ */
+async function checkUserFeatureAccess(userId, feature) {
+  // Try cache first
+  const cacheKey = `subscription:user:${userId}:access`;
+  const cached = await redis.get(cacheKey);
+
+  let subscription;
+  let limits;
+
+  if (cached) {
+    const data = JSON.parse(cached);
+    limits = data.limits;
+  } else {
+    subscription = await UserSubscription.findOne({
+      userId,
+      status: { $in: ['active', 'trialing'] },
+      endDate: { $gt: new Date() },
+    }).populate('planId');
+
+    if (subscription?.planId) {
+      limits = subscription.planId.features;
+    } else {
+      limits = stripeConfig.SUBSCRIPTION_PLANS.KISAN.features;
+    }
+
+    // Cache for 5 minutes
+    await redis.set(cacheKey, JSON.stringify({ limits }), 300);
+  }
+
+  // Get today's usage
+  const usage = await UsageTracking.getTodayUsage(userId);
+
+  // Check specific feature
+  switch (feature) {
+    case 'aiMessage':
+      if (limits.aiMessagesPerDay === -1) {
+        return { allowed: true, remaining: -1, limit: -1 };
+      }
+      const aiRemaining = limits.aiMessagesPerDay - usage.aiMessagesUsed;
+      return {
+        allowed: aiRemaining > 0,
+        remaining: Math.max(0, aiRemaining),
+        limit: limits.aiMessagesPerDay,
+        used: usage.aiMessagesUsed,
+      };
+
+    case 'imageAnalysis':
+      if (limits.imageAnalysisPerDay === -1) {
+        return { allowed: true, remaining: -1, limit: -1 };
+      }
+      const imgRemaining = limits.imageAnalysisPerDay - usage.imageAnalysisUsed;
+      return {
+        allowed: imgRemaining > 0,
+        remaining: Math.max(0, imgRemaining),
+        limit: limits.imageAnalysisPerDay,
+        used: usage.imageAnalysisUsed,
+      };
+
+    case 'consultantChat':
+      if (limits.consultantChatsPerDay === -1) {
+        return { allowed: true, remaining: -1, limit: -1 };
+      }
+      const chatRemaining = limits.consultantChatsPerDay - usage.consultantChatsUsed;
+      return {
+        allowed: chatRemaining > 0,
+        remaining: Math.max(0, chatRemaining),
+        limit: limits.consultantChatsPerDay,
+        used: usage.consultantChatsUsed,
+      };
+
+    case 'createPost':
+      return { allowed: limits.canCreatePosts };
+
+    case 'createReel':
+      return { allowed: limits.canCreateReels };
+
+    case 'marketplaceListing':
+      return {
+        allowed: limits.marketplaceListings === -1 || limits.marketplaceListings > 0,
+        limit: limits.marketplaceListings,
+      };
+
+    default:
+      return { allowed: false, message: 'Unknown feature' };
+  }
+}
+
+/**
+ * Increment usage (internal helper)
+ */
+async function incrementUsage(userId, feature) {
+  const usage = await UsageTracking.getTodayUsage(userId);
+
+  const fieldMap = {
+    aiMessage: 'aiMessagesUsed',
+    imageAnalysis: 'imageAnalysisUsed',
+    consultantChat: 'consultantChatsUsed',
+    videoConsultation: 'videoConsultationsUsed',
+  };
+
+  const field = fieldMap[feature];
+  if (!field) {
+    throw new Error(`Invalid feature: ${feature}`);
+  }
+
+  usage[field] += 1;
+  await usage.save();
+
+  return usage;
+}
+
+/**
+ * Increment usage (internal API endpoint)
+ * Called by other microservices to track usage
+ */
+const incrementUsageInternal = async (req, res) => {
+  try {
+    const { userId, feature } = req.body;
+
+    if (!userId || !feature) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'userId and feature are required',
+      });
+    }
+
+    const usage = await incrementUsage(userId, feature);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Usage incremented successfully',
+      data: {
+        aiMessagesUsed: usage.aiMessagesUsed,
+        imageAnalysisUsed: usage.imageAnalysisUsed,
+        consultantChatsUsed: usage.consultantChatsUsed,
+        videoConsultationsUsed: usage.videoConsultationsUsed,
+      },
+    });
+  } catch (error) {
+    logger.error('Error incrementing usage internally:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to increment usage',
+      error: error.message,
+    });
+  }
+};
+
+// ========== IoT ADD-ON FUNCTIONS ==========
+
+/**
+ * Get all IoT add-ons
+ */
+const getIotAddons = async (req, res) => {
+  try {
+    // Try cache first
+    const cacheKey = 'iot:addons';
+    const cachedAddons = await redis.get(cacheKey);
+
+    if (cachedAddons) {
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'IoT add-ons retrieved from cache',
+        data: JSON.parse(cachedAddons),
+      });
+    }
+
+    // Get from database
+    let addons = await IotAddon.find({ isActive: true }).sort({ order: 1 }).lean();
+
+    // If no addons in DB, seed them
+    if (addons.length === 0) {
+      await seedIotAddons();
+      addons = await IotAddon.find({ isActive: true }).sort({ order: 1 }).lean();
+    }
+
+    // Cache for 1 hour
+    await redis.set(cacheKey, JSON.stringify(addons), CACHE_TTL.VERY_LONG);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'IoT add-ons retrieved successfully',
+      data: addons,
+    });
+  } catch (error) {
+    logger.error('Error getting IoT add-ons:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get IoT add-ons',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get user's IoT add-on subscriptions
+ */
+const getUserIotAddons = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const userAddons = await UserIotAddon.find({
+      userId,
+      status: 'active',
+      endDate: { $gt: new Date() },
+    }).populate('addonId').lean();
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'User IoT add-ons retrieved successfully',
+      data: userAddons,
+    });
+  } catch (error) {
+    logger.error('Error getting user IoT add-ons:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get user IoT add-ons',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Create payment intent for IoT add-on (mobile)
+ */
+const createIotAddonPaymentIntent = async (req, res) => {
+  try {
+    const { addonName, billingCycle } = req.body;
+    const user = req.user;
+
+    if (!addonName || !billingCycle) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Addon name and billing cycle are required',
+      });
+    }
+
+    if (!['WATER_PUMP', 'CROP_IOT', 'IOT_BUNDLE'].includes(addonName)) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Invalid addon name. Choose from WATER_PUMP, CROP_IOT, or IOT_BUNDLE',
+      });
+    }
+
+    if (!['monthly', 'yearly'].includes(billingCycle)) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Billing cycle must be monthly or yearly',
+      });
+    }
+
+    // Check if user already has this addon (or bundle that includes it)
+    const existingAddon = await UserIotAddon.findOne({
+      userId: user._id,
+      status: 'active',
+      endDate: { $gt: new Date() },
+      $or: [
+        { addonName },
+        { addonName: 'IOT_BUNDLE' }, // Bundle includes both
+      ],
+    });
+
+    if (existingAddon) {
+      // If buying individual addon but already has bundle
+      if (existingAddon.addonName === 'IOT_BUNDLE') {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: 'You already have the IoT Bundle which includes all features',
+        });
+      }
+      // If buying same addon again
+      if (existingAddon.addonName === addonName) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: `You already have an active ${addonName} subscription`,
+        });
+      }
+    }
+
+    // If buying bundle, check if they have individual addons (offer discount info)
+    if (addonName === 'IOT_BUNDLE') {
+      const hasWaterPump = await UserIotAddon.findOne({
+        userId: user._id,
+        addonName: 'WATER_PUMP',
+        status: 'active',
+        endDate: { $gt: new Date() },
+      });
+      const hasCropIot = await UserIotAddon.findOne({
+        userId: user._id,
+        addonName: 'CROP_IOT',
+        status: 'active',
+        endDate: { $gt: new Date() },
+      });
+
+      if (hasWaterPump || hasCropIot) {
+        // Cancel existing individual addons when buying bundle
+        if (hasWaterPump) {
+          hasWaterPump.status = 'cancelled';
+          hasWaterPump.cancelledAt = new Date();
+          await hasWaterPump.save();
+        }
+        if (hasCropIot) {
+          hasCropIot.status = 'cancelled';
+          hasCropIot.cancelledAt = new Date();
+          await hasCropIot.save();
+        }
+      }
+    }
+
+    const paymentIntent = await stripeConfig.createIotAddonPaymentIntent({
+      user,
+      addonName,
+      billingCycle,
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'IoT add-on payment intent created',
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+      },
+    });
+  } catch (error) {
+    logger.error('Error creating IoT addon payment intent:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to create payment intent',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Confirm IoT add-on payment and activate (mobile)
+ */
+const confirmIotAddonPayment = async (req, res) => {
+  try {
+    const { paymentIntentId, addonName, billingCycle } = req.body;
+    const user = req.user;
+
+    if (!paymentIntentId || !addonName || !billingCycle) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Payment intent ID, addon name, and billing cycle are required',
+      });
+    }
+
+    // Verify payment intent
+    const paymentIntent = await stripeConfig.stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: `Payment not successful. Status: ${paymentIntent.status}`,
+      });
+    }
+
+    // Get addon
+    const addon = await IotAddon.findOne({ name: addonName });
+    if (!addon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'IoT add-on not found',
+      });
+    }
+
+    // Calculate end date
+    const startDate = new Date();
+    const endDate = new Date();
+    if (billingCycle === 'yearly') {
+      endDate.setFullYear(endDate.getFullYear() + 1);
+    } else {
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
+
+    // Create user IoT addon subscription
+    const userIotAddon = await UserIotAddon.create({
+      userId: user._id,
+      addonId: addon._id,
+      addonName: addon.name,
+      stripeCustomerId: paymentIntent.customer,
+      billingCycle,
+      status: 'active',
+      startDate,
+      endDate,
+      lastPaymentAmount: paymentIntent.amount,
+      lastPaymentDate: new Date(),
+      nextPaymentDate: endDate,
+      autoRenew: true,
+    });
+
+    // Create payment history
+    await PaymentHistory.create({
+      userId: user._id,
+      subscriptionId: userIotAddon._id,
+      stripePaymentIntentId: paymentIntentId,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: 'succeeded',
+      description: `${addon.displayName} - ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} Add-on`,
+      metadata: {
+        type: 'iot_addon',
+        addonName: addon.name,
+      },
+    });
+
+    // Clear cache
+    await redis.del(`iot:user:${user._id}`);
+
+    logger.info(`IoT add-on activated for user ${user._id}: ${addon.name}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'IoT add-on activated successfully',
+      data: {
+        userIotAddon,
+        addon,
+      },
+    });
+  } catch (error) {
+    logger.error('Error confirming IoT addon payment:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to confirm IoT addon payment',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Cancel IoT add-on subscription
+ */
+const cancelIotAddon = async (req, res) => {
+  try {
+    const { addonName, cancelImmediately, reason } = req.body;
+    const userId = req.user._id;
+
+    const userAddon = await UserIotAddon.findOne({
+      userId,
+      addonName,
+      status: 'active',
+    });
+
+    if (!userAddon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'No active IoT add-on found',
+      });
+    }
+
+    // If Stripe subscription exists, cancel it
+    if (userAddon.stripeSubscriptionId) {
+      await stripeConfig.cancelSubscription(
+        userAddon.stripeSubscriptionId,
+        !cancelImmediately
+      );
+    }
+
+    // Update status
+    userAddon.status = cancelImmediately ? 'cancelled' : 'active';
+    userAddon.cancelledAt = new Date();
+    userAddon.autoRenew = false;
+
+    if (cancelImmediately) {
+      userAddon.endDate = new Date();
+    }
+
+    await userAddon.save();
+
+    // Clear cache
+    await redis.del(`iot:user:${userId}`);
+
+    logger.info(`IoT add-on cancelled for user ${userId}: ${addonName}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: cancelImmediately
+        ? 'IoT add-on cancelled immediately'
+        : 'IoT add-on will be cancelled at the end of the billing period',
+      data: userAddon,
+    });
+  } catch (error) {
+    logger.error('Error cancelling IoT addon:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to cancel IoT add-on',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Check IoT feature access
+ */
+const checkIotFeatureAccess = async (req, res) => {
+  try {
+    const { feature } = req.params;
+    const userId = req.user._id;
+
+    const access = await checkUserIotAccess(userId, feature);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'IoT feature access checked',
+      data: access,
+    });
+  } catch (error) {
+    logger.error('Error checking IoT feature access:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to check IoT feature access',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Helper function to check IoT feature access
+ */
+async function checkUserIotAccess(userId, feature) {
+  // Get user's active IoT addons
+  const userAddons = await UserIotAddon.find({
+    userId,
+    status: 'active',
+    endDate: { $gt: new Date() },
+  }).populate('addonId');
+
+  if (userAddons.length === 0) {
+    return { allowed: false, message: 'No active IoT add-on' };
+  }
+
+  // Aggregate features from all active addons
+  const iotFeatures = {
+    waterPump: { enabled: false },
+    cropMonitoring: { enabled: false },
+    weatherStation: { enabled: false },
+  };
+
+  for (const addon of userAddons) {
+    if (addon.addonId.features.waterPump?.enabled) {
+      iotFeatures.waterPump = addon.addonId.features.waterPump;
+    }
+    if (addon.addonId.features.cropMonitoring?.enabled) {
+      iotFeatures.cropMonitoring = addon.addonId.features.cropMonitoring;
+    }
+    if (addon.addonId.features.weatherStation?.enabled) {
+      iotFeatures.weatherStation = addon.addonId.features.weatherStation;
+    }
+  }
+
+  // Check specific feature
+  switch (feature) {
+    case 'waterPump':
+      return {
+        allowed: iotFeatures.waterPump.enabled,
+        features: iotFeatures.waterPump,
+      };
+    case 'cropMonitoring':
+      return {
+        allowed: iotFeatures.cropMonitoring.enabled,
+        features: iotFeatures.cropMonitoring,
+      };
+    case 'weatherStation':
+      return {
+        allowed: iotFeatures.weatherStation.enabled,
+        features: iotFeatures.weatherStation,
+      };
+    default:
+      return { allowed: false, message: 'Unknown IoT feature' };
+  }
+}
+
+/**
+ * Seed IoT add-ons
+ */
+async function seedIotAddons() {
+  try {
+    const addons = Object.values(stripeConfig.IOT_ADDONS);
+
+    for (const addon of addons) {
+      await IotAddon.findOneAndUpdate(
+        { name: addon.name },
+        addon,
+        { upsert: true, new: true }
+      );
+    }
+
+    logger.info('IoT add-ons seeded successfully');
+
+    // Clear cache
+    await redis.del('iot:addons');
+  } catch (error) {
+    logger.error('Error seeding IoT add-ons:', error);
+    throw error;
+  }
+}
+
+/**
+ * Link IoT device to user's subscription
+ */
+const linkIotDevice = async (req, res) => {
+  try {
+    const { addonName, deviceId, deviceType, deviceName } = req.body;
+    const userId = req.user._id;
+
+    if (!addonName || !deviceId || !deviceType) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Addon name, device ID, and device type are required',
+      });
+    }
+
+    const userAddon = await UserIotAddon.findOne({
+      userId,
+      addonName,
+      status: 'active',
+      endDate: { $gt: new Date() },
+    }).populate('addonId');
+
+    if (!userAddon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'No active IoT add-on found',
+      });
+    }
+
+    // Check device limit
+    const features = userAddon.addonId.features;
+    let maxDevices = 0;
+
+    if (deviceType === 'water_pump') {
+      maxDevices = features.waterPump?.maxDevices || 0;
+    } else if (['soil_sensor', 'temperature_sensor', 'humidity_sensor'].includes(deviceType)) {
+      maxDevices = features.cropMonitoring?.maxSensors || 0;
+    }
+
+    if (maxDevices !== -1 && userAddon.linkedDevices.length >= maxDevices) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: `Maximum device limit (${maxDevices}) reached for this add-on`,
+      });
+    }
+
+    // Check if device already linked
+    const deviceExists = userAddon.linkedDevices.find(d => d.deviceId === deviceId);
+    if (deviceExists) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Device already linked',
+      });
+    }
+
+    // Link device
+    userAddon.linkedDevices.push({
+      deviceId,
+      deviceType,
+      deviceName: deviceName || `${deviceType}_${deviceId.substring(0, 6)}`,
+      addedAt: new Date(),
+      isActive: true,
+    });
+
+    await userAddon.save();
+
+    logger.info(`IoT device linked for user ${userId}: ${deviceId}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Device linked successfully',
+      data: userAddon,
+    });
+  } catch (error) {
+    logger.error('Error linking IoT device:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to link IoT device',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Unlink IoT device
+ */
+const unlinkIotDevice = async (req, res) => {
+  try {
+    const { addonName, deviceId } = req.body;
+    const userId = req.user._id;
+
+    const userAddon = await UserIotAddon.findOne({
+      userId,
+      addonName,
+      status: 'active',
+    });
+
+    if (!userAddon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'No active IoT add-on found',
+      });
+    }
+
+    const deviceIndex = userAddon.linkedDevices.findIndex(d => d.deviceId === deviceId);
+    if (deviceIndex === -1) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'Device not found',
+      });
+    }
+
+    userAddon.linkedDevices.splice(deviceIndex, 1);
+    await userAddon.save();
+
+    logger.info(`IoT device unlinked for user ${userId}: ${deviceId}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Device unlinked successfully',
+      data: userAddon,
+    });
+  } catch (error) {
+    logger.error('Error unlinking IoT device:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to unlink IoT device',
+      error: error.message,
+    });
+  }
+};
+
+// ========== SUPER ADMIN FUNCTIONS ==========
+
+/**
+ * Get all subscriptions with pagination and filters (Admin)
+ */
+const adminGetAllSubscriptions = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status, planName, search } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build query
+    const query = {};
+    if (status) query.status = status;
+    if (planName) query.planName = planName;
+
+    // If search query, find matching users first
+    let userIds = null;
+    if (search) {
+      const users = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+        ],
+      }).select('_id');
+      userIds = users.map(u => u._id);
+      query.userId = { $in: userIds };
+    }
+
+    const [subscriptions, total] = await Promise.all([
+      UserSubscription.find(query)
+        .populate('userId', 'name phone email avatar')
+        .populate('planId', 'name displayName')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      UserSubscription.countDocuments(query),
+    ]);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Subscriptions retrieved successfully',
+      data: {
+        subscriptions,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit)),
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting all subscriptions:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get subscriptions',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get user's subscription by user ID (Admin)
+ */
+const adminGetUserSubscription = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const [subscription, usage, paymentHistory] = await Promise.all([
+      UserSubscription.findOne({ userId })
+        .populate('planId')
+        .lean(),
+      UsageTracking.getTodayUsage(userId),
+      PaymentHistory.find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean(),
+    ]);
+
+    const user = await User.findById(userId).select('name phone email avatar').lean();
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'User subscription retrieved',
+      data: {
+        user,
+        subscription,
+        usage: {
+          aiMessagesUsed: usage.aiMessagesUsed,
+          imageAnalysisUsed: usage.imageAnalysisUsed,
+          consultantChatsUsed: usage.consultantChatsUsed,
+          videoConsultationsUsed: usage.videoConsultationsUsed,
+        },
+        paymentHistory,
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting user subscription:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get user subscription',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Update user's subscription (Admin)
+ */
+const adminUpdateUserSubscription = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { planName, status, endDate, billingCycle, autoRenew } = req.body;
+
+    let subscription = await UserSubscription.findOne({ userId });
+
+    if (!subscription) {
+      // Create new subscription
+      const plan = await SubscriptionPlan.findOne({ name: planName || 'KISAN' });
+      if (!plan) {
+        return res.status(HTTP_STATUS.NOT_FOUND).json({
+          success: false,
+          message: 'Plan not found',
+        });
+      }
+
+      subscription = await UserSubscription.create({
+        userId,
+        planId: plan._id,
+        planName: plan.name,
+        status: status || 'active',
+        startDate: new Date(),
+        endDate: endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        billingCycle: billingCycle || 'monthly',
+        autoRenew: autoRenew !== undefined ? autoRenew : true,
+      });
+    } else {
+      // Update existing subscription
+      if (planName) {
+        const plan = await SubscriptionPlan.findOne({ name: planName });
+        if (plan) {
+          subscription.planId = plan._id;
+          subscription.planName = plan.name;
+        }
+      }
+      if (status) subscription.status = status;
+      if (endDate) subscription.endDate = new Date(endDate);
+      if (billingCycle) subscription.billingCycle = billingCycle;
+      if (autoRenew !== undefined) subscription.autoRenew = autoRenew;
+
+      await subscription.save();
+    }
+
+    // Update user detail
+    const plan = await SubscriptionPlan.findById(subscription.planId);
+    await UserDetail.findOneAndUpdate(
+      { userId },
+      {
+        'subscription.type': plan?.name || 'KISAN',
+        'subscription.endDate': subscription.endDate,
+      },
+      { upsert: true }
+    );
+
+    // Clear cache
+    await redis.del(`subscription:user:${userId}`);
+
+    logger.info(`Admin updated subscription for user ${userId}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'User subscription updated',
+      data: subscription,
+    });
+  } catch (error) {
+    logger.error('Error updating user subscription:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to update user subscription',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Cancel user's subscription (Admin)
+ */
+const adminCancelUserSubscription = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason, cancelImmediately } = req.body;
+
+    const subscription = await UserSubscription.findOne({
+      userId,
+      status: { $in: ['active', 'trialing'] },
+    });
+
+    if (!subscription) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'No active subscription found',
+      });
+    }
+
+    // Cancel Stripe subscription if exists
+    if (subscription.stripeSubscriptionId) {
+      try {
+        await stripeConfig.cancelSubscription(subscription.stripeSubscriptionId, !cancelImmediately);
+      } catch (stripeError) {
+        logger.warn('Stripe cancellation failed:', stripeError.message);
+      }
+    }
+
+    subscription.status = cancelImmediately ? 'cancelled' : 'active';
+    subscription.cancelledAt = new Date();
+    subscription.cancellationReason = `[Admin] ${reason || 'Cancelled by admin'}`;
+    subscription.autoRenew = false;
+
+    if (cancelImmediately) {
+      subscription.endDate = new Date();
+    }
+
+    await subscription.save();
+
+    // Update user detail if cancelled immediately
+    if (cancelImmediately) {
+      await UserDetail.findOneAndUpdate(
+        { userId },
+        {
+          'subscription.type': 'FREE',
+          'subscription.endDate': null,
+        }
+      );
+    }
+
+    // Clear cache
+    await redis.del(`subscription:user:${userId}`);
+
+    logger.info(`Admin cancelled subscription for user ${userId}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: cancelImmediately
+        ? 'Subscription cancelled immediately'
+        : 'Subscription will be cancelled at period end',
+      data: subscription,
+    });
+  } catch (error) {
+    logger.error('Error admin cancelling subscription:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to cancel subscription',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get subscription stats (Admin)
+ */
+const adminGetSubscriptionStats = async (req, res) => {
+  try {
+    const [
+      totalSubscriptions,
+      activeSubscriptions,
+      planStats,
+      recentPayments,
+      monthlyRevenue,
+    ] = await Promise.all([
+      UserSubscription.countDocuments(),
+      UserSubscription.countDocuments({ status: 'active', endDate: { $gt: new Date() } }),
+      UserSubscription.aggregate([
+        { $match: { status: 'active', endDate: { $gt: new Date() } } },
+        { $group: { _id: '$planName', count: { $sum: 1 } } },
+      ]),
+      PaymentHistory.find({ status: 'succeeded' })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .populate('userId', 'name phone')
+        .lean(),
+      PaymentHistory.aggregate([
+        {
+          $match: {
+            status: 'succeeded',
+            createdAt: { $gte: new Date(new Date().setDate(1)) },
+          },
+        },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+    ]);
+
+    // Calculate plan distribution
+    const planDistribution = {
+      KISAN: 0,
+      KISAN_PRO: 0,
+      KISAN_PLUS: 0,
+      KISAN_MEGA: 0,
+    };
+    planStats.forEach(stat => {
+      if (planDistribution.hasOwnProperty(stat._id)) {
+        planDistribution[stat._id] = stat.count;
+      }
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Subscription stats retrieved',
+      data: {
+        overview: {
+          totalSubscriptions,
+          activeSubscriptions,
+          freeUsers: totalSubscriptions - activeSubscriptions,
+          conversionRate: totalSubscriptions > 0
+            ? ((activeSubscriptions / totalSubscriptions) * 100).toFixed(2)
+            : 0,
+        },
+        planDistribution,
+        monthlyRevenue: monthlyRevenue[0]?.total || 0,
+        recentPayments,
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting subscription stats:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get subscription stats',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get revenue stats (Admin)
+ */
+const adminGetRevenueStats = async (req, res) => {
+  try {
+    const { timeframe = 'month' } = req.query;
+
+    let startDate = new Date();
+    if (timeframe === 'week') {
+      startDate.setDate(startDate.getDate() - 7);
+    } else if (timeframe === 'month') {
+      startDate.setMonth(startDate.getMonth() - 1);
+    } else if (timeframe === 'year') {
+      startDate.setFullYear(startDate.getFullYear() - 1);
+    }
+
+    const [revenueByDay, revenueByPlan, totalRevenue] = await Promise.all([
+      PaymentHistory.aggregate([
+        { $match: { status: 'succeeded', createdAt: { $gte: startDate } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            revenue: { $sum: '$amount' },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      PaymentHistory.aggregate([
+        { $match: { status: 'succeeded', createdAt: { $gte: startDate } } },
+        { $group: { _id: '$description', revenue: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+      PaymentHistory.aggregate([
+        { $match: { status: 'succeeded', createdAt: { $gte: startDate } } },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Revenue stats retrieved',
+      data: {
+        timeframe,
+        revenueByDay,
+        revenueByPlan,
+        totalRevenue: totalRevenue[0]?.total || 0,
+        totalTransactions: totalRevenue[0]?.count || 0,
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting revenue stats:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get revenue stats',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get user usage stats (Admin)
+ */
+const adminGetUserUsageStats = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const usage = await UsageTracking.getTodayUsage(userId);
+    const subscription = await UserSubscription.findOne({
+      userId,
+      status: { $in: ['active', 'trialing'] },
+    }).populate('planId');
+
+    let limits;
+    if (subscription?.planId) {
+      limits = subscription.planId.features;
+    } else {
+      limits = stripeConfig.SUBSCRIPTION_PLANS.KISAN.features;
+    }
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'User usage stats retrieved',
+      data: {
+        usage: {
+          aiMessagesUsed: usage.aiMessagesUsed,
+          imageAnalysisUsed: usage.imageAnalysisUsed,
+          consultantChatsUsed: usage.consultantChatsUsed,
+          videoConsultationsUsed: usage.videoConsultationsUsed,
+        },
+        limits,
+        planName: subscription?.planName || 'KISAN',
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting user usage stats:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get user usage stats',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Reset user usage (Admin)
+ */
+const adminResetUserUsage = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    await UsageTracking.findOneAndUpdate(
+      {
+        userId,
+        date: new Date().toISOString().split('T')[0],
+      },
+      {
+        aiMessagesUsed: 0,
+        imageAnalysisUsed: 0,
+        consultantChatsUsed: 0,
+        videoConsultationsUsed: 0,
+      }
+    );
+
+    logger.info(`Admin reset usage for user ${userId}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'User usage reset successfully',
+    });
+  } catch (error) {
+    logger.error('Error resetting user usage:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to reset user usage',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Create subscription plan (Admin)
+ */
+const adminCreatePlan = async (req, res) => {
+  try {
+    const planData = req.body;
+
+    // Check if plan name already exists
+    const existingPlan = await SubscriptionPlan.findOne({ name: planData.name });
+    if (existingPlan) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Plan with this name already exists',
+      });
+    }
+
+    const plan = await SubscriptionPlan.create(planData);
+
+    // Clear cache
+    await redis.del('subscription:plans');
+
+    logger.info(`Admin created plan: ${plan.name}`);
+
+    res.status(HTTP_STATUS.CREATED).json({
+      success: true,
+      message: 'Plan created successfully',
+      data: plan,
+    });
+  } catch (error) {
+    logger.error('Error creating plan:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to create plan',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Update subscription plan (Admin)
+ */
+const adminUpdatePlan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const plan = await SubscriptionPlan.findByIdAndUpdate(id, updateData, { new: true });
+
+    if (!plan) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'Plan not found',
+      });
+    }
+
+    // Clear cache
+    await redis.del('subscription:plans');
+
+    logger.info(`Admin updated plan: ${plan.name}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Plan updated successfully',
+      data: plan,
+    });
+  } catch (error) {
+    logger.error('Error updating plan:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to update plan',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Delete subscription plan (Admin)
+ */
+const adminDeletePlan = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const plan = await SubscriptionPlan.findById(id);
+    if (!plan) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'Plan not found',
+      });
+    }
+
+    // Check if any users are on this plan
+    const usersOnPlan = await UserSubscription.countDocuments({
+      planId: id,
+      status: 'active',
+    });
+
+    if (usersOnPlan > 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: `Cannot delete plan. ${usersOnPlan} users are currently on this plan.`,
+      });
+    }
+
+    // Soft delete (mark as inactive)
+    plan.isActive = false;
+    await plan.save();
+
+    // Clear cache
+    await redis.del('subscription:plans');
+
+    logger.info(`Admin deleted plan: ${plan.name}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Plan deleted successfully',
+    });
+  } catch (error) {
+    logger.error('Error deleting plan:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to delete plan',
+      error: error.message,
+    });
+  }
+};
+
+// ========== ADMIN IoT FUNCTIONS ==========
+
+/**
+ * Get all user IoT addon subscriptions (Admin)
+ */
+const adminGetAllUserAddons = async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [addons, total] = await Promise.all([
+      UserIotAddon.find()
+        .populate('userId', 'name phone email')
+        .populate('addonId', 'name displayName')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      UserIotAddon.countDocuments(),
+    ]);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'User IoT addons retrieved',
+      data: {
+        addons,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit)),
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting all user addons:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get user IoT addons',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get user's IoT addons by user ID (Admin)
+ */
+const adminGetUserAddons = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const addons = await UserIotAddon.find({ userId })
+      .populate('addonId')
+      .lean();
+
+    const user = await User.findById(userId).select('name phone email').lean();
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'User IoT addons retrieved',
+      data: {
+        user,
+        addons,
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting user addons:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get user IoT addons',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Cancel user's IoT addon (Admin)
+ */
+const adminCancelUserAddon = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { addonName, reason, cancelImmediately } = req.body;
+
+    const userAddon = await UserIotAddon.findOne({
+      userId,
+      addonName,
+      status: 'active',
+    });
+
+    if (!userAddon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'No active IoT addon found',
+      });
+    }
+
+    // Cancel Stripe subscription if exists
+    if (userAddon.stripeSubscriptionId) {
+      try {
+        await stripeConfig.cancelSubscription(userAddon.stripeSubscriptionId, !cancelImmediately);
+      } catch (stripeError) {
+        logger.warn('Stripe cancellation failed:', stripeError.message);
+      }
+    }
+
+    userAddon.status = cancelImmediately ? 'cancelled' : 'active';
+    userAddon.cancelledAt = new Date();
+    userAddon.autoRenew = false;
+
+    if (cancelImmediately) {
+      userAddon.endDate = new Date();
+    }
+
+    await userAddon.save();
+
+    // Clear cache
+    await redis.del(`iot:user:${userId}`);
+
+    logger.info(`Admin cancelled IoT addon for user ${userId}: ${addonName}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: cancelImmediately
+        ? 'IoT addon cancelled immediately'
+        : 'IoT addon will be cancelled at period end',
+      data: userAddon,
+    });
+  } catch (error) {
+    logger.error('Error admin cancelling addon:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to cancel IoT addon',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get all linked devices (Admin)
+ */
+const adminGetLinkedDevices = async (req, res) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const addons = await UserIotAddon.find({ 'linkedDevices.0': { $exists: true } })
+      .populate('userId', 'name phone email')
+      .populate('addonId', 'name displayName')
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // Flatten devices with user info
+    const devices = [];
+    addons.forEach(addon => {
+      addon.linkedDevices.forEach(device => {
+        devices.push({
+          ...device,
+          user: addon.userId,
+          addon: addon.addonId,
+          addonSubscriptionId: addon._id,
+        });
+      });
+    });
+
+    const total = await UserIotAddon.aggregate([
+      { $match: { 'linkedDevices.0': { $exists: true } } },
+      { $unwind: '$linkedDevices' },
+      { $count: 'total' },
+    ]);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Linked devices retrieved',
+      data: {
+        devices,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: total[0]?.total || 0,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting linked devices:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get linked devices',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Unlink device (Admin)
+ */
+const adminUnlinkDevice = async (req, res) => {
+  try {
+    const { userId, addonName, deviceId } = req.body;
+
+    const userAddon = await UserIotAddon.findOne({
+      userId,
+      addonName,
+    });
+
+    if (!userAddon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'IoT addon not found',
+      });
+    }
+
+    const deviceIndex = userAddon.linkedDevices.findIndex(d => d.deviceId === deviceId);
+    if (deviceIndex === -1) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'Device not found',
+      });
+    }
+
+    userAddon.linkedDevices.splice(deviceIndex, 1);
+    await userAddon.save();
+
+    logger.info(`Admin unlinked device ${deviceId} for user ${userId}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Device unlinked successfully',
+      data: userAddon,
+    });
+  } catch (error) {
+    logger.error('Error admin unlinking device:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to unlink device',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get IoT stats (Admin)
+ */
+const adminGetIotStats = async (req, res) => {
+  try {
+    const [
+      totalIotSubscriptions,
+      activeIotSubscriptions,
+      addonStats,
+      totalDevices,
+    ] = await Promise.all([
+      UserIotAddon.countDocuments(),
+      UserIotAddon.countDocuments({ status: 'active', endDate: { $gt: new Date() } }),
+      UserIotAddon.aggregate([
+        { $match: { status: 'active', endDate: { $gt: new Date() } } },
+        { $group: { _id: '$addonName', count: { $sum: 1 } } },
+      ]),
+      UserIotAddon.aggregate([
+        { $match: { 'linkedDevices.0': { $exists: true } } },
+        { $unwind: '$linkedDevices' },
+        { $count: 'total' },
+      ]),
+    ]);
+
+    const addonDistribution = {
+      WATER_PUMP: 0,
+      CROP_IOT: 0,
+      IOT_BUNDLE: 0,
+    };
+    addonStats.forEach(stat => {
+      if (addonDistribution.hasOwnProperty(stat._id)) {
+        addonDistribution[stat._id] = stat.count;
+      }
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'IoT stats retrieved',
+      data: {
+        overview: {
+          totalIotSubscriptions,
+          activeIotSubscriptions,
+          totalDevices: totalDevices[0]?.total || 0,
+        },
+        addonDistribution,
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting IoT stats:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get IoT stats',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Create IoT addon (Admin)
+ */
+const adminCreateIotAddon = async (req, res) => {
+  try {
+    const addonData = req.body;
+
+    const existingAddon = await IotAddon.findOne({ name: addonData.name });
+    if (existingAddon) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Addon with this name already exists',
+      });
+    }
+
+    const addon = await IotAddon.create(addonData);
+
+    // Clear cache
+    await redis.del('iot:addons');
+
+    logger.info(`Admin created IoT addon: ${addon.name}`);
+
+    res.status(HTTP_STATUS.CREATED).json({
+      success: true,
+      message: 'IoT addon created successfully',
+      data: addon,
+    });
+  } catch (error) {
+    logger.error('Error creating IoT addon:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to create IoT addon',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Update IoT addon (Admin)
+ */
+const adminUpdateIotAddon = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const addon = await IotAddon.findByIdAndUpdate(id, updateData, { new: true });
+
+    if (!addon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'IoT addon not found',
+      });
+    }
+
+    // Clear cache
+    await redis.del('iot:addons');
+
+    logger.info(`Admin updated IoT addon: ${addon.name}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'IoT addon updated successfully',
+      data: addon,
+    });
+  } catch (error) {
+    logger.error('Error updating IoT addon:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to update IoT addon',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Delete IoT addon (Admin)
+ */
+const adminDeleteIotAddon = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const addon = await IotAddon.findById(id);
+    if (!addon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'IoT addon not found',
+      });
+    }
+
+    // Check if any users have this addon
+    const usersWithAddon = await UserIotAddon.countDocuments({
+      addonId: id,
+      status: 'active',
+    });
+
+    if (usersWithAddon > 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: `Cannot delete addon. ${usersWithAddon} users have this addon.`,
+      });
+    }
+
+    // Soft delete
+    addon.isActive = false;
+    await addon.save();
+
+    // Clear cache
+    await redis.del('iot:addons');
+
+    logger.info(`Admin deleted IoT addon: ${addon.name}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'IoT addon deleted successfully',
+    });
+  } catch (error) {
+    logger.error('Error deleting IoT addon:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to delete IoT addon',
+      error: error.message,
+    });
+  }
+};
+
+// Export all functions
+module.exports = {
+  // Subscription functions
+  getPlans,
+  getCurrentSubscription,
+  createCheckoutSession,
+  createPaymentIntent,
+  confirmPayment,
+  cancelSubscription,
+  resumeSubscription,
+  getUsageStats,
+  getPaymentHistory,
+  checkFeatureAccess,
+  handleWebhook,
+  seedSubscriptionPlans,
+  checkUserFeatureAccess,
+  incrementUsage,
+  incrementUsageInternal,
+  // IoT add-on functions
+  getIotAddons,
+  getUserIotAddons,
+  createIotAddonPaymentIntent,
+  confirmIotAddonPayment,
+  cancelIotAddon,
+  checkIotFeatureAccess,
+  checkUserIotAccess,
+  seedIotAddons,
+  linkIotDevice,
+  unlinkIotDevice,
+  // Admin functions
+  adminGetAllSubscriptions,
+  adminGetUserSubscription,
+  adminUpdateUserSubscription,
+  adminCancelUserSubscription,
+  adminGetSubscriptionStats,
+  adminGetRevenueStats,
+  adminGetUserUsageStats,
+  adminResetUserUsage,
+  adminCreatePlan,
+  adminUpdatePlan,
+  adminDeletePlan,
+  // Admin IoT functions
+  adminGetAllUserAddons,
+  adminGetUserAddons,
+  adminCancelUserAddon,
+  adminGetLinkedDevices,
+  adminUnlinkDevice,
+  adminGetIotStats,
+  adminCreateIotAddon,
+  adminUpdateIotAddon,
+  adminDeleteIotAddon,
+};

@@ -1,6 +1,7 @@
 // controllers/reelController.js
 const ReelService = require("../services/reelService");
 const TagService = require("../services/tagService");
+const RecommendationService = require("../services/recommendationService");
 const catchAsync = require("../utils/catchAsync");
 
 class ReelController {
@@ -272,6 +273,105 @@ class ReelController {
     res.json({
       status: "success",
       data: reels,
+    });
+  });
+
+  /**
+   * Get recommended reels based on user interests
+   * GET /reels/recommended/:userId
+   */
+  static getRecommendedReels = catchAsync(async (req, res) => {
+    const { userId } = req.params;
+    const { page = 1, limit = 10, latitude, longitude } = req.query;
+
+    const location = latitude && longitude
+      ? { latitude: parseFloat(latitude), longitude: parseFloat(longitude) }
+      : null;
+
+    const result = await RecommendationService.getRecommendedReels(userId, {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      location,
+    });
+
+    res.json({
+      status: "success",
+      data: result.data,
+      pagination: result.pagination,
+    });
+  });
+
+  /**
+   * Record user interaction with a reel
+   * POST /reels/interaction
+   */
+  static recordInteraction = catchAsync(async (req, res) => {
+    const { userId, reelId, interactionType } = req.body;
+
+    if (!userId || !reelId || !interactionType) {
+      return res.status(400).json({
+        status: "error",
+        message: "userId, reelId, and interactionType are required",
+      });
+    }
+
+    const result = await RecommendationService.recordInteraction(
+      userId,
+      reelId,
+      interactionType
+    );
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  });
+
+  /**
+   * Get user's interest profile
+   * GET /reels/interests/:userId
+   */
+  static getUserInterests = catchAsync(async (req, res) => {
+    const { userId } = req.params;
+
+    const interests = await RecommendationService.getUserInterests(userId);
+
+    res.json({
+      status: "success",
+      data: interests,
+    });
+  });
+
+  /**
+   * Initialize user interests from their activity history
+   * POST /reels/interests/:userId/initialize
+   */
+  static initializeUserInterests = catchAsync(async (req, res) => {
+    const { userId } = req.params;
+
+    const userInterest = await RecommendationService.initializeUserInterests(userId);
+
+    res.json({
+      status: "success",
+      data: {
+        interests: userInterest.interests.slice(0, 20),
+        engagementLevel: userInterest.engagementLevel,
+      },
+    });
+  });
+
+  /**
+   * Sync tags for reels (utility endpoint for data migration)
+   * POST /reels/sync-tags
+   */
+  static syncReelTags = catchAsync(async (req, res) => {
+    const { reelId } = req.body;
+
+    const result = await RecommendationService.syncReelTags(reelId);
+
+    res.json({
+      status: "success",
+      data: result,
     });
   });
 }

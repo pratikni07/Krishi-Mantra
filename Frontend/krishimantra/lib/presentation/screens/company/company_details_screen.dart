@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/company_controller.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 import 'widgets/company_header.dart';
 import 'widgets/contact_info.dart';
 import '../../../data/services/language_service.dart';
 import '../../../core/constants/colors.dart';
-
-// import 'widgets/;
+import '../../../core/utils/responsive_utils.dart';
 import 'widgets/reviews_section.dart';
 import 'widgets/products_section.dart';
 
@@ -55,26 +55,32 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: AppColors.green,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.white,
         title: Text(
           companyDetailsText,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: AppSizes.fontL,
+          ),
         ),
+        iconTheme: IconThemeData(size: AppSizes.iconM),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, size: AppSizes.iconM),
             onPressed: () => controller.fetchCompanyDetails(widget.companyId),
           ),
         ],
       ),
       body: Obx(() {
         if (controller.isLoading.value) {
-          return const Center(child: CircularProgressIndicator());
+          return const SkeletonCompanyDetails();
         }
 
         if (controller.error.isNotEmpty) {
@@ -82,11 +88,24 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(controller.error.value),
+                Text(
+                  controller.error.value,
+                  style: TextStyle(fontSize: AppSizes.fontM),
+                ),
+                SizedBox(height: AppSizes.paddingL),
                 ElevatedButton(
                   onPressed: () =>
                       controller.fetchCompanyDetails(widget.companyId),
-                  child: Text(retryText),
+                  style: ElevatedButton.styleFrom(
+                    padding: RPadding.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                    ),
+                  ),
+                  child: Text(
+                    retryText,
+                    style: TextStyle(fontSize: AppSizes.fontM),
+                  ),
                 ),
               ],
             ),
@@ -101,17 +120,17 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: RPadding.all(16),
               child: Column(
                 children: [
                   CompanyHeader(company: company),
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSizes.paddingXL),
                   ContactInfo(company: company),
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSizes.paddingXL),
                   ReviewsSection(company: company),
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSizes.paddingXL),
                   ProductsSection(company: company),
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSizes.paddingXL),
                 ],
               ),
             ),

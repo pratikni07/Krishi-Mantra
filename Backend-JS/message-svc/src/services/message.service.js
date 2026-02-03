@@ -2,6 +2,7 @@
 const Message = require("../models/message.model");
 const Chat = require("../models/chat.model");
 const Group = require("../models/group.model");
+const notificationService = require("./notification.service");
 
 class MessageService {
   /**
@@ -63,10 +64,29 @@ class MessageService {
           deliveredAt: new Date(),
         },
       ],
+      // Mark as read by sender immediately
+      readBy: [
+        {
+          userId: sender,
+          userName: senderName || senderInfo.userName,
+          profilePhoto: senderPhoto || senderInfo.profilePhoto,
+          readAt: new Date(),
+        },
+      ],
     });
+
+    // Increment unread count for all OTHER participants (not the sender)
+    const unreadIncrements = {};
+    chat.participants.forEach((participant) => {
+      if (participant.userId !== sender) {
+        unreadIncrements[`unreadCount.${participant.userId}`] = 1;
+      }
+    });
+
     await Chat.findByIdAndUpdate(chatId, {
       lastMessage: message._id,
-      $inc: { [`unreadCount.${sender}`]: 1 },
+      lastMessageAt: new Date(),
+      $inc: unreadIncrements,
     });
 
     // Handle message delivery without using a message queue
@@ -75,6 +95,43 @@ class MessageService {
       userName: senderName || senderInfo.userName,
       profilePhoto: senderPhoto || senderInfo.profilePhoto,
     });
+
+    // Send notifications to other participants
+    try {
+      const otherParticipants = chat.participants.filter(p => p.userId !== sender);
+
+      if (chat.type === 'group') {
+        // Group message notifications
+        await notificationService.sendGroupMessageNotifications(otherParticipants, {
+          senderId: sender,
+          senderName: senderName || senderInfo.userName,
+          senderPhoto: senderPhoto || senderInfo.profilePhoto,
+          chatId,
+          messageId: message._id.toString(),
+          content,
+          mediaType: mediaType || 'text',
+        });
+      } else {
+        // Direct message notifications
+        for (const recipient of otherParticipants) {
+          await notificationService.sendMessageNotification({
+            recipientId: recipient.userId,
+            recipientName: recipient.userName,
+            senderId: sender,
+            senderName: senderName || senderInfo.userName,
+            senderPhoto: senderPhoto || senderInfo.profilePhoto,
+            chatId,
+            messageId: message._id.toString(),
+            messageContent: content,
+            messageType: mediaType || 'text',
+            isConsultant: false, // TODO: Check if sender is consultant
+            isGroup: false,
+          });
+        }
+      }
+    } catch (notifError) {
+      console.error('Error sending message notification:', notifError.message);
+    }
 
     return message;
   }
@@ -260,8 +317,11 @@ class MessageService {
       .limit(limit)
       .lean();
 
-    // Mark messages as read
-    await Message.updateMany(
+    // Get user info for read receipts
+    const userInfo = chat.participants.find((p) => p.userId === userId);
+
+    // Mark messages as read (only messages from others that user hasn't read)
+    const result = await Message.updateMany(
       {
         chatId,
         "readBy.userId": { $ne: userId },
@@ -271,11 +331,20 @@ class MessageService {
         $push: {
           readBy: {
             userId,
+            userName: userInfo?.userName || '',
+            profilePhoto: userInfo?.profilePhoto || '',
             readAt: new Date(),
           },
         },
       }
     );
+
+    // Always reset unread count for this user since they're viewing the chat
+    // This ensures the unread indicator clears even if no messages were marked as read
+    // (e.g., when the user only has their own sent messages)
+    await Chat.findByIdAndUpdate(chatId, {
+      [`unreadCount.${userId}`]: 0,
+    });
 
     return messages.reverse();
   }

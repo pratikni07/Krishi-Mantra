@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/responsive_utils.dart';
 import '../../../data/services/UserService.dart';
+import '../../../data/services/api_service.dart';
 import '../../../data/services/language_service.dart';
 import '../../controllers/auth_controller.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -16,10 +20,16 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final UserService _userService = UserService();
+  final ApiService _apiService = Get.find<ApiService>();
   final AuthController _authController = Get.find<AuthController>();
   late LanguageService _languageService;
   Map<String, dynamic>? userData;
   bool isLoading = true;
+
+  // User statistics
+  int postsCount = 0;
+  int commentsCount = 0;
+  int likesCount = 0;
 
   // Translatable text
   String profileText = 'Profile';
@@ -36,6 +46,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String postsText = 'Posts';
   String commentsText = 'Comments';
   String likesText = 'Likes';
+  String contactInfoText = 'Contact Info';
+  String accountInfoText = 'Account Info';
+  String logoutConfirmText = 'Are you sure you want to logout?';
+  String cancelText = 'Cancel';
+  String settingsText = 'Settings';
 
   @override
   void initState() {
@@ -65,6 +80,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _languageService.translate('Posts'),
       _languageService.translate('Comments'),
       _languageService.translate('Likes'),
+      _languageService.translate('Contact Info'),
+      _languageService.translate('Account Info'),
+      _languageService.translate('Are you sure you want to logout?'),
+      _languageService.translate('Cancel'),
+      _languageService.translate('Settings'),
     ]);
 
     setState(() {
@@ -82,6 +102,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       postsText = translations[11];
       commentsText = translations[12];
       likesText = translations[13];
+      contactInfoText = translations[14];
+      accountInfoText = translations[15];
+      logoutConfirmText = translations[16];
+      cancelText = translations[17];
+      settingsText = translations[18];
     });
   }
 
@@ -92,8 +117,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (user != null) {
         setState(() {
           userData = user.toJson();
-          isLoading = false;
         });
+        // Fetch user statistics
+        await _fetchUserStats(user.id);
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
@@ -101,29 +127,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => isLoading = false);
   }
 
+  Future<void> _fetchUserStats(String userId) async {
+    try {
+      final endpoint = ApiConstants.replacePathParams(
+        ApiConstants.USER_STATS,
+        {'userId': userId},
+      );
+      final response = await _apiService.get(endpoint);
+
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final stats = response.data['data']['stats'];
+        setState(() {
+          postsCount = stats['posts'] ?? 0;
+          commentsCount = stats['comments'] ?? 0;
+          likesCount = stats['likes'] ?? 0;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching user stats: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Get screen dimensions for responsiveness
-    final mediaQuery = MediaQuery.of(context);
-    final screenWidth = mediaQuery.size.width;
-    final screenHeight = mediaQuery.size.height;
-    final paddingTop = mediaQuery.padding.top;
-    final isSmallScreen = screenWidth < 360;
+    ResponsiveUtils.init(context);
+    final paddingTop = MediaQuery.of(context).padding.top;
 
-    // Calculate dynamic sizes
-    final appBarHeight = screenHeight * 0.28;
-    final profileImageSize = isSmallScreen ? 80.0 : 90.0;
-    final cardPadding = isSmallScreen ? 12.0 : 16.0;
-    final textScaleFactor = mediaQuery.textScaleFactor;
-    final titleFontSize = isSmallScreen ? 18.0 : 22.0;
+    // Calculate dynamic sizes using ResponsiveUtils
+    final appBarHeight = ResponsiveUtils.hp(28);
+    final profileImageSize = ResponsiveUtils.responsive(mobile: 80.0, tablet: 100.0);
+    final cardPadding = AppSizes.paddingL;
 
     if (isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            color: AppColors.green,
-          ),
-        ),
+      return Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: const SkeletonProfileScreen(),
       );
     }
 
@@ -139,13 +177,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final String rating =
         userData?['additionalDetails']?['rating']?.toString() ?? '0';
 
-    // Mock statistics - replace with real data when available
-    final int postsCount = userData?['stats']?['posts'] ?? 5;
-    final int commentsCount = userData?['stats']?['comments'] ?? 12;
-    final int likesCount = userData?['stats']?['likes'] ?? 28;
-
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: AppColors.scaffoldBackground,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
@@ -157,14 +190,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             backgroundColor: AppColors.green,
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.arrow_back, color: Colors.white),
+              icon: Icon(Icons.arrow_back, color: AppColors.white, size: AppSizes.iconM),
               onPressed: () => Get.back(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               title: Text(
                 '',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppColors.white,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -188,7 +221,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   // Profile image and name
                   Positioned(
-                    top: paddingTop + 60,
+                    top: paddingTop + ResponsiveUtils.hp(8),
                     left: cardPadding + 4,
                     child: Row(
                       children: [
@@ -197,13 +230,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: Colors.white,
+                              color: AppColors.white,
                               width: 2,
                             ),
                           ),
                           child: CircleAvatar(
                             radius: profileImageSize / 2,
-                            backgroundColor: Colors.white,
+                            backgroundColor: AppColors.white,
                             child: userData?['image'] != null
                                 ? ClipOval(
                                     child: CachedNetworkImage(
@@ -212,26 +245,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       width: profileImageSize - 4,
                                       height: profileImageSize - 4,
                                       placeholder: (context, url) =>
-                                          const CircularProgressIndicator(
+                                          CircularProgressIndicator(
                                         color: AppColors.green,
                                         strokeWidth: 2,
                                       ),
                                       errorWidget: (context, url, error) =>
-                                          const Icon(
+                                          Icon(
                                         Icons.person,
-                                        size: 40,
+                                        size: AppSizes.iconXL,
                                         color: AppColors.green,
                                       ),
                                     ),
                                   )
-                                : const Icon(
+                                : Icon(
                                     Icons.person,
-                                    size: 40,
+                                    size: AppSizes.iconXL,
                                     color: AppColors.green,
                                   ),
                           ),
                         ),
-                        SizedBox(width: 15),
+                        SizedBox(width: AppSizes.paddingL),
                         // Name and type
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,17 +272,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Text(
                               fullName,
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.white,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 20 / textScaleFactor,
+                                fontSize: AppSizes.fontXL,
                               ),
                             ),
                             Text(
                               userType,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
+                                color: AppColors.white.withOpacity(0.9),
                                 fontWeight: FontWeight.w400,
-                                fontSize: 14 / textScaleFactor,
+                                fontSize: AppSizes.fontS,
                               ),
                             ),
                           ],
@@ -265,21 +298,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Content
           SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                  horizontal: cardPadding, vertical: isSmallScreen ? 8 : 12),
+              padding: RPadding.symmetric(horizontal: 16, vertical: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Statistics row
                   Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    padding: EdgeInsets.all(cardPadding),
+                    margin: EdgeInsets.only(top: AppSizes.paddingS),
+                    padding: RPadding.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: AppColors.shadowLight,
                           blurRadius: 10,
                           spreadRadius: 1,
                         ),
@@ -288,37 +320,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildStatItem(
-                            postsText, postsCount.toString(), isSmallScreen),
+                        _buildStatItem(postsText, postsCount.toString()),
                         Container(
-                          height: 40,
+                          height: ResponsiveUtils.hp(5),
                           width: 1,
-                          color: Colors.grey[300],
+                          color: AppColors.borderLight,
                         ),
-                        _buildStatItem(commentsText, commentsCount.toString(),
-                            isSmallScreen),
+                        _buildStatItem(commentsText, commentsCount.toString()),
                         Container(
-                          height: 40,
+                          height: ResponsiveUtils.hp(5),
                           width: 1,
-                          color: Colors.grey[300],
+                          color: AppColors.borderLight,
                         ),
-                        _buildStatItem(
-                            likesText, likesCount.toString(), isSmallScreen),
+                        _buildStatItem(likesText, likesCount.toString()),
                       ],
                     ),
                   ),
 
-                  SizedBox(height: 16),
+                  SizedBox(height: AppSizes.paddingL),
 
                   // Contact Information
                   Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    margin: EdgeInsets.symmetric(vertical: AppSizes.paddingS),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: AppColors.shadowLight,
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -328,17 +357,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          padding: RPadding.only(left: 16, top: 16, right: 16, bottom: 8),
                           child: Text(
-                            'Contact Info',
+                            contactInfoText,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: Colors.grey[800],
+                              fontSize: AppSizes.fontL,
+                              color: AppColors.textDark,
                             ),
                           ),
                         ),
-                        const Divider(),
+                        const Divider(color: AppColors.divider),
                         _buildProfileInfoItem(
                             Icons.email, emailText, userData?['email'] ?? ''),
                         _buildProfileInfoItem(Icons.phone, phoneText,
@@ -351,13 +380,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   // Subscription Info
                   Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    margin: EdgeInsets.symmetric(vertical: AppSizes.paddingS),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: AppColors.shadowLight,
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -367,17 +396,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          padding: RPadding.only(left: 16, top: 16, right: 16, bottom: 8),
                           child: Text(
-                            'Account Info',
+                            accountInfoText,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: Colors.grey[800],
+                              fontSize: AppSizes.fontL,
+                              color: AppColors.textDark,
                             ),
                           ),
                         ),
-                        const Divider(),
+                        const Divider(color: AppColors.divider),
                         _buildProfileInfoItem(Icons.card_membership,
                             subscriptionText, subscriptionType),
                         if (userData?['accountType'] == 'consultant') ...[
@@ -393,25 +422,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Edit Profile Button
                   Container(
                     width: double.infinity,
-                    margin: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                    margin: RPadding.only(left: 16, top: 24, right: 16, bottom: 8),
                     child: ElevatedButton(
                       onPressed: () {
                         // TODO: Implement edit profile functionality
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        foregroundColor: AppColors.white,
+                        padding: RPadding.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                         ),
-                        minimumSize: const Size(double.infinity, 54),
+                        minimumSize: Size(double.infinity, AppSizes.buttonHeight),
                       ),
                       child: Text(
                         editProfileText,
-                        style: const TextStyle(
-                          fontSize: 16,
+                        style: TextStyle(
+                          fontSize: AppSizes.fontL,
                           fontWeight: FontWeight.bold,
+                          color: AppColors.white,
                         ),
                       ),
                     ),
@@ -420,7 +450,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Logout Button
                   Container(
                     width: double.infinity,
-                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    margin: RPadding.symmetric(horizontal: 16, vertical: 8),
                     child: OutlinedButton(
                       onPressed: () {
                         // Show logout confirmation dialog
@@ -428,20 +458,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context: context,
                           builder: (context) {
                             return AlertDialog(
-                              title: Text(logoutText),
-                              content: const Text(
-                                  'Are you sure you want to logout?'),
+                              backgroundColor: AppColors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                              ),
+                              title: Text(
+                                logoutText,
+                                style: TextStyle(
+                                  fontSize: AppSizes.fontL,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                              content: Text(
+                                logoutConfirmText,
+                                style: TextStyle(
+                                  fontSize: AppSizes.fontM,
+                                  color: AppColors.textGrey,
+                                ),
+                              ),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(context),
-                                  child: const Text('Cancel'),
+                                  child: Text(
+                                    cancelText,
+                                    style: TextStyle(
+                                      color: AppColors.textGrey,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: AppSizes.fontM,
+                                    ),
+                                  ),
                                 ),
                                 TextButton(
                                   onPressed: () {
                                     Navigator.pop(context);
                                     _authController.logout();
                                   },
-                                  child: Text(logoutText),
+                                  child: Text(
+                                    logoutText,
+                                    style: TextStyle(
+                                      color: AppColors.error,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: AppSizes.fontM,
+                                    ),
+                                  ),
                                 ),
                               ],
                             );
@@ -450,15 +510,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.green),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: RPadding.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                         ),
                       ),
                       child: Text(
                         logoutText,
-                        style: const TextStyle(
-                          fontSize: 16,
+                        style: TextStyle(
+                          fontSize: AppSizes.fontL,
                           fontWeight: FontWeight.bold,
                           color: AppColors.green,
                         ),
@@ -469,16 +529,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Settings Button
                   Container(
                     width: double.infinity,
-                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    margin: RPadding.only(left: 16, top: 8, right: 16, bottom: 16),
                     child: TextButton.icon(
                       onPressed: () {
                         Get.toNamed('/settings');
                       },
-                      icon: const Icon(Icons.settings, color: AppColors.green),
-                      label: const Text(
-                        'Settings',
+                      icon: Icon(Icons.settings, color: AppColors.green, size: AppSizes.iconM),
+                      label: Text(
+                        settingsText,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: AppSizes.fontL,
                           fontWeight: FontWeight.bold,
                           color: AppColors.green,
                         ),
@@ -491,31 +551,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           // Bottom padding
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 24),
+          SliverToBoxAdapter(
+            child: SizedBox(height: AppSizes.paddingXXL),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value, bool isSmallScreen) {
+  Widget _buildStatItem(String label, String value) {
     return Column(
       children: [
         Text(
           value,
           style: TextStyle(
-            fontSize: isSmallScreen ? 18 : 22,
+            fontSize: AppSizes.fontXL,
             fontWeight: FontWeight.bold,
             color: AppColors.green,
           ),
         ),
-        SizedBox(height: 4),
+        SizedBox(height: AppSizes.paddingS),
         Text(
           label,
           style: TextStyle(
-            fontSize: isSmallScreen ? 12 : 14,
-            color: Colors.grey[600],
+            fontSize: AppSizes.fontS,
+            color: AppColors.textLight,
           ),
         ),
       ],
@@ -524,37 +584,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileInfoItem(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: RPadding.symmetric(vertical: 12, horizontal: 16),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: RPadding.all(8),
             decoration: BoxDecoration(
               color: AppColors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppSizes.radiusL),
             ),
             child: Icon(
               icon,
               color: AppColors.green,
-              size: 22,
+              size: AppSizes.iconS,
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: AppSizes.paddingL),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+                  fontSize: AppSizes.fontS,
+                  color: AppColors.textLight,
                 ),
               ),
               Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 16,
+                style: TextStyle(
+                  fontSize: AppSizes.fontL,
                   fontWeight: FontWeight.w500,
+                  color: AppColors.textDark,
                 ),
               ),
             ],

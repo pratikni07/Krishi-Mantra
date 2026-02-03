@@ -21,7 +21,12 @@ class ChatController {
       });
 
       if (existingChat) {
-        return res.json(existingChat);
+        // Add otherParticipants for the requesting user
+        const chatResponse = existingChat.toObject();
+        chatResponse.otherParticipants = chatResponse.participants.filter(
+          (p) => p.userId !== userId
+        );
+        return res.json(chatResponse);
       }
 
       const chat = await Chat.create({
@@ -40,7 +45,13 @@ class ChatController {
         ],
       });
 
-      return res.status(201).json(chat);
+      // Add otherParticipants for the requesting user (filter out their own participant entry)
+      const chatResponse = chat.toObject();
+      chatResponse.otherParticipants = chatResponse.participants.filter(
+        (p) => p.userId !== userId
+      );
+
+      return res.status(201).json(chatResponse);
     } catch (error) {
       console.error("Create direct chat error:", error);
       return res.status(500).json({ error: "Internal server error" });

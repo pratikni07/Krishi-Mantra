@@ -4,13 +4,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../data/services/language_service.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/constants/colors.dart';
+import '../../../core/utils/responsive_utils.dart';
 import 'widgets/media_content.dart';
 import 'widgets/post_header.dart';
 import 'widgets/post_content.dart';
 import 'widgets/post_actions.dart';
 import 'widgets/comments_section.dart';
 import 'widgets/comment_input.dart';
-import '../../../data/models/comment_modal.dart';
+import '../../../data/models/comment_model.dart';
 import '../../controllers/feed_controller.dart';
 import '../../widgets/video_player_widget.dart';
 import '../../../core/utils/error_handler.dart';
@@ -191,18 +194,24 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: AppColors.textDark, size: AppSizes.iconM),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           postDetailsText,
-          style: const TextStyle(color: Colors.black),
+          style: TextStyle(
+            color: AppColors.textDark,
+            fontSize: AppSizes.fontL,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       body: Column(
@@ -242,7 +251,7 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
   Widget _buildCommentsSection() {
     return Obx(() {
       if (_feedController.isLoadingComments.value && _feedController.comments.isEmpty) {
-        return Center(child: CircularProgressIndicator(color: Colors.green));
+        return const Center(child: CircularProgressIndicator(color: AppColors.green));
       }
 
       // Only show error screen for actual errors, not for the "no comments" case
@@ -284,19 +293,21 @@ class MediaContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
     // Validate the URL first
     final String validatedUrl = ImageUtils.validateUrl(mediaUrl);
-    
+    final mediaHeight = ResponsiveUtils.hp(25);
+
     if (validatedUrl.isEmpty) {
       return Container(
         width: double.infinity,
-        height: 200,
-        color: Colors.grey.withOpacity(0.2),
-        child: const Center(
+        height: mediaHeight,
+        color: AppColors.shimmerBase.withOpacity(0.2),
+        child: Center(
           child: Icon(
             Icons.broken_image,
-            color: Colors.grey,
-            size: 48,
+            color: AppColors.textLight,
+            size: AppSizes.iconXL,
           ),
         ),
       );
@@ -320,16 +331,16 @@ class MediaContent extends StatelessWidget {
         width: double.infinity,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
-          print('❌ Error loading post image: $error');
+          logger.e('Error loading post image', tag: 'FeedDetailsScreen', error: error);
           return Container(
             width: double.infinity,
-            height: 200,
-            color: Colors.grey.withOpacity(0.2),
-            child: const Center(
+            height: mediaHeight,
+            color: AppColors.shimmerBase.withOpacity(0.2),
+            child: Center(
               child: Icon(
                 Icons.broken_image,
-                color: Colors.grey,
-                size: 48,
+                color: AppColors.textLight,
+                size: AppSizes.iconXL,
               ),
             ),
           );

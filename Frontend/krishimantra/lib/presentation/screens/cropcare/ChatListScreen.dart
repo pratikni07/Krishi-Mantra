@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/responsive_utils.dart';
+import '../../../core/utils/language_helper.dart';
 import '../../../data/models/consultant_model.dart';
 import '../../../data/models/message_model.dart';
 import '../../../data/services/UserService.dart';
+import '../../../data/services/language_service.dart';
 import '../../controllers/message_controller.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/skeleton/skeleton_widgets.dart';
 import 'ChatDetailScreen.dart';
 import 'package:get_storage/get_storage.dart';
 import '../../../data/services/LocationService.dart';
@@ -20,7 +25,7 @@ class ChatListScreen extends StatefulWidget {
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListScreenState extends State<ChatListScreen> with TranslationMixin {
   final MessageController _messageController = Get.find<MessageController>();
   final UserService _userService = Get.find<UserService>();
   final TextEditingController _groupNameController = TextEditingController();
@@ -32,15 +37,91 @@ class _ChatListScreenState extends State<ChatListScreen> {
   final _box = GetStorage();
   static const String CACHED_CHATS_KEY = 'cached_chats';
 
+  // Translation keys
+  static const String KEY_UNKNOWN_GROUP = 'unknown_group';
+  static const String KEY_UNKNOWN = 'unknown';
+  static const String KEY_NO_MESSAGES = 'no_messages_yet';
+  static const String KEY_CREATE_NEW_GROUP = 'create_new_group';
+  static const String KEY_GROUP_NAME = 'group_name';
+  static const String KEY_ENTER_GROUP_NAME = 'enter_group_name';
+  static const String KEY_GROUP_DESCRIPTION = 'group_description';
+  static const String KEY_ENTER_GROUP_DESC = 'enter_group_description';
+  static const String KEY_CANCEL = 'cancel';
+  static const String KEY_CREATE_GROUP = 'create_group';
+  static const String KEY_SUCCESS = 'success';
+  static const String KEY_GROUP_CREATED = 'group_created_successfully';
+  static const String KEY_ERROR = 'error';
+  static const String KEY_FAILED_CREATE_GROUP = 'failed_to_create_group';
+  static const String KEY_ENTER_GROUP_NAME_ERROR = 'please_enter_group_name';
+  static const String KEY_LOCATION_PERMISSION = 'location_permission_required';
+  static const String KEY_LOCATION_PERMISSION_MSG = 'enable_location_for_consultants';
+  static const String KEY_OPEN_SETTINGS = 'open_settings';
+  static const String KEY_AVAILABLE_CONSULTANTS = 'available_consultants';
+  static const String KEY_NO_CONSULTANTS = 'no_consultants_available';
+  static const String KEY_YEARS = 'years';
+  static const String KEY_FAILED_CREATE_CHAT = 'failed_to_create_chat';
+  static const String KEY_RETRY = 'retry';
+  static const String KEY_NO_CHATS = 'no_chats_found';
+  static const String KEY_YESTERDAY = 'yesterday';
+  static const String KEY_MONDAY = 'monday';
+  static const String KEY_TUESDAY = 'tuesday';
+  static const String KEY_WEDNESDAY = 'wednesday';
+  static const String KEY_THURSDAY = 'thursday';
+  static const String KEY_FRIDAY = 'friday';
+  static const String KEY_SATURDAY = 'saturday';
+  static const String KEY_SUNDAY = 'sunday';
+
   @override
   void initState() {
     super.initState();
+    _registerTranslations();
+    _initializeLanguage();
     _loadCachedChats();
     // Add a small delay to ensure user ID is available
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialChats();
     });
     _setupScrollListener();
+  }
+
+  void _registerTranslations() {
+    registerTranslation(KEY_UNKNOWN_GROUP, 'Unknown Group');
+    registerTranslation(KEY_UNKNOWN, 'Unknown');
+    registerTranslation(KEY_NO_MESSAGES, 'No messages yet');
+    registerTranslation(KEY_CREATE_NEW_GROUP, 'Create New Group');
+    registerTranslation(KEY_GROUP_NAME, 'Group Name');
+    registerTranslation(KEY_ENTER_GROUP_NAME, 'Enter group name');
+    registerTranslation(KEY_GROUP_DESCRIPTION, 'Group Description');
+    registerTranslation(KEY_ENTER_GROUP_DESC, 'Enter group description');
+    registerTranslation(KEY_CANCEL, 'Cancel');
+    registerTranslation(KEY_CREATE_GROUP, 'Create Group');
+    registerTranslation(KEY_SUCCESS, 'Success');
+    registerTranslation(KEY_GROUP_CREATED, 'Group created successfully');
+    registerTranslation(KEY_ERROR, 'Error');
+    registerTranslation(KEY_FAILED_CREATE_GROUP, 'Failed to create group');
+    registerTranslation(KEY_ENTER_GROUP_NAME_ERROR, 'Please enter a group name');
+    registerTranslation(KEY_LOCATION_PERMISSION, 'Location Permission Required');
+    registerTranslation(KEY_LOCATION_PERMISSION_MSG, 'Please enable location services to connect with consultants near you.');
+    registerTranslation(KEY_OPEN_SETTINGS, 'Open Settings');
+    registerTranslation(KEY_AVAILABLE_CONSULTANTS, 'Available Consultants');
+    registerTranslation(KEY_NO_CONSULTANTS, 'No consultants available');
+    registerTranslation(KEY_YEARS, 'years');
+    registerTranslation(KEY_FAILED_CREATE_CHAT, 'Failed to create chat');
+    registerTranslation(KEY_RETRY, 'Retry');
+    registerTranslation(KEY_NO_CHATS, 'No chats found');
+    registerTranslation(KEY_YESTERDAY, 'Yesterday');
+    registerTranslation(KEY_MONDAY, 'Monday');
+    registerTranslation(KEY_TUESDAY, 'Tuesday');
+    registerTranslation(KEY_WEDNESDAY, 'Wednesday');
+    registerTranslation(KEY_THURSDAY, 'Thursday');
+    registerTranslation(KEY_FRIDAY, 'Friday');
+    registerTranslation(KEY_SATURDAY, 'Saturday');
+    registerTranslation(KEY_SUNDAY, 'Sunday');
+  }
+
+  Future<void> _initializeLanguage() async {
+    await updateTranslations();
+    if (mounted) setState(() {});
   }
 
   void _setupScrollListener() {
@@ -133,13 +214,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final lastMessage = chat.lastMessageDetails?.isNotEmpty == true
         ? chat.lastMessageDetails?.first
         : null;
+    final avatarRadius = ResponsiveUtils.responsive(mobile: 24.0, tablet: 30.0);
 
     return InkWell(
-      onTap: () {
-        Get.to(() => ChatDetailScreen(chat: chat));
+      onTap: () async {
+        await Get.to(() => ChatDetailScreen(chat: chat));
+        // Refresh chats after returning to update unread counts
+        if (_messageController.userId.value != null) {
+          _messageController.loadUserChats(_messageController.userId.value!);
+        }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: RPadding.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -151,16 +237,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
         child: Row(
           children: [
             CircleAvatar(
-              radius: 24,
+              radius: avatarRadius,
               backgroundColor: AppColors.faintGreen,
               backgroundImage: isGroup
                   ? null
                   : NetworkImage(otherParticipant?.profilePhoto ?? ''),
               child: isGroup
-                  ? const Icon(Icons.group, color: AppColors.green)
+                  ? Icon(Icons.group, color: AppColors.green, size: AppSizes.iconM)
                   : null,
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: AppSizes.paddingM),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,11 +257,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       Expanded(
                         child: Text(
                           isGroup
-                              ? chat.groupDetails?.name ?? 'Unknown Group'
-                              : otherParticipant?.userName ?? 'Unknown',
-                          style: const TextStyle(
+                              ? chat.groupDetails?.name ?? getTranslation(KEY_UNKNOWN_GROUP)
+                              : otherParticipant?.userName ?? getTranslation(KEY_UNKNOWN),
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            fontSize: 16,
+                            fontSize: AppSizes.fontL,
                             color: AppColors.textGrey,
                           ),
                           maxLines: 1,
@@ -186,21 +272,21 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         _formatDateTime(
                             lastMessage?.createdAt ?? chat.createdAt),
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: AppSizes.fontS,
                           color: AppColors.textGrey.withOpacity(0.7),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: AppSizes.paddingXS),
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          lastMessage?.content ?? 'No messages yet',
+                          lastMessage?.content ?? getTranslation(KEY_NO_MESSAGES),
                           style: TextStyle(
                             color: AppColors.textGrey.withOpacity(0.8),
-                            fontSize: 14,
+                            fontSize: AppSizes.fontM,
                             fontStyle: lastMessage == null
                                 ? FontStyle.italic
                                 : FontStyle.normal,
@@ -214,9 +300,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           chat.unreadCount[_messageController.userId.value]! >
                               0)
                         Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                          margin: EdgeInsets.only(left: AppSizes.paddingS),
+                          padding: RPadding.symmetric(horizontal: 8, vertical: 4),
                           decoration: const BoxDecoration(
                             color: AppColors.green,
                             shape: BoxShape.circle,
@@ -224,9 +309,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           child: Text(
                             chat.unreadCount[_messageController.userId.value]
                                 .toString(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.white,
-                              fontSize: 12,
+                              fontSize: AppSizes.fontS,
                             ),
                           ),
                         ),
@@ -243,13 +328,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   Widget _buildCreateGroupDialog() {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusXL)),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        padding: const EdgeInsets.all(24),
+        padding: RPadding.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppSizes.radiusXL),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
@@ -265,112 +350,116 @@ class _ChatListScreenState extends State<ChatListScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: RPadding.all(8),
                   decoration: BoxDecoration(
                     color: AppColors.faintGreen,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusM),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.group_add,
                     color: AppColors.green,
-                    size: 24,
+                    size: AppSizes.iconM,
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Create New Group',
+                SizedBox(width: AppSizes.paddingM),
+                Text(
+                  getTranslation(KEY_CREATE_NEW_GROUP),
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: AppSizes.fontTitle,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textGrey,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'Group Name',
+            SizedBox(height: AppSizes.paddingXL),
+            Text(
+              getTranslation(KEY_GROUP_NAME),
               style: TextStyle(
-                fontSize: 14,
+                fontSize: AppSizes.fontM,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textGrey,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: AppSizes.paddingS),
             TextField(
               controller: _groupNameController,
+              style: TextStyle(fontSize: AppSizes.fontM),
               decoration: InputDecoration(
-                hintText: 'Enter group name',
+                hintText: getTranslation(KEY_ENTER_GROUP_NAME),
                 hintStyle: TextStyle(
                   color: AppColors.textGrey.withOpacity(0.5),
+                  fontSize: AppSizes.fontM,
                 ),
                 filled: true,
                 fillColor: AppColors.faintGreen.withOpacity(0.1),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                   borderSide:
                       const BorderSide(color: AppColors.green, width: 1.5),
                 ),
-                prefixIcon: const Icon(
+                prefixIcon: Icon(
                   Icons.group,
                   color: AppColors.green,
+                  size: AppSizes.iconM,
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              'Group Description',
+            SizedBox(height: AppSizes.paddingL),
+            Text(
+              getTranslation(KEY_GROUP_DESCRIPTION),
               style: TextStyle(
-                fontSize: 14,
+                fontSize: AppSizes.fontM,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textGrey,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: AppSizes.paddingS),
             TextField(
               controller: _groupDescController,
               maxLines: 3,
+              style: TextStyle(fontSize: AppSizes.fontM),
               decoration: InputDecoration(
-                hintText: 'Enter group description',
+                hintText: getTranslation(KEY_ENTER_GROUP_DESC),
                 hintStyle: TextStyle(
                   color: AppColors.textGrey.withOpacity(0.5),
+                  fontSize: AppSizes.fontM,
                 ),
                 filled: true,
                 fillColor: AppColors.faintGreen.withOpacity(0.1),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
                   borderSide:
                       const BorderSide(color: AppColors.green, width: 1.5),
                 ),
               ),
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: AppSizes.paddingXXL),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
                   onPressed: () => Get.back(),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                    padding: RPadding.symmetric(horizontal: 20, vertical: 12),
                   ),
-                  child: const Text(
-                    'Cancel',
+                  child: Text(
+                    getTranslation(KEY_CANCEL),
                     style: TextStyle(
                       color: AppColors.textGrey,
-                      fontSize: 16,
+                      fontSize: AppSizes.fontL,
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                SizedBox(width: AppSizes.paddingL),
                 ElevatedButton(
                   onPressed: () async {
                     if (_groupNameController.text.isNotEmpty) {
@@ -387,8 +476,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           _groupNameController.clear();
                           _groupDescController.clear();
                           Get.snackbar(
-                            'Success',
-                            'Group created successfully',
+                            getTranslation(KEY_SUCCESS),
+                            getTranslation(KEY_GROUP_CREATED),
                             backgroundColor: AppColors.green,
                             colorText: Colors.white,
                             snackPosition: SnackPosition.BOTTOM,
@@ -396,8 +485,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         }
                       } catch (e) {
                         Get.snackbar(
-                          'Error',
-                          'Failed to create group',
+                          getTranslation(KEY_ERROR),
+                          getTranslation(KEY_FAILED_CREATE_GROUP),
                           backgroundColor: Colors.red,
                           colorText: Colors.white,
                           snackPosition: SnackPosition.BOTTOM,
@@ -405,8 +494,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       }
                     } else {
                       Get.snackbar(
-                        'Error',
-                        'Please enter a group name',
+                        getTranslation(KEY_ERROR),
+                        getTranslation(KEY_ENTER_GROUP_NAME_ERROR),
                         backgroundColor: Colors.red,
                         colorText: Colors.white,
                         snackPosition: SnackPosition.BOTTOM,
@@ -415,18 +504,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.green,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
+                    padding: RPadding.symmetric(horizontal: 24, vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
                     ),
                     elevation: 2,
                   ),
-                  child: const Text(
-                    'Create Group',
+                  child: Text(
+                    getTranslation(KEY_CREATE_GROUP),
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: AppSizes.fontL,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -465,20 +553,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Location Permission Required'),
-        content: const Text(
-            'Please enable location services to connect with consultants near you.'),
+        title: Text(getTranslation(KEY_LOCATION_PERMISSION)),
+        content: Text(getTranslation(KEY_LOCATION_PERMISSION_MSG)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(getTranslation(KEY_CANCEL)),
           ),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
               await AppSettings.openAppSettings();
             },
-            child: const Text('Open Settings'),
+            child: Text(getTranslation(KEY_OPEN_SETTINGS)),
           ),
         ],
       ),
@@ -492,33 +579,33 @@ class _ChatListScreenState extends State<ChatListScreen> {
       isScrollControlled: true,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXXL)),
         ),
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
+              padding: RPadding.all(16),
+              decoration: BoxDecoration(
                 color: AppColors.green,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXXL)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.person, color: Colors.white),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Available Consultants',
+                  Icon(Icons.person, color: Colors.white, size: AppSizes.iconM),
+                  SizedBox(width: AppSizes.paddingM),
+                  Text(
+                    getTranslation(KEY_AVAILABLE_CONSULTANTS),
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: AppSizes.fontL,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
+                    icon: Icon(Icons.close, color: Colors.white, size: AppSizes.iconM),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -527,26 +614,41 @@ class _ChatListScreenState extends State<ChatListScreen> {
             Expanded(
               child: Obx(() {
                 if (_messageController.isLoadingConsultants.value) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: AppColors.green),
+                  return SizedBox(
+                    height: 160,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.symmetric(horizontal: AppSizes.paddingL),
+                      itemCount: 4,
+                      itemBuilder: (context, index) {
+                        return const SkeletonConsultantCard();
+                      },
+                    ),
                   );
                 }
 
                 if (_messageController.consultantError.value != null) {
                   return Center(
-                    child: Text(_messageController.consultantError.value!),
+                    child: Text(
+                      _messageController.consultantError.value!,
+                      style: TextStyle(fontSize: AppSizes.fontM),
+                    ),
                   );
                 }
 
                 if (_messageController.consultants.isEmpty) {
-                  return const Center(
-                    child: Text('No consultants available'),
+                  return Center(
+                    child: Text(
+                      getTranslation(KEY_NO_CONSULTANTS),
+                      style: TextStyle(fontSize: AppSizes.fontM),
+                    ),
                   );
                 }
 
                 return ListView.builder(
                   itemCount: _messageController.consultants.length,
-                  padding: const EdgeInsets.all(16),
+                  padding: RPadding.all(16),
                   itemBuilder: (context, index) {
                     final consultant = _messageController.consultants[index];
                     return _buildConsultantCard(consultant);
@@ -566,33 +668,36 @@ class _ChatListScreenState extends State<ChatListScreen> {
           'Building card for consultant: ${consultant.id} - ${consultant.userName}');
     }
 
+    final avatarRadius = ResponsiveUtils.responsive(mobile: 30.0, tablet: 38.0);
+    final avatarSize = avatarRadius * 2;
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: AppSizes.paddingL),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusL)),
       child: InkWell(
         onTap: () => _createDirectChat(consultant),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSizes.radiusL),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: RPadding.all(16),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 30,
+                radius: avatarRadius,
                 backgroundColor: AppColors.faintGreen,
                 child: consultant.profilePhotoId != null
                     ? ClipOval(
                         child: Image.network(
                           consultant.profilePhotoId!,
-                          width: 60,
-                          height: 60,
+                          width: avatarSize,
+                          height: avatarSize,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             return Text(
                               consultant.userName[0].toUpperCase(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.green,
-                                fontSize: 24,
+                                fontSize: AppSizes.fontTitle,
                               ),
                             );
                           },
@@ -600,40 +705,40 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       )
                     : Text(
                         consultant.userName[0].toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.green,
-                          fontSize: 24,
+                          fontSize: AppSizes.fontTitle,
                         ),
                       ),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: AppSizes.paddingL),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       consultant.userName,
-                      style: const TextStyle(
-                        fontSize: 16,
+                      style: TextStyle(
+                        fontSize: AppSizes.fontL,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: AppSizes.paddingXS),
                     Row(
                       children: [
-                        Icon(Icons.star, color: Colors.amber, size: 16),
-                        Text(' ${consultant.rating}'),
-                        Text(' • ${consultant.experience} years'),
+                        Icon(Icons.star, color: Colors.amber, size: AppSizes.iconS),
+                        Text(' ${consultant.rating}', style: TextStyle(fontSize: AppSizes.fontM)),
+                        Text(' • ${consultant.experience} ${getTranslation(KEY_YEARS)}', style: TextStyle(fontSize: AppSizes.fontM)),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: AppSizes.paddingXS),
                     Row(
                       children: [
                         if (consultant.company.logo.isNotEmpty &&
                             Uri.tryParse(consultant.company.logo)?.hasScheme ==
                                 true)
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(AppSizes.radiusXS),
                             child: Image.network(
                               consultant.company.logo,
                               height: 20,
@@ -655,17 +760,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
                             width: 20,
                             decoration: BoxDecoration(
                               color: Colors.grey[200],
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(AppSizes.radiusXS),
                             ),
                             child: Icon(Icons.business,
                                 size: 12, color: Colors.grey[400]),
                           ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: AppSizes.paddingS),
                         Text(
                           consultant.company.name,
                           style: TextStyle(
                             color: Colors.grey[600],
-                            fontSize: 12,
+                            fontSize: AppSizes.fontS,
                           ),
                         ),
                       ],
@@ -731,7 +836,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
         if (mounted) {
           Navigator.pop(context); // Close consultant list
           await Future.delayed(const Duration(milliseconds: 100));
-          Get.to(() => ChatDetailScreen(chat: chat));
+          await Get.to(() => ChatDetailScreen(chat: chat));
+          // Refresh chats after returning to update unread counts
+          if (_messageController.userId.value != null) {
+            _messageController.loadUserChats(_messageController.userId.value!);
+          }
         }
       } else {
         throw Exception('Invalid chat object received');
@@ -742,8 +851,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
       }
 
       Get.snackbar(
-        'Error',
-        'Failed to create chat: ${e.toString()}',
+        getTranslation(KEY_ERROR),
+        '${getTranslation(KEY_FAILED_CREATE_CHAT)}: ${e.toString()}',
         backgroundColor: Colors.red,
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
@@ -754,21 +863,45 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.white,
-      body: SafeArea(
-        child: Column(
+    ResponsiveUtils.init(context);
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: AppColors.green,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.white,
+        body: Column(
           children: [
             Container(
               color: AppColors.green,
-              padding: const EdgeInsets.all(16),
-              child: const AppHeader(),
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 8,
+                left: 8,
+                right: AppSizes.paddingL,
+                bottom: AppSizes.paddingL,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.arrow_back, color: Colors.white, size: AppSizes.iconM),
+                    onPressed: () => Get.back(),
+                  ),
+                  const Expanded(child: AppHeader()),
+                ],
+              ),
             ),
             Expanded(
               child: Obx(() {
                 if (_messageController.isLoading.value && _currentPage == 1) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: AppColors.green),
+                  return ListView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: 5,
+                    itemBuilder: (context, index) {
+                      return const SkeletonChatItem();
+                    },
                   );
                 }
 
@@ -779,12 +912,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       children: [
                         Text(
                           _messageController.error.value!,
-                          style: const TextStyle(color: Colors.red),
+                          style: TextStyle(color: Colors.red, fontSize: AppSizes.fontM),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: AppSizes.paddingL),
                         ElevatedButton(
                           onPressed: _onRefresh,
-                          child: const Text('Retry'),
+                          style: ElevatedButton.styleFrom(
+                            padding: RPadding.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                            ),
+                          ),
+                          child: Text(getTranslation(KEY_RETRY), style: TextStyle(fontSize: AppSizes.fontM)),
                         ),
                       ],
                     ),
@@ -792,12 +931,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 }
 
                 if (_messageController.chats.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text(
-                      'No chats found',
+                      getTranslation(KEY_NO_CHATS),
                       style: TextStyle(
                         color: AppColors.textGrey,
-                        fontSize: 16,
+                        fontSize: AppSizes.fontL,
                       ),
                     ),
                   );
@@ -813,10 +952,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         (_isLoadingMore ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index == _messageController.chats.length) {
-                        return const Center(
+                        return Center(
                           child: Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: CircularProgressIndicator(
+                            padding: RPadding.all(8),
+                            child: const CircularProgressIndicator(
                               color: AppColors.green,
                             ),
                           ),
@@ -831,40 +970,40 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
           ],
         ),
-      ),
-      floatingActionButton: Obx(() {
-        final accountType = _messageController.accountType.value;
-        if (accountType == 'consultant' || accountType == 'admin') {
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              FloatingActionButton(
-                heroTag: 'createGroup',
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => _buildCreateGroupDialog(),
-                  );
-                },
-                backgroundColor: AppColors.green,
-                child: const Icon(Icons.group_add, color: AppColors.white),
-              ),
-              const SizedBox(height: 16),
-              FloatingActionButton(
-                heroTag: 'createChat',
-                onPressed: _showConsultantsList,
-                backgroundColor: AppColors.green,
-                child: const Icon(Icons.chat, color: AppColors.white),
-              ),
-            ],
+        floatingActionButton: Obx(() {
+          final accountType = _messageController.accountType.value;
+          if (accountType == 'consultant' || accountType == 'admin') {
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'createGroup',
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => _buildCreateGroupDialog(),
+                    );
+                  },
+                  backgroundColor: AppColors.green,
+                  child: Icon(Icons.group_add, color: AppColors.white, size: AppSizes.iconM),
+                ),
+                SizedBox(height: AppSizes.paddingL),
+                FloatingActionButton(
+                  heroTag: 'createChat',
+                  onPressed: _showConsultantsList,
+                  backgroundColor: AppColors.green,
+                  child: Icon(Icons.chat, color: AppColors.white, size: AppSizes.iconM),
+                ),
+              ],
+            );
+          }
+          return FloatingActionButton(
+            onPressed: _showConsultantsList,
+            backgroundColor: AppColors.green,
+            child: Icon(Icons.chat, color: AppColors.white, size: AppSizes.iconM),
           );
-        }
-        return FloatingActionButton(
-          onPressed: _showConsultantsList,
-          backgroundColor: AppColors.green,
-          child: const Icon(Icons.chat, color: AppColors.white),
-        );
-      }),
+        }),
+      ),
     );
   }
 
@@ -890,7 +1029,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     if (difference.inDays == 0) {
       return '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
     } else if (difference.inDays == 1) {
-      return 'Yesterday';
+      return getTranslation(KEY_YESTERDAY);
     } else if (difference.inDays < 7) {
       return _getDayOfWeek(dateTime.weekday);
     } else {
@@ -901,19 +1040,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
   String _getDayOfWeek(int day) {
     switch (day) {
       case 1:
-        return 'Monday';
+        return getTranslation(KEY_MONDAY);
       case 2:
-        return 'Tuesday';
+        return getTranslation(KEY_TUESDAY);
       case 3:
-        return 'Wednesday';
+        return getTranslation(KEY_WEDNESDAY);
       case 4:
-        return 'Thursday';
+        return getTranslation(KEY_THURSDAY);
       case 5:
-        return 'Friday';
+        return getTranslation(KEY_FRIDAY);
       case 6:
-        return 'Saturday';
+        return getTranslation(KEY_SATURDAY);
       case 7:
-        return 'Sunday';
+        return getTranslation(KEY_SUNDAY);
       default:
         return '';
     }

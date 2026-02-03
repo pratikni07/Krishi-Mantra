@@ -23,6 +23,8 @@ import '../presentation/screens/schemes/gov_schemes_screen.dart';
 import '../presentation/screens/marketplace/marketplace_screen.dart';
 
 import '../presentation/screens/marketplace/add_product_screen.dart';
+import '../presentation/screens/notification/notification_screen.dart';
+import '../presentation/screens/subscription/subscription_plans_screen.dart';
 
 class AppRoutes {
   static const String SPLASH = '/splash';
@@ -56,6 +58,10 @@ class AppRoutes {
   static const String MARKETPLACE_DETAIL = '/marketplace-detail';
   static const String ADD_MARKETPLACE_PRODUCT = '/add-marketplace-product';
 
+  // Subscription routes
+  static const String SUBSCRIPTION_PLANS = '/subscription-plans';
+  static const String PAYMENT_HISTORY = '/payment-history';
+
   static final routes = [
     GetPage(name: SPLASH, page: () => SplashScreen()),
     GetPage(name: LOGIN, page: () => LoginScreen()),
@@ -80,7 +86,10 @@ class AppRoutes {
     // Note: OTP and Signup screens need parameters, so they'll be navigated to using Get.to() directly
     // rather than using named routes
 
-    // Add notification routes
+    // Notification route
+    GetPage(name: NOTIFICATIONS, page: () => const NotificationScreen()),
+
+    // Marketplace routes
     GetPage(name: MARKETPLACE, page: () => const MarketplaceScreen()),
     GetPage(
       name: MARKETPLACE_DETAIL,
@@ -89,5 +98,9 @@ class AppRoutes {
     ),
     GetPage(
         name: ADD_MARKETPLACE_PRODUCT, page: () => const AddProductScreen()),
+
+    // Subscription routes
+    GetPage(
+        name: SUBSCRIPTION_PLANS, page: () => const SubscriptionPlansScreen()),
   ];
 }

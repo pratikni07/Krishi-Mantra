@@ -1,499 +1,498 @@
-const axios = require("axios");
-const bcrypt = require("bcrypt");
-const User = require("../model/User");
-const OTP = require("../model/OTP");
-const jwt = require("jsonwebtoken");
-const otpGenerator = require("otp-generator");
-const mailSender = require("../utils/mailSender");
-const { passwordUpdated } = require("../mail/templates/passwordUpdate");
-const WhatsAppOTP = require("../model/WhatsappOTP");
+const axios = require('axios');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const otpGenerator = require('otp-generator');
 
-const UserDetail = require("../model/UserDetail");
-require("dotenv").config();
+const User = require('../model/User');
+const UserDetail = require('../model/UserDetail');
+const WhatsAppOTP = require('../model/WhatsappOTP');
+const mailSender = require('../utils/mailSender');
+const { sendOTP: sendSMSOTP } = require('../utils/smsSender');
+const { passwordUpdated } = require('../mail/templates/passwordUpdate');
+const { asyncHandler } = require('../utils');
+const { HTTP_STATUS, JWT_CONFIG, OTP_CONFIG } = require('../utils/constants');
+const logger = require('../utils/logger');
 
-// Controller for Changing Password
-exports.changePassword = async (req, res) => {
-  try {
-    // Get user data from req.user
-    const userDetails = await User.findById(req.user.id);
+/**
+ * Generate JWT token
+ * @param {Object} payload - Token payload
+ * @returns {string} - JWT token
+ */
+const generateToken = (payload) => {
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: JWT_CONFIG.ACCESS_TOKEN_EXPIRY,
+  });
+};
 
-    // Get old password, new password, and confirm new password from req.body
-    const { oldPassword, newPassword, confirmNewPassword } = req.body;
+/**
+ * Get cookie options
+ * @returns {Object} - Cookie options
+ */
+const getCookieOptions = () => ({
+  expires: new Date(Date.now() + JWT_CONFIG.COOKIE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+});
 
-    // Validate old password
-    const isPasswordMatch = await bcrypt.compare(
-      oldPassword,
-      userDetails.password
-    );
-    if (oldPassword === newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "New Password cannot be same as Old Password",
-      });
-    }
+/**
+ * Change user password
+ */
+exports.changePassword = asyncHandler(async (req, res) => {
+  const { oldPassword, newPassword, confirmNewPassword } = req.body;
 
-    if (!isPasswordMatch) {
-      // If old password does not match, return a 401 (Unauthorized) error
-      return res
-        .status(401)
-        .json({ success: false, message: "The password is incorrect" });
-    }
-
-    // Match new password and confirm new password
-    if (newPassword !== confirmNewPassword) {
-      // If new password and confirm new password do not match, return a 400 (Bad Request) error
-      return res.status(400).json({
-        success: false,
-        message: "The password and confirm password does not match",
-      });
-    }
-
-    // Update password
-    const encryptedPassword = await bcrypt.hash(newPassword, 10);
-    const updatedUserDetails = await User.findByIdAndUpdate(
-      req.user.id,
-      { password: encryptedPassword },
-      { new: true }
-    );
-
-    // Send notification email
-    try {
-      const emailResponse = await mailSender(
-        updatedUserDetails.email,
-        "Study Notion - Password Updated",
-        passwordUpdated(
-          updatedUserDetails.email,
-          `Password updated successfully for ${updatedUserDetails.firstName} ${updatedUserDetails.lastName}`
-        )
-      );
-      console.log("Email sent successfully:", emailResponse.response);
-    } catch (error) {
-      // If there's an error sending the email, log the error and return a 500 (Internal Server Error) error
-      console.error("Error occurred while sending email:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Error occurred while sending email",
-        error: error.message,
-      });
-    }
-
-    // Return success response
-    return res
-      .status(200)
-      .json({ success: true, message: "Password updated successfully" });
-  } catch (error) {
-    // If there's an error updating the password, log the error and return a 500 (Internal Server Error) error
-    console.error("Error occurred while updating password:", error);
-    return res.status(500).json({
+  // Get user
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
       success: false,
-      message: "Error occurred while updating password",
-      error: error.message,
+      message: 'User not found',
     });
   }
-};
 
-exports.findUserIp = async (req, res) => {
-  const ip = req.query.ip || req.connection.remoteAddress;
-  const userId = req.query.userId; // Check if user is logged in by checking userId in query
-  console.log(ip, userId);
-
-  try {
-    // Fetch the IP location data from GeoPlugin
-    const response = await axios.get(
-      `http://www.geoplugin.net/json.gp?ip=${ip}`
-    );
-    const locationData = response.data;
-    console.log(locationData);
-
-    // Extract latitude, longitude, and city
-    const latitude = parseFloat(locationData.geoplugin_latitude);
-    const longitude = parseFloat(locationData.geoplugin_longitude);
-    const city = locationData.geoplugin_city;
-
-    // If user is logged in, update their details
-    if (userId) {
-      const user = await User.findById(userId);
-
-      if (user) {
-        // Find or create UserDetail to store location data
-        let userDetail = await UserDetail.findOne({ userId: userId });
-        console.log(userDetail);
-
-        if (!userDetail) {
-          userDetail = new UserDetail({ userId: userId });
-        }
-
-        userDetail.location = {
-          type: "Point",
-          coordinates: [longitude, latitude],
-        };
-        userDetail.address = city;
-        await userDetail.save();
-        user.location = userDetail.location;
-        await user.save();
-
-        return res.status(200).json({
-          success: true,
-          message: "User location updated successfully",
-          location: userDetail.location,
-        });
-      }
-
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // If user is not logged in, only return the location
-    return res.status(200).json({
-      success: true,
-      location: {
-        latitude: latitude,
-        longitude: longitude,
-        city: city, // Include city in the response for non-logged-in users
-      },
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Error fetching IP location");
-  }
-};
-
-// New controller for initiating mobile verification (first step)
-exports.initiateAuth = async (req, res) => {
-  try {
-    const { phoneNo } = req.body;
-
-    if (!phoneNo) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone number is required",
-      });
-    }
-
-    const existingUser = await User.findOne({ phoneNo });
-    const isRegistered = existingUser ? true : false;
-
-    const otp = otpGenerator.generate(6, {
-      upperCaseAlphabets: false,
-      lowerCaseAlphabets: false,
-      specialChars: false,
-    });
-
-    const whatsappText = encodeURIComponent(`Your OTP is ${otp}`);
-    const whatsappUrl = `https://wa.me/91${phoneNo}?text=${whatsappText}`;
-
-    // Save OTP details
-    const purpose = isRegistered ? "login" : "signup";
-    await WhatsAppOTP.create({
-      phoneNo,
-      otp,
-      whatsappUrl,
-      purpose,
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Authentication initiated",
-      isRegistered,
-      phoneNo,
-    });
-  } catch (error) {
-    console.error("Authentication Initiation Error:", error);
-    return res.status(500).json({
+  // Validate old password
+  const isPasswordMatch = await bcrypt.compare(oldPassword, user.password);
+  if (!isPasswordMatch) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
       success: false,
-      message: "Failed to initiate authentication. Please try again.",
+      message: 'Current password is incorrect',
     });
   }
-};
 
-// Admin endpoint to get pending OTP requests
-exports.getPendingOTPs = async (req, res) => {
-  try {
-    const pendingOTPs = await WhatsAppOTP.find({ isSent: false })
-      .sort({ createdAt: -1 })
-      .limit(50);
-
-    return res.status(200).json({
-      success: true,
-      data: pendingOTPs,
-    });
-  } catch (error) {
-    console.error("Error fetching pending OTPs:", error);
-    return res.status(500).json({
+  // Check if new password is same as old
+  if (oldPassword === newPassword) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
-      message: "Failed to fetch pending OTPs",
+      message: 'New password cannot be the same as current password',
     });
   }
-};
 
-// Admin endpoint to mark OTP as sent
-exports.markOTPSent = async (req, res) => {
-  try {
-    const { otpId } = req.params;
-
-    const otpRecord = await WhatsAppOTP.findByIdAndUpdate(
-      otpId,
-      { isSent: true },
-      { new: true }
-    );
-
-    if (!otpRecord) {
-      return res.status(404).json({
-        success: false,
-        message: "OTP record not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "OTP marked as sent",
-      data: otpRecord,
-    });
-  } catch (error) {
-    console.error("Error marking OTP as sent:", error);
-    return res.status(500).json({
+  // Validate password match
+  if (newPassword !== confirmNewPassword) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
-      message: "Failed to update OTP status",
+      message: 'New password and confirm password do not match',
     });
   }
-};
 
-// Verify OTP and proceed with login/signup
-exports.verifyOTP = async (req, res) => {
+  // Update password
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await User.findByIdAndUpdate(req.user.id, { password: hashedPassword });
+
+  // Send notification email (non-blocking)
+  if (user.email) {
+    mailSender(
+      user.email,
+      'Password Updated Successfully',
+      passwordUpdated(user.email, `Password updated for ${user.name}`)
+    ).catch((err) => logger.error('Failed to send password update email:', err));
+  }
+
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'Password updated successfully',
+  });
+});
+
+/**
+ * Find user IP and update location
+ */
+exports.findUserIp = asyncHandler(async (req, res) => {
+  const ip = req.query.ip || req.ip || req.connection?.remoteAddress;
+  const userId = req.query.userId;
+
+  // Fetch location data
+  const response = await axios.get(`http://www.geoplugin.net/json.gp?ip=${ip}`);
+  const locationData = response.data;
+
+  const latitude = parseFloat(locationData.geoplugin_latitude);
+  const longitude = parseFloat(locationData.geoplugin_longitude);
+  const city = locationData.geoplugin_city;
+
+  // If user is logged in, update their location
+  if (userId) {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    let userDetail = await UserDetail.findOne({ userId });
+    if (!userDetail) {
+      userDetail = new UserDetail({ userId });
+    }
+
+    userDetail.location = {
+      type: 'Point',
+      coordinates: [longitude, latitude],
+    };
+    userDetail.address = city;
+    await userDetail.save();
+
+    user.location = userDetail.location;
+    await user.save();
+
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'User location updated successfully',
+      location: userDetail.location,
+    });
+  }
+
+  // Return location for non-logged-in users
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    location: {
+      latitude,
+      longitude,
+      city,
+    },
+  });
+});
+
+/**
+ * Initiate phone authentication
+ */
+exports.initiateAuth = asyncHandler(async (req, res) => {
+  const { phoneNo } = req.body;
+
+  if (!phoneNo) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'Phone number is required',
+    });
+  }
+
+  // Validate phone number format (10 digits)
+  const phoneRegex = /^[6-9]\d{9}$/;
+  if (!phoneRegex.test(phoneNo)) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'Invalid phone number. Please enter a valid 10-digit Indian mobile number.',
+    });
+  }
+
+  // Check if user exists
+  const existingUser = await User.findOne({ phoneNo });
+  const isRegistered = !!existingUser;
+
+  // Generate OTP
+  const otp = otpGenerator.generate(OTP_CONFIG.LENGTH, {
+    upperCaseAlphabets: false,
+    lowerCaseAlphabets: false,
+    specialChars: false,
+  });
+
+  const whatsappText = encodeURIComponent(`Your OTP is ${otp}`);
+  const whatsappUrl = `https://wa.me/91${phoneNo}?text=${whatsappText}`;
+
+  // Save OTP to database
+  const otpRecord = await WhatsAppOTP.create({
+    phoneNo,
+    otp,
+    whatsappUrl,
+    purpose: isRegistered ? 'login' : 'signup',
+  });
+
+  // Send OTP via Twilio SMS
+  let smsSent = false;
   try {
-    const { phoneNo, otp } = req.body;
+    await sendSMSOTP(phoneNo, otp);
+    smsSent = true;
+    // Mark OTP as sent
+    otpRecord.isSent = true;
+    await otpRecord.save();
+    logger.info(`OTP sent via SMS to ${phoneNo}`);
+  } catch (smsError) {
+    logger.error(`Failed to send OTP via SMS to ${phoneNo}:`, smsError.message);
+    // SMS failed but OTP is still saved, admin can manually send if needed
+  }
 
-    if (!phoneNo || !otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone number and OTP are required",
-      });
-    }
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: smsSent ? 'OTP sent to your phone number' : 'Authentication initiated. OTP will be sent shortly.',
+    isRegistered,
+    phoneNo,
+    smsSent,
+  });
+});
 
-    // Find the most recent OTP for the phone number
-    const recentOtp = await WhatsAppOTP.findOne({ phoneNo, isSent: true }).sort(
-      { createdAt: -1 }
-    );
+/**
+ * Get pending OTPs (Admin)
+ */
+exports.getPendingOTPs = asyncHandler(async (req, res) => {
+  const pendingOTPs = await WhatsAppOTP.find({ isSent: false })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
 
-    if (!recentOtp || recentOtp.otp !== otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid OTP. Please try again.",
-      });
-    }
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: pendingOTPs,
+  });
+});
 
-    // Mark OTP as verified
-    recentOtp.isVerified = true;
-    await recentOtp.save();
+/**
+ * Mark OTP as sent (Admin)
+ */
+exports.markOTPSent = asyncHandler(async (req, res) => {
+  const { otpId } = req.params;
 
-    // Check if user exists
-    const user = await User.findOne({ phoneNo }).populate("additionalDetails");
+  const otpRecord = await WhatsAppOTP.findByIdAndUpdate(
+    otpId,
+    { isSent: true },
+    { new: true }
+  );
 
-    if (user) {
-      // User exists - handle login
-      const token = jwt.sign(
-        { phoneNo: user.phoneNo, id: user._id, accountType: user.accountType },
-        process.env.JWT_SECRET,
-        {
-          expiresIn: "24h",
-        }
-      );
+  if (!otpRecord) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
+      success: false,
+      message: 'OTP record not found',
+    });
+  }
 
-      user.token = token;
-      user.password = undefined;
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'OTP marked as sent',
+    data: otpRecord,
+  });
+});
 
-      const options = {
-        expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-        httpOnly: true,
-      };
+/**
+ * Verify OTP
+ */
+exports.verifyOTP = asyncHandler(async (req, res) => {
+  const { phoneNo, otp } = req.body;
 
-      return res.cookie("token", token, options).status(200).json({
+  // Debug logging
+  console.log('=== VERIFY OTP DEBUG ===');
+  console.log('req.body:', JSON.stringify(req.body));
+  console.log('phoneNo:', phoneNo, 'type:', typeof phoneNo);
+  console.log('otp:', otp, 'type:', typeof otp);
+
+  if (!phoneNo || !otp) {
+    console.log('Missing phoneNo or otp');
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'Phone number and OTP are required',
+    });
+  }
+
+  // Find the most recent OTP (skip isSent check in development)
+  const query = process.env.NODE_ENV === 'development'
+    ? { phoneNo }
+    : { phoneNo, isSent: true };
+
+  const recentOtp = await WhatsAppOTP.findOne(query)
+    .sort({ createdAt: -1 });
+
+  console.log('Found OTP in DB:', recentOtp ? { otp: recentOtp.otp, isSent: recentOtp.isSent, isVerified: recentOtp.isVerified } : 'null');
+
+  if (!recentOtp) {
+    console.log('No OTP found for phoneNo:', phoneNo);
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'No OTP found. Please request a new one.',
+    });
+  }
+
+  // Check OTP expiry (10 minutes)
+  const otpAge = Date.now() - new Date(recentOtp.createdAt).getTime();
+  if (otpAge > OTP_CONFIG.EXPIRY_MINUTES * 60 * 1000) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'OTP has expired. Please request a new one.',
+    });
+  }
+
+  // Verify OTP
+  if (recentOtp.otp !== otp) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'Invalid OTP. Please try again.',
+    });
+  }
+
+  // Mark OTP as verified
+  recentOtp.isVerified = true;
+  await recentOtp.save();
+
+  // Check if user exists
+  const user = await User.findOne({ phoneNo }).populate('additionalDetails');
+
+  if (user) {
+    // Existing user - login
+    const token = generateToken({
+      phoneNo: user.phoneNo,
+      id: user._id,
+      accountType: user.accountType,
+    });
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    userResponse.token = token;
+
+    return res.cookie('token', token, getCookieOptions())
+      .status(HTTP_STATUS.OK)
+      .json({
         success: true,
         token,
-        user,
-        message: "Login successful",
+        user: userResponse,
+        message: 'Login successful',
       });
-    } else {
-      return res.status(200).json({
-        success: true,
-        isRegistered: false,
-        message: "Phone number verified. Please complete registration.",
-        phoneNo,
-      });
-    }
-  } catch (error) {
-    console.error("OTP Verification Error:", error);
-    return res.status(500).json({
+  }
+
+  // New user - needs registration
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    isRegistered: false,
+    message: 'Phone number verified. Please complete registration.',
+    phoneNo,
+  });
+});
+
+/**
+ * Signup with phone
+ */
+exports.signupWithPhone = asyncHandler(async (req, res) => {
+  const { name, firstName, lastName, phoneNo, image } = req.body;
+
+  // Validate required fields
+  if (!name || !phoneNo) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
-      message: "OTP verification failed. Please try again.",
+      message: 'Name and Phone Number are required',
     });
   }
-};
 
-// Modified signup controller to return login-like response
-exports.signupWithPhone = async (req, res) => {
-  try {
-    const { name, firstName, lastName, phoneNo, image } = req.body;
+  // Verify phone was OTP-verified recently
+  const verifiedOtp = await WhatsAppOTP.findOne({
+    phoneNo,
+    isVerified: true,
+    purpose: 'signup',
+    createdAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) },
+  }).sort({ createdAt: -1 });
 
-    console.log(req.body);
-    // Check if required fields are present
-    if (!name || !phoneNo) {
-      return res.status(400).json({
-        success: false,
-        message: "Name, Phone Number, are required",
-      });
-    }
-
-    // Verify the phone has been OTP-verified recently
-    const verifiedOtp = await WhatsAppOTP.findOne({
-      phoneNo,
-      isVerified: true,
-      purpose: "signup",
-      createdAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) },
-    }).sort({ createdAt: -1 });
-
-    if (!verifiedOtp) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone verification required before signup.",
-      });
-    }
-
-    // Create additional user details
-    const profileDetails = await UserDetail.create({});
-
-    // Create user
-    const user = await User.create({
-      name,
-      firstName,
-      lastName,
-      phoneNo,
-      additionalDetails: profileDetails._id,
-      image:
-        image ||
-        `https://api.dicebear.com/6.x/initials/svg?seed=${name}&backgroundColor=00897b,00acc1,039be5&backgroundType=solid`,
+  if (!verifiedOtp) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'Phone verification required before signup.',
     });
+  }
 
-    // Update profile details with userId
-    profileDetails.userId = user._id;
-    await profileDetails.save();
+  // Check if user already exists
+  const existingUser = await User.findOne({ phoneNo });
+  if (existingUser) {
+    return res.status(HTTP_STATUS.CONFLICT).json({
+      success: false,
+      message: 'User already exists with this phone number',
+    });
+  }
 
-    // Generate JWT token like in login API
-    const token = jwt.sign(
-      {
-        name: user.name,
-        firstName: name.firstName,
-        lastName: name.lastName,
-        phoneNo: user.phoneNo,
-        id: user._id,
-        accountType: user.accountType,
-        image: user.image,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "24h",
-      }
-    );
+  // Create user details
+  const profileDetails = await UserDetail.create({});
 
-    // Set cookie options
-    const options = {
-      expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-      httpOnly: true,
-    };
+  // Create user
+  const user = await User.create({
+    name,
+    firstName: firstName || '',
+    lastName: lastName || '',
+    phoneNo,
+    additionalDetails: profileDetails._id,
+    image: image || `https://api.dicebear.com/6.x/initials/png?seed=${encodeURIComponent(name)}&backgroundColor=00897b,00acc1,039be5&backgroundType=solid`,
+  });
 
-    return res.cookie("token", token, options).status(201).json({
+  // Link profile to user
+  profileDetails.userId = user._id;
+  await profileDetails.save();
+
+  // Generate token
+  const token = generateToken({
+    name: user.name,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    phoneNo: user.phoneNo,
+    id: user._id,
+    accountType: user.accountType,
+    image: user.image,
+  });
+
+  const userResponse = user.toObject();
+  delete userResponse.password;
+
+  return res.cookie('token', token, getCookieOptions())
+    .status(HTTP_STATUS.CREATED)
+    .json({
       success: true,
       token,
-      user,
-      message: "User registered successfully.",
+      user: userResponse,
+      message: 'User registered successfully.',
     });
-  } catch (error) {
-    console.error("Signup Error:", error);
-    return res.status(500).json({
+});
+
+/**
+ * Admin login
+ */
+exports.adminLogin = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+
+  // Validate input
+  if (!email || !password) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
-      message: "User registration failed. Please try again later.",
+      message: 'Email and password are required',
     });
   }
-};
 
-exports.adminLogin = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  // Find admin or marketplace user (include password field for verification)
+  const admin = await User.findOne({ email, accountType: { $in: ['admin', 'marketplace'] } })
+    .select('+password')
+    .populate('additionalDetails');
 
-    // Validate input
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required",
-      });
-    }
+  if (!admin) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Invalid credentials or unauthorized access',
+    });
+  }
 
-    // Find admin user
-    const admin = await User.findOne({ email, accountType: "admin" }).populate(
-      "additionalDetails"
-    );
-    console.log(admin);
+  // Verify password exists
+  if (!admin.password) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Please use the password reset flow to set up your password',
+    });
+  }
 
-    if (!admin) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials or unauthorized access",
-      });
-    }
+  // Verify password
+  const isPasswordValid = await bcrypt.compare(password, admin.password);
+  if (!isPasswordValid) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Invalid credentials',
+    });
+  }
 
-    // Verify password
-    if (!admin.password) {
-      return res.status(401).json({
-        success: false,
-        message: "Please use the password reset flow to set up your password",
-      });
-    }
+  // Generate token
+  const token = generateToken({
+    email: admin.email,
+    id: admin._id,
+    accountType: admin.accountType,
+  });
 
-    const isPasswordValid = await bcrypt.compare(password, admin.password);
+  const adminResponse = admin.toObject();
+  delete adminResponse.password;
+  adminResponse.token = token;
 
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials",
-      });
-    }
-
-    // Generate JWT token
-    const token = jwt.sign(
-      {
-        email: admin.email,
-        id: admin._id,
-        accountType: admin.accountType,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "24h",
-      }
-    );
-
-    // Remove sensitive data
-    admin.password = undefined;
-    admin.token = token;
-
-    // Set cookie options
-    const options = {
-      expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-      httpOnly: true,
-    };
-
-    return res.cookie("token", token, options).status(200).json({
+  return res.cookie('token', token, getCookieOptions())
+    .status(HTTP_STATUS.OK)
+    .json({
       success: true,
       token,
-      user: admin,
-      message: "Admin logged in successfully",
+      user: adminResponse,
+      admin: adminResponse,
+      message: 'Admin logged in successfully',
     });
-  } catch (error) {
-    console.error("Admin Login Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Login failed. Please try again later.",
-    });
-  }
-};
+});

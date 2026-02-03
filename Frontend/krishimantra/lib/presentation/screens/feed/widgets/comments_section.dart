@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../../data/models/comment_modal.dart';
+import '../../../../data/models/comment_model.dart';
+import '../../../../core/constants/colors.dart';
 import '../../../controllers/feed_controller.dart';
 import 'comment_item.dart';
 
@@ -17,7 +18,7 @@ class CommentsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: AppColors.white,
       margin: const EdgeInsets.only(top: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -29,18 +30,25 @@ class CommentsSection extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: AppColors.textDark,
                   ),
                 )),
           ),
           Obx(() {
             if (feedController.isLoadingComments.value &&
                 feedController.comments.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator(color: AppColors.green));
             } else if (feedController.comments.isEmpty) {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('No comments yet'),
+                  child: Text(
+                    'No comments yet',
+                    style: TextStyle(
+                      color: AppColors.textLight,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
               );
             } else {

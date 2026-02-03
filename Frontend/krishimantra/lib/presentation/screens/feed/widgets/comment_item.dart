@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../../../core/constants/colors.dart';
-import '../../../../data/models/comment_modal.dart';
+import '../../../../data/models/comment_model.dart';
 
 class CommentItem extends StatefulWidget {
   final CommentModel comment;
@@ -48,8 +48,9 @@ class _CommentItemState extends State<CommentItem> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                backgroundImage: NetworkImage(widget.comment.profilePhoto),
+              _buildProfileAvatar(
+                profilePhoto: widget.comment.profilePhoto,
+                userName: widget.comment.userName,
                 radius: 20,
               ),
               const SizedBox(width: 12),
@@ -71,15 +72,15 @@ class _CommentItemState extends State<CommentItem> {
                       children: [
                         Text(
                           timeago.format(widget.comment.createdAt),
-                          style: TextStyle(
-                            color: Colors.grey[600],
+                          style: const TextStyle(
+                            color: AppColors.textLight,
                             fontSize: 12,
                           ),
                         ),
                         const SizedBox(width: 16),
                         GestureDetector(
                           onTap: () => widget.onReply(widget.comment),
-                          child: Text(
+                          child: const Text(
                             'Reply',
                             style: TextStyle(
                               color: AppColors.green,
@@ -140,7 +141,7 @@ class _ReplyList extends StatelessWidget {
                 onTap: onShowMoreTap,
                 child: Text(
                   'Show ${totalReplies - 2} more replies',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.green,
                     fontWeight: FontWeight.w500,
                   ),
@@ -168,9 +169,11 @@ class _ReplyItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
+          _buildProfileAvatar(
+            profilePhoto: reply.profilePhoto,
+            userName: reply.userName,
             radius: 16,
-            backgroundImage: NetworkImage(reply.profilePhoto),
+            fontSize: 12,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -192,8 +195,8 @@ class _ReplyItem extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   timeago.format(reply.createdAt),
-                  style: TextStyle(
-                    color: Colors.grey[600],
+                  style: const TextStyle(
+                    color: AppColors.textLight,
                     fontSize: 12,
                   ),
                 ),
@@ -204,4 +207,38 @@ class _ReplyItem extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Helper function to build profile avatar that handles SVG and empty URLs properly
+Widget _buildProfileAvatar({
+  required String profilePhoto,
+  required String userName,
+  required double radius,
+  double fontSize = 14,
+}) {
+  final bool hasValidImage = profilePhoto.isNotEmpty &&
+      !profilePhoto.contains('.svg');
+
+  if (hasValidImage) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: AppColors.faintGreen,
+      backgroundImage: NetworkImage(profilePhoto),
+      onBackgroundImageError: (_, __) {},
+      child: null,
+    );
+  }
+
+  return CircleAvatar(
+    radius: radius,
+    backgroundColor: AppColors.faintGreen,
+    child: Text(
+      userName.isNotEmpty ? userName[0].toUpperCase() : '?',
+      style: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: fontSize,
+      ),
+    ),
+  );
 }

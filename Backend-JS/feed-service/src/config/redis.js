@@ -1,145 +1,181 @@
-const Redis = require("ioredis");
+const Redis = require('ioredis');
+const { CACHE_TTL } = require('../utils/constants');
 
 let redisClient;
 let useDummyClient = false;
 
-function createDummyRedisClient() {
-  console.warn("Using dummy Redis client - caching disabled");
+/**
+ * In-memory LRU cache with TTL support for fallback
+ */
+class LRUCache {
+  constructor(maxSize = 5000) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+    this.timers = new Map();
+  }
 
-  const dummyCache = new Map(); // In-memory cache as fallback
+  get(key) {
+    if (!this.cache.has(key)) return null;
+    // Move to end (most recently used)
+    const value = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  set(key, value, ttlSeconds = 0) {
+    // Clear existing timer if any
+    if (this.timers.has(key)) {
+      clearTimeout(this.timers.get(key));
+      this.timers.delete(key);
+    }
+
+    // Remove oldest if at capacity
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+      if (this.timers.has(firstKey)) {
+        clearTimeout(this.timers.get(firstKey));
+        this.timers.delete(firstKey);
+      }
+    }
+
+    this.cache.set(key, value);
+
+    // Set TTL if specified
+    if (ttlSeconds > 0) {
+      const timer = setTimeout(() => {
+        this.cache.delete(key);
+        this.timers.delete(key);
+      }, ttlSeconds * 1000);
+      this.timers.set(key, timer);
+    }
+  }
+
+  delete(key) {
+    if (this.timers.has(key)) {
+      clearTimeout(this.timers.get(key));
+      this.timers.delete(key);
+    }
+    return this.cache.delete(key);
+  }
+
+  keys(pattern) {
+    const prefix = pattern.replace('*', '');
+    return Array.from(this.cache.keys()).filter((k) =>
+      pattern.includes('*') ? k.startsWith(prefix) : k === pattern
+    );
+  }
+
+  clear() {
+    this.timers.forEach((timer) => clearTimeout(timer));
+    this.timers.clear();
+    this.cache.clear();
+  }
+
+  size() {
+    return this.cache.size;
+  }
+}
+
+const fallbackCache = new LRUCache(5000);
+
+function createDummyRedisClient() {
+  console.warn('Using in-memory LRU cache - Redis unavailable');
 
   return {
-    get: async (key) => {
-      console.log(`[Dummy Redis] GET ${key}`);
-      return dummyCache.get(key) || null;
-    },
+    get: async (key) => fallbackCache.get(key),
     set: async (key, value) => {
-      console.log(`[Dummy Redis] SET ${key}`);
-      dummyCache.set(key, value);
-      return "OK";
+      fallbackCache.set(key, value);
+      return 'OK';
     },
     setex: async (key, seconds, value) => {
-      console.log(`[Dummy Redis] SETEX ${key} ${seconds}`);
-      dummyCache.set(key, value);
-      // For a production app, we would handle expiry too
-      return "OK";
+      fallbackCache.set(key, value, seconds);
+      return 'OK';
     },
     del: async (key) => {
-      console.log(`[Dummy Redis] DEL ${key}`);
-      if (typeof key === "string" && key.includes("*")) {
-        // Handle wildcard deletion
-        const prefix = key.replace("*", "");
-        const keysToDelete = Array.from(dummyCache.keys()).filter((k) =>
-          k.startsWith(prefix)
-        );
-
-        let count = 0;
-        for (const k of keysToDelete) {
-          if (dummyCache.delete(k)) count++;
-        }
-        return count;
+      if (typeof key === 'string' && key.includes('*')) {
+        const keys = fallbackCache.keys(key);
+        keys.forEach((k) => fallbackCache.delete(k));
+        return keys.length;
       }
-      return dummyCache.delete(key) ? 1 : 0;
+      return fallbackCache.delete(key) ? 1 : 0;
     },
-    keys: async (pattern) => {
-      console.log(`[Dummy Redis] KEYS ${pattern}`);
-      return Array.from(dummyCache.keys()).filter((k) =>
-        pattern.includes("*")
-          ? k.startsWith(pattern.replace("*", ""))
-          : k === pattern
-      );
-    },
+    keys: async (pattern) => fallbackCache.keys(pattern),
     disconnect: () => {
-      console.log(`[Dummy Redis] Disconnected`);
+      fallbackCache.clear();
+      console.log('[LRU Cache] Cleared');
     },
-    info: async () => {
-      return "dummy:redis";
-    },
+    info: async () => `lru-cache:size=${fallbackCache.size()}`,
   };
 }
 
 // Function to switch to dummy client
 function switchToDummyClient() {
   if (!useDummyClient) {
-    console.warn("Redis authentication failed - switching to dummy client");
+    console.warn('Redis unavailable - switching to in-memory cache');
     useDummyClient = true;
     try {
-      if (redisClient && typeof redisClient.disconnect === "function") {
+      if (redisClient && typeof redisClient.disconnect === 'function') {
         redisClient.disconnect();
       }
     } catch (e) {
-      console.warn("Error disconnecting Redis client:", e.message);
+      // Ignore disconnect errors
     }
     redisClient = createDummyRedisClient();
   }
 }
 
 try {
-  // Get Redis password from environment variables
   const redisPassword = process.env.REDIS_PASSWORD;
 
-  // Create Redis client with or without password based on configuration
   const config = {
-    host: process.env.REDIS_HOST || "localhost",
+    host: process.env.REDIS_HOST || 'localhost',
     port: process.env.REDIS_PORT || 6379,
     retryStrategy(times) {
-      if (useDummyClient) return false; // Stop retrying if we're using dummy client
-      const delay = Math.min(times * 50, 2000);
-      return delay;
+      if (useDummyClient) return false;
+      if (times > 3) {
+        switchToDummyClient();
+        return false;
+      }
+      return Math.min(times * 100, 3000);
     },
     maxRetriesPerRequest: 2,
     connectTimeout: 5000,
     enableOfflineQueue: false,
+    lazyConnect: false,
   };
 
-  // Only add password if it exists and is not empty
-  if (redisPassword && redisPassword.trim() !== "") {
+  if (redisPassword && redisPassword.trim() !== '') {
     config.password = redisPassword;
   }
 
   redisClient = new Redis(config);
 
-  // Set a connection timeout
-  let connectTimeout = setTimeout(() => {
-    console.error("Redis connection timeout - falling back to dummy client");
+  const connectTimeout = setTimeout(() => {
+    console.error('Redis connection timeout - using in-memory cache');
     switchToDummyClient();
   }, 5000);
 
-  redisClient.on("error", (err) => {
-    console.error("Redis Client Error:", err);
-
-    // If we get auth errors, switch to dummy client
-    if (
-      (err.message.includes("NOAUTH") || err.message.includes("AUTH")) &&
-      !useDummyClient
-    ) {
-      switchToDummyClient();
+  redisClient.on('error', (err) => {
+    if (!useDummyClient) {
+      console.error('Redis error:', err.message);
+      if (err.message.includes('NOAUTH') || err.message.includes('AUTH') || err.message.includes('ECONNREFUSED')) {
+        switchToDummyClient();
+      }
     }
   });
 
-  redisClient.on("connect", () => {
-    console.log("Redis Client Connected");
+  redisClient.on('connect', () => {
+    console.log('Redis connected');
     clearTimeout(connectTimeout);
+  });
 
-    // Test authentication immediately after connection
-    redisClient
-      .info()
-      .then(() => {
-        console.log("Redis authentication successful");
-      })
-      .catch((error) => {
-        if (
-          error.message.includes("NOAUTH") ||
-          error.message.includes("AUTH")
-        ) {
-          console.warn("Redis authentication failed during initial test");
-          switchToDummyClient();
-        }
-      });
+  redisClient.on('ready', () => {
+    console.log('Redis ready');
   });
 } catch (error) {
-  console.error("Redis Connection Error:", error);
-  // Fallback to a dummy cache if Redis is unavailable
+  console.error('Redis initialization error:', error.message);
   switchToDummyClient();
 }
 
@@ -149,17 +185,10 @@ const redis = {
     try {
       return await redisClient.get(key);
     } catch (error) {
-      console.warn(`Redis GET error for key ${key}:`, error.message);
-
-      // Switch to dummy client if auth error
-      if (
-        (error.message.includes("NOAUTH") || error.message.includes("AUTH")) &&
-        !useDummyClient
-      ) {
+      if (!useDummyClient) {
         switchToDummyClient();
         return redisClient.get(key);
       }
-
       return null;
     }
   },
@@ -168,17 +197,10 @@ const redis = {
     try {
       return await redisClient.set(key, value);
     } catch (error) {
-      console.warn(`Redis SET error for key ${key}:`, error.message);
-
-      // Switch to dummy client if auth error
-      if (
-        (error.message.includes("NOAUTH") || error.message.includes("AUTH")) &&
-        !useDummyClient
-      ) {
+      if (!useDummyClient) {
         switchToDummyClient();
         return redisClient.set(key, value);
       }
-
       return null;
     }
   },
@@ -187,17 +209,10 @@ const redis = {
     try {
       return await redisClient.setex(key, seconds, value);
     } catch (error) {
-      console.warn(`Redis SETEX error for key ${key}:`, error.message);
-
-      // Switch to dummy client if auth error
-      if (
-        (error.message.includes("NOAUTH") || error.message.includes("AUTH")) &&
-        !useDummyClient
-      ) {
+      if (!useDummyClient) {
         switchToDummyClient();
         return redisClient.setex(key, seconds, value);
       }
-
       return null;
     }
   },
@@ -206,17 +221,10 @@ const redis = {
     try {
       return await redisClient.del(key);
     } catch (error) {
-      console.warn(`Redis DEL error for key ${key}:`, error.message);
-
-      // Switch to dummy client if auth error
-      if (
-        (error.message.includes("NOAUTH") || error.message.includes("AUTH")) &&
-        !useDummyClient
-      ) {
+      if (!useDummyClient) {
         switchToDummyClient();
         return redisClient.del(key);
       }
-
       return null;
     }
   },
@@ -225,26 +233,66 @@ const redis = {
     try {
       return await redisClient.keys(pattern);
     } catch (error) {
-      console.warn(`Redis KEYS error for pattern ${pattern}:`, error.message);
-
-      // Switch to dummy client if auth error
-      if (
-        (error.message.includes("NOAUTH") || error.message.includes("AUTH")) &&
-        !useDummyClient
-      ) {
+      if (!useDummyClient) {
         switchToDummyClient();
         return redisClient.keys(pattern);
       }
-
       return [];
     }
   },
 
-  // Add the raw client for any direct operations
-  client: redisClient,
+  /**
+   * Get cached data or fetch and cache it
+   * @param {string} key - Cache key
+   * @param {number} ttl - TTL in seconds
+   * @param {Function} fetchFn - Function to fetch data if not cached
+   * @returns {Promise<any>}
+   */
+  async getOrSet(key, ttl, fetchFn) {
+    try {
+      const cached = await this.get(key);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+      const data = await fetchFn();
+      await this.setex(key, ttl, JSON.stringify(data));
+      return data;
+    } catch (error) {
+      // If cache fails, just fetch the data
+      return fetchFn();
+    }
+  },
 
-  // Add a helper to check if we're using the dummy client
+  /**
+   * Delete multiple keys by pattern
+   * @param {string} pattern - Pattern to match keys
+   * @returns {Promise<number>}
+   */
+  async deleteByPattern(pattern) {
+    try {
+      const keys = await this.keys(pattern);
+      if (keys.length > 0) {
+        await Promise.all(keys.map((k) => this.del(k)));
+      }
+      return keys.length;
+    } catch (error) {
+      return 0;
+    }
+  },
+
+  // Raw client access
+  get client() {
+    return redisClient;
+  },
+
   isDummyClient: () => useDummyClient,
+
+  // Graceful shutdown
+  async disconnect() {
+    if (redisClient && typeof redisClient.disconnect === 'function') {
+      await redisClient.disconnect();
+    }
+  },
 };
 
 module.exports = redis;

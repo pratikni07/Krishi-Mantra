@@ -1,15 +1,17 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema(
   {
     chatId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: "Chat",
+      ref: 'Chat',
+      index: true,
     },
     sender: {
       type: String,
       required: true,
+      index: true,
     },
     senderName: {
       type: String,
@@ -20,11 +22,12 @@ const messageSchema = new mongoose.Schema(
     },
     content: {
       type: String,
+      maxlength: 5000,
     },
     mediaType: {
       type: String,
-      enum: ["text", "image", "video", "text_image", "text_video"],
-      default: "text",
+      enum: ['text', 'image', 'video', 'text_image', 'text_video', 'audio', 'file'],
+      default: 'text',
     },
     mediaUrl: {
       type: String,
@@ -34,29 +37,73 @@ const messageSchema = new mongoose.Schema(
       of: String,
       default: {},
     },
-    readBy: [
-      {
-        userId: String,
-        userName: String,
-        profilePhoto: String,
-        readAt: Date,
+    readBy: [{
+      userId: {
+        type: String,
+        index: true,
       },
-    ],
-    deliveredTo: [
-      {
-        userId: String,
-        userName: String,
-        profilePhoto: String,
-        deliveredAt: Date,
+      userName: String,
+      profilePhoto: String,
+      readAt: {
+        type: Date,
+        default: Date.now,
       },
-    ],
+    }],
+    deliveredTo: [{
+      userId: {
+        type: String,
+        index: true,
+      },
+      userName: String,
+      profilePhoto: String,
+      deliveredAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
     isDeleted: {
       type: Boolean,
       default: false,
+      index: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-messageSchema.index({ chatId: 1, createdAt: -1 });
-module.exports = mongoose.model("Message", messageSchema);
+// Compound indexes for common query patterns (optimized for 10k users)
+messageSchema.index({ chatId: 1, createdAt: -1 }); // Get messages for a chat
+messageSchema.index({ chatId: 1, isDeleted: 1, createdAt: -1 }); // Get non-deleted messages
+messageSchema.index({ sender: 1, createdAt: -1 }); // Get messages by user
+messageSchema.index({ chatId: 1, 'readBy.userId': 1 }); // Find unread messages
+
+// Static method to get unread count for a user in a chat
+messageSchema.statics.getUnreadCount = async function(chatId, userId) {
+  return this.countDocuments({
+    chatId,
+    sender: { $ne: userId },
+    'readBy.userId': { $ne: userId },
+    isDeleted: false,
+  });
+};
+
+// Static method to get latest messages
+messageSchema.statics.getLatestMessages = function(chatId, limit = 50) {
+  return this.find({
+    chatId,
+    isDeleted: false,
+  })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+};
+
+// Instance method for soft delete
+messageSchema.methods.softDelete = async function() {
+  this.isDeleted = true;
+  this.content = '[deleted]';
+  return this.save();
+};
+
+module.exports = mongoose.model('Message', messageSchema);

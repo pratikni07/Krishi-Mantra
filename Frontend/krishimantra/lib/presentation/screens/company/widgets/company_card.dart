@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../data/models/company_model.dart';
+import '../../../../core/utils/responsive_utils.dart';
+import '../../../../core/constants/colors.dart';
 
 class CompanyCard extends StatelessWidget {
   final CompanyModel company;
@@ -13,15 +15,18 @@ class CompanyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+    final iconErrorSize = ResponsiveUtils.responsive(mobile: 60.0, tablet: 80.0);
+
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXL),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
+            color: AppColors.shadowLight,
             spreadRadius: 1,
             blurRadius: 6,
-            offset: Offset(0, 3),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -29,17 +34,17 @@ class CompanyCard extends StatelessWidget {
         elevation: 0,
         color: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppSizes.radiusXL),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppSizes.radiusXL),
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.white,
+                  AppColors.white,
                   Colors.grey.shade50,
                 ],
               ),
@@ -51,19 +56,19 @@ class CompanyCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Container(
-                      padding: EdgeInsets.all(16),
+                      padding: RPadding.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.white,
                         borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(24),
-                          bottomRight: Radius.circular(24),
+                          bottomLeft: Radius.circular(AppSizes.radiusXXL),
+                          bottomRight: Radius.circular(AppSizes.radiusXXL),
                         ),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.grey.withOpacity(0.1),
                             spreadRadius: 1,
                             blurRadius: 2,
-                            offset: Offset(0, 1),
+                            offset: const Offset(0, 1),
                           ),
                         ],
                       ),
@@ -71,52 +76,52 @@ class CompanyCard extends StatelessWidget {
                         company.logo,
                         fit: BoxFit.contain,
                         errorBuilder: (context, error, stackTrace) {
-                          return Icon(Icons.business, size: 60, color: Colors.grey.shade400);
+                          return Icon(Icons.business, size: iconErrorSize, color: Colors.grey.shade400);
                         },
                       ),
                     ),
                   ),
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    padding: RPadding.symmetric(horizontal: 12, vertical: 16),
                     child: Column(
                       children: [
                         Text(
                           company.name,
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: AppSizes.fontL,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: AppColors.textDark,
                           ),
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        SizedBox(height: 8),
+                        SizedBox(height: AppSizes.paddingS),
                         Container(
-                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: RPadding.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
+                            color: AppColors.white,
+                            borderRadius: BorderRadius.circular(AppSizes.radiusXXL),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.grey.withOpacity(0.15),
                                 spreadRadius: 1,
                                 blurRadius: 3,
-                                offset: Offset(0, 1),
+                                offset: const Offset(0, 1),
                               ),
                             ],
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.star, color: Colors.amber, size: 20),
-                              SizedBox(width: 4),
+                              Icon(Icons.star, color: Colors.amber, size: AppSizes.iconS),
+                              SizedBox(width: AppSizes.paddingXS),
                               Text(
                                 company.rating.toStringAsFixed(1),
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: AppSizes.fontM,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
+                                  color: AppColors.textDark,
                                 ),
                               ),
                             ],

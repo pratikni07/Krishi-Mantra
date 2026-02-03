@@ -1,13 +1,15 @@
 import 'package:get/get.dart';
-import '../../data/models/comment_modal.dart';
+import '../../data/models/comment_model.dart';
 import '../../data/repositories/feed_repository.dart';
 import '../../data/models/feed_model.dart';
 import '../../data/services/UserService.dart';
+import '../../data/services/engagement_service.dart';
 import 'base_controller.dart';
 
 class FeedController extends BaseController {
   final FeedRepository _feedRepository;
   final UserService _userService;
+  final EngagementService _engagementService = EngagementService();
 
   final RxList<FeedModel> feeds = <FeedModel>[].obs;
   final RxList<CommentModel> comments = <CommentModel>[].obs;
@@ -30,11 +32,14 @@ class FeedController extends BaseController {
   final RxList<FeedModel> topFeeds = <FeedModel>[].obs;
   final RxBool isLoadingTopFeeds = false.obs;
   final RxBool isLoadingComments = false.obs;
-  
+
   final RxList<Map<String, dynamic>> trendingHashtags =
       <Map<String, dynamic>>[].obs;
   final RxBool isLoadingHashtags = false.obs;
   final RxString selectedTag = ''.obs;
+
+  // Track viewed feeds to avoid duplicate tracking
+  final Set<String> _viewedFeedIds = {};
 
   FeedController(this._feedRepository, this._userService);
 
@@ -160,9 +165,18 @@ class FeedController extends BaseController {
         final userData = await _userService.getUser();
         if (userData == null) throw Exception('User not found');
 
+        // Use name field, or construct from firstName/lastName if name is empty
+        String userName = userData.name;
+        if (userName.isEmpty) {
+          userName = '${userData.firstName} ${userData.lastName}'.trim();
+        }
+        if (userName.isEmpty) {
+          userName = 'User';
+        }
+
         final Map<String, dynamic> commentData = {
           'userId': userData.id,
-          'userName': userData.firstName + " " + userData.lastName,
+          'userName': userName,
           'profilePhoto': userData.image,
           'content': content.trim(),
         };
@@ -170,7 +184,11 @@ class FeedController extends BaseController {
           commentData['parentCommentId'] = parentCommentId;
         }
 
+        print('FeedController: Adding comment to feed $feedId with parentCommentId: $parentCommentId');
         await _feedRepository.addComment(feedId, commentData);
+
+        // Track engagement
+        _engagementService.trackFeedComment(feedId);
 
         // Update the comments list and total count
         await getComments(feedId, refresh: true);
@@ -207,6 +225,9 @@ class FeedController extends BaseController {
         recommendedFeeds[index] = feed.copyWith();
         throw Exception('Failed to like post');
       }
+
+      // Track engagement
+      _engagementService.trackFeedLike(feedId, isLike: feed.isLiked);
     } catch (e) {
       // Silent fail for likes, don't show error screen
       // Just log the error or show a minimal indicator
@@ -252,7 +273,12 @@ class FeedController extends BaseController {
         () async {
           // Get user data and check if it exists
           final userData = await _userService.getUser();
-          if (userData == null) throw Exception('User not found');
+          if (userData == null) {
+            print('FeedController: User not found, cannot fetch recommended feeds');
+            throw Exception('User not found');
+          }
+
+          print('FeedController: Fetching recommended feeds for user: ${userData.id}');
 
           final result = await _feedRepository.getRecommendedFeeds(
             userData.id,
@@ -260,11 +286,14 @@ class FeedController extends BaseController {
             limit: limit,
           );
 
+          print('FeedController: Got result with ${result['feeds']?.length ?? 0} feeds');
+
           // Safely handle the feeds list which might be null
           final feedsList = result['feeds'];
           if (feedsList != null) {
             final newFeeds = (feedsList as List<FeedModel>);
             recommendedFeeds.addAll(newFeeds);
+            print('FeedController: Added ${newFeeds.length} feeds, total: ${recommendedFeeds.length}');
           }
 
           // Update pagination
@@ -276,6 +305,7 @@ class FeedController extends BaseController {
         isRefresh: refresh,
       );
     } catch (e) {
+      print('FeedController: Error fetching recommended feeds: $e');
       // Error is already handled by handleAsync
     } finally {
       isRecommendedLoading.value = false;
@@ -297,9 +327,10 @@ class FeedController extends BaseController {
         () async {
           final userData = await _userService.getUser();
           if (userData == null) throw Exception('User not found');
-          
+
           final result = await _feedRepository.getTopFeeds();
           topFeeds.value = result;
+          update(); // Notify GetBuilder listeners
         },
         showLoading: false,
       );
@@ -307,6 +338,7 @@ class FeedController extends BaseController {
       // Error handled silently for home screen components
     } finally {
       isLoadingTopFeeds.value = false;
+      update(); // Notify GetBuilder listeners
     }
   }
 
@@ -317,6 +349,7 @@ class FeedController extends BaseController {
           final tags = await _feedRepository.getTrendingHashtags();
           if (tags != null) {
             trendingHashtags.value = tags;
+            update(); // Notify GetBuilder listeners
           }
         },
         showLoading: false,
@@ -379,5 +412,109 @@ class FeedController extends BaseController {
   void clearSelectedTag() {
     selectedTag.value = '';
     fetchRecommendedFeeds(refresh: true);
+  }
+
+  /// Track when a feed is viewed (called when feed becomes visible)
+  Future<void> trackFeedView(String feedId) async {
+    // Avoid duplicate tracking for the same feed in this session
+    if (_viewedFeedIds.contains(feedId)) return;
+    _viewedFeedIds.add(feedId);
+
+    // Track in engagement service
+    _engagementService.trackFeedView(feedId);
+
+    try {
+      final userData = await _userService.getUser();
+      if (userData == null) return;
+
+      await _feedRepository.trackInteraction(
+        userId: userData.id,
+        feedId: feedId,
+        interactionType: 'view',
+      );
+    } catch (e) {
+      // Silent fail - don't interrupt user experience
+      print('Error tracking feed view: $e');
+    }
+  }
+
+  /// Track when a feed is shared
+  Future<void> trackFeedShare(String feedId) async {
+    try {
+      final userData = await _userService.getUser();
+      if (userData == null) return;
+
+      await _feedRepository.trackInteraction(
+        userId: userData.id,
+        feedId: feedId,
+        interactionType: 'share',
+      );
+    } catch (e) {
+      print('Error tracking feed share: $e');
+    }
+  }
+
+  /// Track when a feed is saved/bookmarked
+  Future<void> trackFeedSave(String feedId) async {
+    try {
+      final userData = await _userService.getUser();
+      if (userData == null) return;
+
+      await _feedRepository.trackInteraction(
+        userId: userData.id,
+        feedId: feedId,
+        interactionType: 'save',
+      );
+    } catch (e) {
+      print('Error tracking feed save: $e');
+    }
+  }
+
+  /// Update user's location for location-based recommendations
+  Future<void> updateUserLocation(double latitude, double longitude) async {
+    try {
+      final userData = await _userService.getUser();
+      if (userData == null) return;
+
+      await _feedRepository.updateUserInterest(
+        userId: userData.id,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    } catch (e) {
+      print('Error updating user location: $e');
+    }
+  }
+
+  /// Clear viewed feeds tracking (call on logout or session reset)
+  void clearViewTracking() {
+    _viewedFeedIds.clear();
+  }
+
+  /// Sync user's initial interests from profile/onboarding
+  /// Call this after user completes onboarding or updates their interests
+  Future<void> syncUserInterests({
+    List<String>? interests,
+    List<String>? categories,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final userData = await _userService.getUser();
+      if (userData == null) return;
+
+      await _feedRepository.syncInitialInterests(
+        userId: userData.id,
+        interests: interests,
+        categories: categories,
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+      // Refresh recommended feeds after syncing interests
+      await fetchRecommendedFeeds(refresh: true);
+    } catch (e) {
+      print('Error syncing user interests: $e');
+    }
   }
 }

@@ -37,6 +37,12 @@ import 'package:krishimantra/presentation/controllers/presigned_url_controller.d
 // Add new imports for marketplace
 import 'package:krishimantra/data/repositories/marketplace_repository.dart';
 import 'package:krishimantra/presentation/controllers/marketplace_controller.dart';
+// Add notification imports
+import 'package:krishimantra/data/repositories/notification_repository.dart';
+import 'package:krishimantra/presentation/controllers/notification_controller.dart';
+// Add subscription imports
+import 'package:krishimantra/data/repositories/subscription_repository.dart';
+import 'package:krishimantra/presentation/controllers/subscription_controller.dart';
 
 Future<void> initDependencies() async {
   // Initialize Dio and ApiService first
@@ -78,6 +84,10 @@ Future<void> initDependencies() async {
       () => MarketplaceRepository(
           Get.find<ApiService>(), Get.find<UserService>()),
       fenix: true);
+  // Add notification repository
+  Get.lazyPut(() => NotificationRepository(Get.find<ApiService>()), fenix: true);
+  // Add subscription repository
+  Get.lazyPut(() => SubscriptionRepository(Get.find<ApiService>()), fenix: true);
 
   // Initialize controllers with fenix: true
   Get.lazyPut(
@@ -157,6 +167,22 @@ Future<void> initDependencies() async {
     () => MarketplaceController(
       Get.find<MarketplaceRepository>(),
     ),
+    fenix: true,
+  );
+
+  // Add notification controller
+  Get.lazyPut(
+    () => NotificationController(
+      Get.find<NotificationRepository>(),
+      Get.find<UserService>(),
+      Get.find<SocketService>(),
+    ),
+    fenix: true,
+  );
+
+  // Add subscription controller
+  Get.lazyPut(
+    () => SubscriptionController(Get.find<SubscriptionRepository>()),
     fenix: true,
   );
 

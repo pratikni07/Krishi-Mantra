@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+.next/
+**/.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+**/logs/
+*.log
+
+# Package lock files in node_modules
+**/node_modules/.package-lock.json
+
+# Testing
+coverage/
+
+# Misc
+*.pem
+.vercel
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local Netlify folder
+.netlify
+
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+*.iml
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+
+# Android
+**/.gradle/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Next.js env files (keep .env.example files)
+**/.env.local
+
+# Notification service logs (already tracked, will be ignored for new changes)
+Backend-JS/notification-service/logs/

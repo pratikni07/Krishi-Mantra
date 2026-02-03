@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishimantra/core/constants/colors.dart';
+import 'package:krishimantra/core/utils/responsive_utils.dart';
 import 'package:krishimantra/presentation/controllers/auth_controller.dart';
 import 'package:krishimantra/routes/app_routes.dart';
 import '../../../data/services/language_service.dart';
@@ -106,33 +107,52 @@ class _SignupScreenState extends State<SignupScreen> {
   void _showImageSourceDialog() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: AppColors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXXL)),
       ),
       builder: (context) => Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: RPadding.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(Icons.camera_alt, color: AppColors.green),
-              title: Text(takePhotoText),
+              leading: Icon(Icons.camera_alt, color: AppColors.green, size: AppSizes.iconM),
+              title: Text(
+                takePhotoText,
+                style: TextStyle(
+                  fontSize: AppSizes.fontL,
+                  color: AppColors.textDark,
+                ),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.camera);
               },
             ),
             ListTile(
-              leading: Icon(Icons.photo_library, color: AppColors.green),
-              title: Text(chooseFromGalleryText),
+              leading: Icon(Icons.photo_library, color: AppColors.green, size: AppSizes.iconM),
+              title: Text(
+                chooseFromGalleryText,
+                style: TextStyle(
+                  fontSize: AppSizes.fontL,
+                  color: AppColors.textDark,
+                ),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.gallery);
               },
             ),
             ListTile(
-              leading: Icon(Icons.cancel, color: Colors.red),
-              title: Text(cancelText),
+              leading: Icon(Icons.cancel, color: AppColors.error, size: AppSizes.iconM),
+              title: Text(
+                cancelText,
+                style: TextStyle(
+                  fontSize: AppSizes.fontL,
+                  color: AppColors.textDark,
+                ),
+              ),
               onTap: () => Navigator.pop(context),
             ),
           ],
@@ -143,19 +163,23 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+    final avatarRadius = ResponsiveUtils.responsive(mobile: 60.0, tablet: 80.0);
+    final cameraButtonSize = ResponsiveUtils.responsive(mobile: 40.0, tablet: 48.0);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.green),
+          icon: Icon(Icons.arrow_back, color: AppColors.green, size: AppSizes.iconM),
           onPressed: () => Get.back(),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: RPadding.all(24),
           child: Form(
             key: _formKey,
             child: Column(
@@ -164,20 +188,20 @@ class _SignupScreenState extends State<SignupScreen> {
                 Text(
                   completeProfileText,
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: AppSizes.fontTitle,
                     fontWeight: FontWeight.bold,
                     color: AppColors.green,
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: AppSizes.paddingM),
                 Text(
                   provideDetailsText,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: AppSizes.fontL,
                     color: AppColors.textGrey,
                   ),
                 ),
-                const SizedBox(height: 30),
+                SizedBox(height: AppSizes.paddingXXL),
 
                 // Profile Image
                 Center(
@@ -188,16 +212,16 @@ class _SignupScreenState extends State<SignupScreen> {
                         child: Stack(
                           children: [
                             CircleAvatar(
-                              radius: 60,
-                              backgroundColor: Colors.grey[200],
+                              radius: avatarRadius,
+                              backgroundColor: AppColors.scaffoldBackground,
                               backgroundImage: _profileImage != null
                                   ? FileImage(_profileImage!)
                                   : null,
                               child: _profileImage == null
                                   ? Icon(
                                       Icons.person,
-                                      size: 60,
-                                      color: Colors.grey[400],
+                                      size: avatarRadius,
+                                      color: AppColors.textLight,
                                     )
                                   : null,
                             ),
@@ -205,32 +229,32 @@ class _SignupScreenState extends State<SignupScreen> {
                               right: 0,
                               bottom: 0,
                               child: Container(
-                                height: 40,
-                                width: 40,
+                                height: cameraButtonSize,
+                                width: cameraButtonSize,
                                 decoration: BoxDecoration(
                                   color: AppColors.green,
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.white,
+                                    color: AppColors.white,
                                     width: 2,
                                   ),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.camera_alt,
-                                  color: Colors.white,
-                                  size: 20,
+                                  color: AppColors.white,
+                                  size: AppSizes.iconS,
                                 ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: AppSizes.paddingS),
                       Text(
                         "($optionalText)",
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
+                          fontSize: AppSizes.fontS,
+                          color: AppColors.textLight,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -238,24 +262,29 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 30),
+                SizedBox(height: AppSizes.paddingXXL),
 
                 // Full Name Field
                 TextFormField(
                   controller: _nameController,
+                  style: TextStyle(
+                    fontSize: AppSizes.fontL,
+                    color: AppColors.textDark,
+                  ),
                   decoration: InputDecoration(
                     labelText: fullNameText,
-                    prefixIcon: Icon(Icons.person, color: AppColors.green),
+                    labelStyle: const TextStyle(color: AppColors.textGrey),
+                    prefixIcon: Icon(Icons.person, color: AppColors.green, size: AppSizes.iconM),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.green, width: 2),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                      borderSide: const BorderSide(color: AppColors.green, width: 2),
                     ),
                   ),
                   validator: (value) {
@@ -266,25 +295,29 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
 
-                const SizedBox(height: 20),
+                SizedBox(height: AppSizes.paddingL),
 
                 // First Name Field
                 TextFormField(
                   controller: _firstNameController,
+                  style: TextStyle(
+                    fontSize: AppSizes.fontL,
+                    color: AppColors.textDark,
+                  ),
                   decoration: InputDecoration(
                     labelText: firstNameText,
-                    prefixIcon:
-                        Icon(Icons.person_outline, color: AppColors.green),
+                    labelStyle: const TextStyle(color: AppColors.textGrey),
+                    prefixIcon: Icon(Icons.person_outline, color: AppColors.green, size: AppSizes.iconM),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.green, width: 2),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                      borderSide: const BorderSide(color: AppColors.green, width: 2),
                     ),
                   ),
                   validator: (value) {
@@ -295,25 +328,29 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
 
-                const SizedBox(height: 20),
+                SizedBox(height: AppSizes.paddingL),
 
                 // Last Name Field
                 TextFormField(
                   controller: _lastNameController,
+                  style: TextStyle(
+                    fontSize: AppSizes.fontL,
+                    color: AppColors.textDark,
+                  ),
                   decoration: InputDecoration(
                     labelText: lastNameText,
-                    prefixIcon:
-                        Icon(Icons.person_outline, color: AppColors.green),
+                    labelStyle: const TextStyle(color: AppColors.textGrey),
+                    prefixIcon: Icon(Icons.person_outline, color: AppColors.green, size: AppSizes.iconM),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.green, width: 2),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                      borderSide: const BorderSide(color: AppColors.green, width: 2),
                     ),
                   ),
                   validator: (value) {
@@ -324,59 +361,66 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
 
-                const SizedBox(height: 20),
+                SizedBox(height: AppSizes.paddingL),
 
                 // Phone Number Field (Disabled)
                 TextFormField(
                   initialValue: widget.phoneNumber,
                   enabled: false,
+                  style: TextStyle(
+                    fontSize: AppSizes.fontL,
+                    color: AppColors.textGrey,
+                  ),
                   decoration: InputDecoration(
                     labelText: phoneNumberText,
+                    labelStyle: const TextStyle(color: AppColors.textGrey),
                     prefixText: '+91 ',
-                    prefixIcon: Icon(Icons.phone, color: AppColors.green),
+                    prefixIcon: Icon(Icons.phone, color: AppColors.green, size: AppSizes.iconM),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                     ),
                     disabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
                     ),
                     filled: true,
-                    fillColor: Colors.grey[100],
+                    fillColor: AppColors.disabledBackground,
                   ),
                 ),
 
-                const SizedBox(height: 40),
+                SizedBox(height: ResponsiveUtils.hp(5)),
 
                 // Continue Button
                 Obx(() => SizedBox(
                       width: double.infinity,
-                      height: 56,
+                      height: AppSizes.buttonHeight,
                       child: ElevatedButton(
                         onPressed: _authController.isLoading.value
                             ? null
                             : () => _handleSignup(),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.green,
+                          disabledBackgroundColor: AppColors.green.withOpacity(0.5),
+                          foregroundColor: AppColors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppSizes.radiusXL),
                           ),
                           elevation: 2,
                         ),
                         child: _authController.isLoading.value
                             ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
+                                height: AppSizes.iconS,
+                                width: AppSizes.iconS,
+                                child: const CircularProgressIndicator(
+                                  color: AppColors.white,
                                   strokeWidth: 2,
                                 ),
                               )
                             : Text(
                                 continueText,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: AppSizes.fontL,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -399,14 +443,24 @@ class _SignupScreenState extends State<SignupScreen> {
       if (_profileImage != null) {
         Get.dialog(
           Dialog(
+            backgroundColor: AppColors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: RPadding.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: AppColors.green),
-                  SizedBox(height: 16),
-                  Text('Uploading profile image...'),
+                  const CircularProgressIndicator(color: AppColors.green),
+                  SizedBox(height: AppSizes.paddingL),
+                  Text(
+                    'Uploading profile image...',
+                    style: TextStyle(
+                      fontSize: AppSizes.fontS,
+                      color: AppColors.textGrey,
+                    ),
+                  ),
                 ],
               ),
             ),

@@ -5,6 +5,7 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:share_plus/share_plus.dart';
 import 'package:get/get.dart';
 import '../../../../data/models/feed_model.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../FeedDetailsScreen.dart';
 import 'package:chewie/chewie.dart';
 import 'package:video_player/video_player.dart';
@@ -24,12 +25,16 @@ class FeedCard extends StatefulWidget {
   final FeedModel feed;
   final VoidCallback onLike;
   final VoidCallback? onSave;
+  final VoidCallback? onShare;
+  final VoidCallback? onView;
 
   const FeedCard({
     super.key,
     required this.feed,
     required this.onLike,
     this.onSave,
+    this.onShare,
+    this.onView,
   });
 
   @override
@@ -39,8 +44,25 @@ class FeedCard extends StatefulWidget {
 class _FeedCardState extends State<FeedCard> {
   bool _isExpanded = false;
   bool _isVideoPlaying = false;
+  bool _hasTrackedView = false;
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Track view when the card is first displayed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trackViewIfNeeded();
+    });
+  }
+
+  void _trackViewIfNeeded() {
+    if (!_hasTrackedView && widget.onView != null) {
+      _hasTrackedView = true;
+      widget.onView!();
+    }
+  }
 
   @override
   void dispose() {
@@ -140,6 +162,7 @@ class _FeedCardState extends State<FeedCard> {
                   Colors.green,
                   () {
                     Share.share(widget.feed.content);
+                    widget.onShare?.call();
                     Navigator.pop(context);
                   },
                 ),
@@ -150,6 +173,7 @@ class _FeedCardState extends State<FeedCard> {
                   Colors.blue,
                   () {
                     Share.share(widget.feed.content);
+                    widget.onShare?.call();
                     Navigator.pop(context);
                   },
                 ),
@@ -160,6 +184,7 @@ class _FeedCardState extends State<FeedCard> {
                   Colors.lightBlue,
                   () {
                     Share.share(widget.feed.content);
+                    widget.onShare?.call();
                     Navigator.pop(context);
                   },
                 ),
@@ -422,7 +447,7 @@ class _FeedCardState extends State<FeedCard> {
         width: double.infinity,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
-          print('❌ Error loading feed image: $error');
+          logger.e('Error loading feed image', tag: 'FeedCard', error: error);
           return Container(
             width: double.infinity,
             height: 200,
@@ -484,7 +509,7 @@ class _FeedCardState extends State<FeedCard> {
       // This will trigger a rebuild to show the video player
       setState(() {});
     } catch (e) {
-      print('Error initializing video player: $e');
+      logger.e('Error initializing video player', tag: 'FeedCard', error: e);
       setState(() {
         _isVideoPlaying = false;
       });

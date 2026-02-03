@@ -64,26 +64,38 @@ class CropController extends GetxController {
     }
   }
 
-  Future<void> fetchCropCalendar(String cropId) async {
+  Future<bool> fetchCropCalendar(String cropId) async {
+    print('[CropController] fetchCropCalendar called with cropId: $cropId');
+
     // Find the crop in our list first
     final crop = crops.firstWhereOrNull((crop) => crop.id == cropId);
     if (crop != null) {
       selectedCrop.value = crop;
+      print('[CropController] Found crop: ${crop.name}');
+    } else {
+      print('[CropController] Crop not found in list');
     }
-    
+
     isLoadingCalendar.value = true;
     calendarError.value = '';
     cropCalendar.value = null;
 
     try {
+      print('[CropController] Fetching calendar from repository...');
       final calendar = await _cropRepository.getCropCalendar(cropId);
+      print('[CropController] Calendar fetched successfully');
       cropCalendar.value = calendar;
+      isLoadingCalendar.value = false;
+      // Navigate to detail screen after successful fetch
+      print('[CropController] Navigating to CropDetailScreen...');
       Get.to(() => const CropDetailScreen());
+      return true;
     } catch (e) {
+      print('[CropController] Error fetching calendar: $e');
       calendarError.value = e.toString().replaceFirst('Exception: ', '');
       Get.snackbar('Error', calendarError.value, duration: const Duration(seconds: 3));
-    } finally {
       isLoadingCalendar.value = false;
+      return false;
     }
   }
 

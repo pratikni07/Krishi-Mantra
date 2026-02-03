@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishimantra/core/constants/colors.dart';
+import 'package:krishimantra/core/utils/responsive_utils.dart';
 import 'package:krishimantra/presentation/controllers/auth_controller.dart';
 import '../../../data/services/language_service.dart';
 import 'otp_verification_screen.dart';
@@ -22,7 +23,7 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
   String phoneVerificationText = 'Phone Verification';
   String enterPhoneText = 'Enter your phone number';
   String weWillSendText =
-      'We will send you a WhatsApp message with a verification code';
+      'We will send you an SMS with a verification code';
   String phoneNumberText = 'Phone Number';
   String continueText = 'Continue';
   String invalidPhoneText = 'Please enter a valid phone number';
@@ -43,7 +44,7 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
       _languageService.translate('Phone Verification'),
       _languageService.translate('Enter your phone number'),
       _languageService.translate(
-          'We will send you a WhatsApp message with a verification code'),
+          'We will send you an SMS with a verification code'),
       _languageService.translate('Phone Number'),
       _languageService.translate('Continue'),
       _languageService.translate('Please enter a valid phone number'),
@@ -61,19 +62,27 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.green),
-          onPressed: () => Get.back(),
+          icon: Icon(Icons.arrow_back, color: AppColors.green, size: AppSizes.iconM),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Get.back();
+            }
+          },
         ),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: RPadding.all(24),
           child: Form(
             key: _formKey,
             child: Column(
@@ -82,47 +91,53 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
                 Text(
                   phoneVerificationText,
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: AppSizes.fontTitle,
                     fontWeight: FontWeight.bold,
                     color: AppColors.green,
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: AppSizes.paddingM),
                 Text(
                   enterPhoneText,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: AppSizes.fontL,
                     color: AppColors.textGrey,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: AppSizes.paddingS),
                 Text(
                   weWillSendText,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: AppSizes.fontM,
                     color: AppColors.textGrey.withOpacity(0.7),
                   ),
                 ),
-                const SizedBox(height: 40),
+                SizedBox(height: ResponsiveUtils.hp(5)),
 
                 // Phone number field
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
+                  style: TextStyle(
+                    fontSize: AppSizes.fontL,
+                    color: AppColors.textDark,
+                  ),
                   decoration: InputDecoration(
                     labelText: phoneNumberText,
                     prefixText: '+91 ',
-                    prefixIcon: Icon(Icons.phone, color: AppColors.green),
+                    labelStyle: const TextStyle(color: AppColors.textGrey),
+                    hintStyle: const TextStyle(color: AppColors.textLight),
+                    prefixIcon: Icon(Icons.phone, color: AppColors.green, size: AppSizes.iconM),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.green, width: 2),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                      borderSide: const BorderSide(color: AppColors.green, width: 2),
                     ),
                   ),
                   validator: (value) {
@@ -142,37 +157,40 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
                 // Continue Button
                 Obx(() => SizedBox(
                       width: double.infinity,
-                      height: 56,
+                      height: AppSizes.buttonHeight,
                       child: ElevatedButton(
                         onPressed: _authController.isLoading.value
                             ? null
                             : () => _handleContinue(),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.green,
+                          disabledBackgroundColor: AppColors.green.withOpacity(0.5),
+                          foregroundColor: AppColors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppSizes.radiusL),
                           ),
                           elevation: 2,
                         ),
                         child: _authController.isLoading.value
                             ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
+                                height: AppSizes.iconS,
+                                width: AppSizes.iconS,
+                                child: const CircularProgressIndicator(
+                                  color: AppColors.white,
                                   strokeWidth: 2,
                                 ),
                               )
                             : Text(
                                 continueText,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: AppSizes.fontL,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                       ),
                     )),
+                SizedBox(height: AppSizes.paddingL),
               ],
             ),
           ),

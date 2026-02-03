@@ -10,26 +10,31 @@ const testingmiddleware = (req, res, next) => {
   next();
 };
 
-// Start fresh with a clean route
+// Static routes MUST come before parameterized routes to avoid conflicts
+// Admin routes
 router.get("/getAllFeedsAdmin", testingmiddleware, feedController.getAllFeedsForAdmin);
 
-// Other routes
+// Static routes
 router.get("/getoptwo", feedController.getTopFeeds);
+router.get("/feeds/random", feedController.getRandomFeeds);
+router.get("/trending/hashtags", feedController.getTrendingHashtags);
+
+// User interest and interaction routes (static paths - must be before :userId)
+router.post("/user/interest", feedController.updateUserInterest);
+router.post("/user/interaction", feedController.recordInteraction);
+router.post("/user/sync-interests", feedController.syncInitialInterests);
+
+// User routes with userId parameter
+router.get("/user/:userId/stats", feedController.getUserStats);
+router.get("/user/:userId/recommended", feedController.getRecommendedFeeds);
+
+// Tag routes
+router.get("/tag/:tagName/feeds", feedController.getFeedsByTag);
+
+// Feed CRUD routes (parameterized routes at the end)
 router.post("/", feedController.createFeed);
 router.get("/:feedId", feedController.getFeed);
 router.post("/:feedId/comment", feedController.addComment);
 router.post("/:feedId/like", feedController.toggleLike);
-router.get("/tag/:tagName/feeds", feedController.getFeedsByTag);
-router.get("/feeds/random", feedController.getRandomFeeds);
-
-// User interest and interaction routes
-router.post("/user/interest", feedController.updateUserInterest);
-router.post("/user/interaction", feedController.recordInteraction);
-
-// Recommended feeds route
-router.get("/user/:userId/recommended", feedController.getAllFeeds);
-
-// Trending hashtags route
-router.get("/trending/hashtags", feedController.getTrendingHashtags);
 
 module.exports = router;

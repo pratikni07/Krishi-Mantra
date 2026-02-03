@@ -4,7 +4,9 @@ import 'package:krishimantra/presentation/controllers/marketplace_controller.dar
 import 'package:krishimantra/core/constants/colors.dart';
 import 'package:krishimantra/core/utils/language_helper.dart';
 import 'package:krishimantra/core/utils/error_with_translation.dart';
+import 'package:krishimantra/core/utils/responsive_utils.dart';
 import 'package:krishimantra/presentation/widgets/error_widgets.dart';
+import 'package:krishimantra/presentation/widgets/skeleton/skeleton_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -25,11 +27,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   final TextEditingController _searchController = TextEditingController();
   bool _canAddProducts = false;
 
-  final double a8 = 8.0; // Spacing constant
-  Map<String, int> _currentImageIndices =
-      {}; // Track current image index for each product
+  Map<String, int> _currentImageIndices = {};
 
-  // Add new variables for search and filters
   bool _showFilters = false;
   RangeValues _priceRange = RangeValues(0, 1000000);
 
@@ -71,7 +70,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     try {
       await _controller.fetchMarketplaceProducts();
     } catch (e) {
-      // Error is handled in the controller and displayed in the UI
       await TranslatedErrorHandler.showError(e, context: context);
     }
   }
@@ -83,27 +81,28 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
         _canAddProducts = canAdd;
       });
     } catch (e) {
-      // Just log the error but don't show to user as this is not critical
       debugPrint('Error checking permissions: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
         backgroundColor: AppColors.green,
         title: Text(
           getTranslation(KEY_MARKETPLACE),
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: AppColors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 20,
+            fontSize: AppSizes.fontXXL,
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: AppColors.white, size: AppSizes.iconM),
           onPressed: () => Get.back(),
         ),
       ),
@@ -119,7 +118,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                 Get.to(() => AddProductScreen());
               },
               backgroundColor: AppColors.green,
-              child: const Icon(Icons.add, color: Colors.white),
+              child: Icon(Icons.add, color: AppColors.white, size: AppSizes.iconM),
             )
           : null,
     );
@@ -128,49 +127,57 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   Widget _buildSearchBar() {
     return Container(
       color: AppColors.green,
-      padding: EdgeInsets.fromLTRB(16, 8, 16, _showFilters ? 16 : 24),
+      padding: RPadding.only(
+        left: 16,
+        right: 16,
+        top: 8,
+        bottom: _showFilters ? 16 : 24,
+      ),
       child: Column(
         children: [
           Container(
-            height: 48, // Fixed height
+            height: AppSizes.buttonHeight,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(30),
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(AppSizes.radiusRound),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: AppColors.shadowLight,
                   blurRadius: 5,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Center(
-              // Center the TextField
               child: TextField(
                 controller: _searchController,
+                style: TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: AppSizes.fontL,
+                ),
                 decoration: InputDecoration(
                   hintText: getTranslation(KEY_SEARCH_HINT),
                   hintStyle: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 16,
+                    color: AppColors.textLight,
+                    fontSize: AppSizes.fontL,
                   ),
-                  prefixIcon: Icon(Icons.search, color: AppColors.green),
+                  prefixIcon: Icon(Icons.search, color: AppColors.green, size: AppSizes.iconM),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _showFilters
                           ? Icons.filter_list
                           : Icons.filter_list_outlined,
                       color: AppColors.green,
+                      size: AppSizes.iconM,
                     ),
                     onPressed: () =>
                         setState(() => _showFilters = !_showFilters),
                   ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  alignLabelWithHint: true, // Align hint text
+                  contentPadding: RPadding.symmetric(horizontal: 16),
+                  alignLabelWithHint: true,
                 ),
-                textAlignVertical:
-                    TextAlignVertical.center, // Center text vertically
+                textAlignVertical: TextAlignVertical.center,
                 onChanged: (value) {
                   _controller.searchTerm.value = value;
                   _controller.searchProducts();
@@ -186,14 +193,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
 
   Widget _buildFilters() {
     return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(16),
+      margin: RPadding.only(top: 16),
+      padding: RPadding.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppSizes.radiusL),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: AppColors.shadowMedium,
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -204,7 +211,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
         children: [
           Text(
             getTranslation(KEY_PRICE_RANGE),
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textDark,
+              fontSize: AppSizes.fontM,
+            ),
           ),
           RangeSlider(
             values: _priceRange,
@@ -223,18 +234,22 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               _controller.searchProducts();
             },
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppSizes.paddingL),
           Text(
             getTranslation(KEY_CATEGORIES),
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textDark,
+              fontSize: AppSizes.fontM,
+            ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: AppSizes.paddingS),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: AppSizes.paddingS,
+            runSpacing: AppSizes.paddingS,
             children: _buildCategoryChips(),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppSizes.paddingL),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -244,12 +259,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                   foregroundColor: AppColors.green,
                   side: BorderSide(color: AppColors.green),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusRound),
                   ),
                 ),
-                child: Text(getTranslation(KEY_CLEAR_FILTERS)),
+                child: Text(
+                  getTranslation(KEY_CLEAR_FILTERS),
+                  style: TextStyle(fontSize: AppSizes.fontM),
+                ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: AppSizes.paddingS),
               ElevatedButton(
                 onPressed: () {
                   _controller.searchProducts();
@@ -257,12 +275,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.green,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusRound),
                   ),
                 ),
-                child: Text(getTranslation(KEY_APPLY_FILTERS)),
+                child: Text(
+                  getTranslation(KEY_APPLY_FILTERS),
+                  style: TextStyle(fontSize: AppSizes.fontM),
+                ),
               ),
             ],
           ),
@@ -272,10 +293,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   }
 
   String _formatPrice(double price) {
-    // Format price with commas (e.g., 1,000,000)
     if (price == null) return '0';
     return price.toStringAsFixed(0).replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+  }
+
+  String _formatPriceRange(Map<String, dynamic> product) {
+    // Backend sends priceRange: {min, max} instead of minPrice/maxPrice
+    final priceRange = product['priceRange'];
+    if (priceRange != null && priceRange is Map) {
+      final minPrice = priceRange['min'] ?? 0;
+      final maxPrice = priceRange['max'] ?? 0;
+      return "₹$minPrice - ₹$maxPrice";
+    }
+    // Fallback for older format
+    return "₹${product['minPrice'] ?? 0} - ₹${product['maxPrice'] ?? 0}";
   }
 
   void _clearFilters() {
@@ -319,12 +351,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           label: Text(
             category,
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black87,
-              fontSize: 12,
+              color: isSelected ? AppColors.white : AppColors.textDark,
+              fontSize: AppSizes.fontS,
             ),
           ),
-          backgroundColor: isSelected ? AppColors.green : Colors.grey[200],
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          backgroundColor: isSelected ? AppColors.green : AppColors.scaffoldBackground,
+          padding: RPadding.symmetric(horizontal: 8),
         ),
       );
     }).toList();
@@ -334,20 +366,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     return Expanded(
       child: Obx(() {
         if (_controller.isLoading) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  getTranslation(KEY_LOADING),
-                  style: TextStyle(color: Colors.grey[700]),
-                ),
-              ],
+          return GridView.builder(
+            padding: RPadding.all(16),
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: ResponsiveUtils.gridCrossAxisCount,
+              childAspectRatio: 0.7,
+              crossAxisSpacing: AppSizes.paddingM,
+              mainAxisSpacing: AppSizes.paddingM,
             ),
+            itemCount: 6,
+            itemBuilder: (context, index) {
+              return const SkeletonMarketplaceCard();
+            },
           );
         }
 
@@ -373,12 +404,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           },
           color: AppColors.green,
           child: GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
+            padding: RPadding.all(16),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: ResponsiveUtils.gridCrossAxisCount,
+              childAspectRatio: ResponsiveUtils.gridAspectRatio,
+              crossAxisSpacing: AppSizes.paddingL,
+              mainAxisSpacing: AppSizes.paddingL,
             ),
             itemCount: products.length,
             itemBuilder: (context, index) {
@@ -398,14 +429,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
 
   Widget _buildProductCard(Map<String, dynamic> product, int index) {
     final productId = product['_id'].toString();
-    final media = List<Map<String, dynamic>>.from(product['media'] ?? []);
-    final images = media.where((m) => m['type'] == 'image').toList();
+
+    // Backend returns 'images' as array of URL strings, not 'media' with {type, url}
+    final imagesList = product['images'];
+    final List<String> images = imagesList is List
+        ? List<String>.from(imagesList.map((e) => e?.toString() ?? ''))
+        : <String>[];
     final currentIndex = _currentImageIndices[productId] ?? 0;
 
-    // Safely get image URL
     String imageUrl = '';
     if (images.isNotEmpty && currentIndex < images.length) {
-      imageUrl = images[currentIndex]['url'] ?? '';
+      imageUrl = images[currentIndex];
     }
 
     return GestureDetector(
@@ -415,11 +449,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(AppSizes.radiusL),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: AppColors.shadowLight,
               blurRadius: 5,
               offset: const Offset(0, 2),
             ),
@@ -431,15 +465,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
             Expanded(
               flex: 5,
               child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(AppSizes.radiusL),
+                ),
                 child: Stack(
                   children: [
-                    // Product image with carousel functionality
                     if (images.length > 1)
                       CarouselSlider(
                         options: CarouselOptions(
-                          aspectRatio: 1, // Square aspect ratio
+                          aspectRatio: 1,
                           viewportFraction: 1.0,
                           enableInfiniteScroll: false,
                           onPageChanged: (pageIndex, _) {
@@ -448,18 +482,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                             });
                           },
                         ),
-                        items: images.map((imageData) {
-                          final url = imageData['url'] ?? '';
+                        items: images.map((url) {
                           return _buildProductImage(url);
                         }).toList(),
                       )
                     else
                       _buildProductImage(imageUrl),
 
-                    // Only show indicator if more than one image
                     if (images.length > 1)
                       Positioned(
-                        bottom: 8,
+                        bottom: AppSizes.paddingS,
                         left: 0,
                         right: 0,
                         child: Center(
@@ -482,30 +514,30 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               ),
             ),
 
-            // Product info
             Expanded(
               flex: 3,
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: RPadding.all(8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       (product['title'] ?? 'Unknown Product').toString(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: AppSizes.fontM,
+                        color: AppColors.textDark,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: AppSizes.paddingXS),
                     Text(
-                      "₹${product['minPrice'] ?? 0} - ₹${product['maxPrice'] ?? 0}",
+                      _formatPriceRange(product),
                       style: TextStyle(
                         color: AppColors.green,
                         fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                        fontSize: AppSizes.fontS,
                       ),
                     ),
                   ],
@@ -520,19 +552,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
 
   Widget _buildProductImage(String imageUrl) {
     return Container(
-      color: Colors.grey[200],
+      color: AppColors.shimmerBase,
       child: CachedNetworkImage(
         imageUrl: imageUrl,
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        placeholder: (context, url) => Center(
+        placeholder: (context, url) => const Center(
           child: CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
           ),
         ),
-        errorWidget: (context, url, error) => const Center(
-          child: Icon(Icons.image_not_supported, color: Colors.grey),
+        errorWidget: (context, url, error) => Center(
+          child: Icon(Icons.image_not_supported, color: AppColors.textLight, size: AppSizes.iconL),
         ),
       ),
     );

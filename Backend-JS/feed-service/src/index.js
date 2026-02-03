@@ -1,113 +1,212 @@
-const path = require("path");
-const dotenv = require("dotenv");
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 
-// Load environment variables based on NODE_ENV
-const envFile =
-  process.env.NODE_ENV === "production"
-    ? path.resolve(process.cwd(), ".env.production")
-    : path.resolve(process.cwd(), ".env.development");
+// Load environment configuration first
+const config = require('./config/environment');
 
-dotenv.config({ path: envFile });
-console.log(
-  `Using environment: ${process.env.NODE_ENV}, loaded from: ${envFile}`
-);
+// Import database and redis
+const database = require('./config/database');
+const redis = require('./config/redis');
+const rabbitmq = require('./config/rabbitmq');
 
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
-const redis = require("./config/redis");
-const analyticsRoutes = require("./routes/analytics");
+// Import routes
+const feedRoutes = require('./routes/feed');
+const commentRoutes = require('./routes/comment');
+const likeRoutes = require('./routes/like');
+const analyticsRoutes = require('./routes/analytics');
+
+// Import middlewares
+const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
+
+// Import constants
+const { RATE_LIMITS, HTTP_STATUS } = require('./utils/constants');
+
 // Import auto post scheduler
-const autoPostScheduler = require("./utils/autoPostScheduler");
+const autoPostScheduler = require('./utils/autoPostScheduler');
 
 const app = express();
 
+// Trust proxy for rate limiting behind reverse proxy
+app.set('trust proxy', 1);
+
 // Security Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
-// Rate Limiting
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // limit each IP to 100 requests per windowMs
-// });
-// app.use(limiter);
+// Compression for responses
+app.use(compression());
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// CORS configuration
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
 
-// Check Redis status after 3 seconds to allow connection to resolve
-setTimeout(() => {
-  if (redis.isDummyClient && redis.isDummyClient()) {
-    console.log(
-      "⚠️ WARNING: Using in-memory dummy Redis client - caching won't persist"
-    );
-    console.log(
-      "ℹ️ Run 'node checkRedis.js' to diagnose Redis connection issues"
-    );
-  } else {
-    console.log("✅ Redis connection successful - caching enabled");
-  }
-}, 3000);
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',')
+      : ['http://localhost:3000', 'http://localhost:8080'];
 
-// Database Connection
-mongoose
-  .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,
-  })
-  .then(() => {
-    console.log("MongoDB Connected");
-    // Start auto post scheduler after successful database connection
-    if (process.env.ENABLE_AUTO_POST !== "false") {
-      // autoPostScheduler.init();
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all in development, restrict in production
     }
-  })
-  .catch((err) => console.error("MongoDB Connection Error:", err));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+};
+app.use(cors(corsOptions));
 
-mongoose.connection.on("connected", () => {
-  console.log("Mongoose connected to database");
+// Rate Limiting - Optimized for 10k concurrent users
+const generalLimiter = rateLimit({
+  windowMs: RATE_LIMITS.WINDOW_MS,
+  max: RATE_LIMITS.MAX_REQUESTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later',
+  },
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health';
+  },
 });
 
-mongoose.connection.on("error", (err) => {
-  console.error("Mongoose connection error:", err);
+// Stricter rate limit for write operations
+const writeLimiter = rateLimit({
+  windowMs: RATE_LIMITS.WINDOW_MS,
+  max: RATE_LIMITS.FEED_CREATE_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many write operations, please try again later',
+  },
+});
+
+app.use(generalLimiter);
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'Feed service is healthy',
+    timestamp: new Date().toISOString(),
+    redis: redis.isDummyClient() ? 'fallback' : 'connected',
+    database: database.isConnected() ? 'connected' : 'disconnected',
+  });
 });
 
 // Routes
-app.use("/feeds", require("./routes/feed"));
-app.use("/comments", require("./routes/comment"));
-app.use("/likes", require("./routes/like"));
-app.use("/analytics", analyticsRoutes);
+app.use('/feeds', feedRoutes);
+app.use('/comments', commentRoutes);
+app.use('/likes', likeRoutes);
+app.use('/analytics', analyticsRoutes);
 
-// Global Error Handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    message: "Something went wrong!",
-    error: process.env.NODE_ENV === "production" ? {} : err.stack,
-  });
-});
+// 404 handler
+app.use(notFoundHandler);
 
-// Start Server
-const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Global error handler
+app.use(errorHandler);
 
-// Graceful Shutdown
-process.on("SIGTERM", () => {
-  console.log("SIGTERM received. Closing HTTP server.");
-  server.close(() => {
-    console.log("HTTP server closed.");
-    mongoose.connection.close(false, () => {
-      console.log("MongoDB connection closed.");
-      process.exit(0);
+// Database connection and server start
+const startServer = async () => {
+  try {
+    // Connect to MongoDB
+    await database.connect();
+
+    // Connect to RabbitMQ for notifications
+    try {
+      await rabbitmq.connect();
+      console.log('✅ RabbitMQ connected for notifications');
+    } catch (rabbitError) {
+      console.warn('⚠️  RabbitMQ unavailable, notifications will be disabled');
+    }
+
+    // Check Redis status after delay
+    setTimeout(() => {
+      if (redis.isDummyClient()) {
+        console.log('⚠️  Using in-memory cache (Redis unavailable)');
+      } else {
+        console.log('✅ Redis connected');
+      }
+    }, 3000);
+
+    // Start auto post scheduler if enabled
+    if (config.features.enableAutoPost) {
+      autoPostScheduler.init();
+      console.log('📅 Auto post scheduler initialized');
+    }
+
+    // Start server
+    const server = app.listen(config.port, () => {
+      console.log(`🚀 Feed service running on port ${config.port}`);
+      console.log(`📊 Environment: ${config.env}`);
+      console.log(`⚡ Rate limit: ${RATE_LIMITS.MAX_REQUESTS} requests/${RATE_LIMITS.WINDOW_MS / 1000}s`);
     });
-  });
-});
+
+    // Graceful shutdown
+    const gracefulShutdown = async (signal) => {
+      console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+      server.close(async () => {
+        console.log('HTTP server closed');
+
+        try {
+          await database.disconnect();
+          await redis.disconnect();
+          await rabbitmq.disconnect();
+          console.log('All connections closed');
+          process.exit(0);
+        } catch (error) {
+          console.error('Error during shutdown:', error);
+          process.exit(1);
+        }
+      });
+
+      // Force shutdown after 30 seconds
+      setTimeout(() => {
+        console.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 30000);
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught Exception:', error);
+      gracefulShutdown('uncaughtException');
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    });
+
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 module.exports = app;
