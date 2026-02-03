@@ -76,3 +76,8 @@ yarn-error.log*
 
 # Notification service logs (already tracked, will be ignored for new changes)
 Backend-JS/notification-service/logs/
+
+# IoT Service
+iot-service/iot-service
+mosquitto/data/
+mosquitto/log/

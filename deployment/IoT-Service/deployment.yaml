@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-device-simulator
+  namespace: microservices
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iot-device-simulator
+  template:
+    metadata:
+      labels:
+        app: iot-device-simulator
+    spec:
+      containers:
+      - name: iot-device-simulator
+        image: your-registry/iot-service:latest
+        imagePullPolicy: Always
+        env:
+        - name: APP_TYPE
+          value: "device"
+        - name: DEVICE_ID
+          value: "device-001"
+        envFrom:
+        - configMapRef:
+            name: iot-service-config
+        - secretRef:
+            name: iot-service-secret
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-parser
+  namespace: microservices
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: iot-parser
+  template:
+    metadata:
+      labels:
+        app: iot-parser
+    spec:
+      containers:
+      - name: iot-parser
+        image: your-registry/iot-service:latest
+        imagePullPolicy: Always
+        env:
+        - name: APP_TYPE
+          value: "parser"
+        envFrom:
+        - configMapRef:
+            name: iot-service-config
+        - secretRef:
+            name: iot-service-secret
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-soil-consumer
+  namespace: microservices
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: iot-soil-consumer
+  template:
+    metadata:
+      labels:
+        app: iot-soil-consumer
+    spec:
+      containers:
+      - name: iot-soil-consumer
+        image: your-registry/iot-service:latest
+        imagePullPolicy: Always
+        env:
+        - name: APP_TYPE
+          value: "soil"
+        envFrom:
+        - configMapRef:
+            name: iot-service-config
+        - secretRef:
+            name: iot-service-secret
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-weather-consumer
+  namespace: microservices
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: iot-weather-consumer
+  template:
+    metadata:
+      labels:
+        app: iot-weather-consumer
+    spec:
+      containers:
+      - name: iot-weather-consumer
+        image: your-registry/iot-service:latest
+        imagePullPolicy: Always
+        env:
+        - name: APP_TYPE
+          value: "weather"
+        envFrom:
+        - configMapRef:
+            name: iot-service-config
+        - secretRef:
+            name: iot-service-secret
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi

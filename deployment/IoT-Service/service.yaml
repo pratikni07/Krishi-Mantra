@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: iot-service
+  namespace: microservices
+spec:
+  selector:
+    app: iot-parser
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP

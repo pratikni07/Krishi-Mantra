@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: krishi-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: krishi-clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    environment:
+      - CLICKHOUSE_DB=krishi_mantra
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+
+  iot-device-simulator:
+    build:
+      context: ./iot-service
+      dockerfile: Dockerfile
+    container_name: krishi-iot-device
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    environment:
+      - APP_TYPE=device
+      - DEVICE_ID=device-001
+      - MQTT_BROKER_URL=tcp://mosquitto:1883
+      - SENSOR_INTERVAL=10
+
+  iot-parser:
+    build:
+      context: ./iot-service
+      dockerfile: Dockerfile
+    container_name: krishi-iot-parser
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    environment:
+      - APP_TYPE=parser
+      - MQTT_BROKER_URL=tcp://mosquitto:1883
+      - MQTT_CLIENT_ID=krishi-parser
+
+  iot-soil-consumer:
+    build:
+      context: ./iot-service
+      dockerfile: Dockerfile
+    container_name: krishi-iot-soil
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+      - clickhouse
+    environment:
+      - APP_TYPE=soil
+      - MQTT_BROKER_URL=tcp://mosquitto:1883
+      - MQTT_CLIENT_ID=krishi-soil-consumer
+      - CLICKHOUSE_ADDR=clickhouse:9000
+      - CLICKHOUSE_DB=krishi_mantra
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASS=
+
+  iot-weather-consumer:
+    build:
+      context: ./iot-service
+      dockerfile: Dockerfile
+    container_name: krishi-iot-weather
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+      - clickhouse
+    environment:
+      - APP_TYPE=weather
+      - MQTT_BROKER_URL=tcp://mosquitto:1883
+      - MQTT_CLIENT_ID=krishi-weather-consumer
+      - CLICKHOUSE_ADDR=clickhouse:9000
+      - CLICKHOUSE_DB=krishi_mantra
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASS=
+
+volumes:
+  clickhouse_data:

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iot-service-config
+  namespace: microservices
+data:
+  MQTT_BROKER_URL: "tcp://mosquitto:1883"
+  CLICKHOUSE_ADDR: "clickhouse:9000"
+  CLICKHOUSE_DB: "krishi_mantra"
+  CLICKHOUSE_USER: "default"
+  SENSOR_INTERVAL: "10"
