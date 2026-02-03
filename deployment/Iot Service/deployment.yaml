@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-service
+  namespace: microservices
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iot-service
+  template:
+    metadata:
+      labels:
+        app: iot-service
+    spec:
+      containers:
+      - name: iot-service
+        image: your-registry/iot-service:latest
+        imagePullPolicy: Always
+        env:
+        - name: APP_TYPE
+          value: "parser"
+        envFrom:
+        - configMapRef:
+            name: iot-service-config
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
