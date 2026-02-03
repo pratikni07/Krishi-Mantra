@@ -9,13 +9,16 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Rate limiting configuration
-// const limiter = rateLimit({
-//   windowMs: process.env.RATE_LIMIT_WINDOW_MS || 900000,
-//   max: process.env.RATE_LIMIT_MAX_REQUESTS || 100,
-// });
+const limiter = rateLimit({
+  windowMs: process.env.RATE_LIMIT_WINDOW_MS || 900000, // 15 minutes
+  max: process.env.RATE_LIMIT_MAX_REQUESTS || 100,
+  message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Middleware
-// app.use(limiter);
+app.use(limiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -39,7 +42,7 @@ app.use(
         callback(null, true);
       } else {
         console.log("Blocked by CORS:", origin);
-        callback(null, true);
+        callback(new Error("Not allowed by CORS"), false);
       }
     },
     credentials: true,
@@ -50,20 +53,23 @@ app.use(
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log("Inside request logging middleware");
-  console.log("Request received:", req.method, req.url);
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  if (process.env.LOG_LEVEL === 'debug') {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  }
   next();
 });
 
-console.log("Environment Variables:", {
-  MAIN_SERVICE_URL: process.env.MAIN_SERVICE_URL,
-  MESSAGE_SERVICE_URL: process.env.MESSAGE_SERVICE_URL,
-  FEED_SERVICE_URL: process.env.FEED_SERVICE_URL,
-  REEL_SERVICE_URL: process.env.REEL_SERVICE_URL,
-  ENGAGEMENT_SERVICE_URL: process.env.ENGAGEMENT_SERVICE_URL,
-  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
-});
+// Log environment variables only in debug mode
+if (process.env.LOG_LEVEL === 'debug') {
+  console.log("Environment Variables:", {
+    MAIN_SERVICE_URL: process.env.MAIN_SERVICE_URL,
+    MESSAGE_SERVICE_URL: process.env.MESSAGE_SERVICE_URL,
+    FEED_SERVICE_URL: process.env.FEED_SERVICE_URL,
+    REEL_SERVICE_URL: process.env.REEL_SERVICE_URL,
+    ENGAGEMENT_SERVICE_URL: process.env.ENGAGEMENT_SERVICE_URL,
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
+  });
+}
 
 const createServiceProxy = (serviceName, serviceUrl, pathRewrite) => {
   console.log(
