@@ -66,8 +66,13 @@ yarn-error.log*
 *.temp
 .cache/
 
-# Next.js env files (keep .env.example files)
+# Environment files (keep .env.example files)
+.env
+**/.env
 **/.env.local
+**/.env.development
+**/.env.production
+!**/.env.example
 
 # Notification service logs (already tracked, will be ignored for new changes)
 Backend-JS/notification-service/logs/
