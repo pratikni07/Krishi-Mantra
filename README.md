@@ -41,6 +41,13 @@ Krishi Doctor is a comprehensive mobile application designed to support and empo
 - Product comparisons
 - Dealer and distributor details
 
+### 7. 🌡️ IoT Farm Monitoring (NEW)
+- Real-time soil monitoring (moisture, temperature, pH, NPK)
+- Weather station data (temperature, humidity, pressure, wind, rainfall, light)
+- Automated data collection every 10 seconds
+- Historical data analysis
+- Data-driven farming insights
+
 ## 🛠 Tech Stack
 
 ### Frontend
@@ -55,9 +62,50 @@ Krishi Doctor is a comprehensive mobile application designed to support and empo
 - MongoDB
 - Redis
 
+### IoT Platform (NEW)
+- **Go** - IoT service implementation
+- **MQTT (Mosquitto)** - Message broker for sensor data
+- **ClickHouse** - Time-series database for sensor data storage
+- **Docker** - Containerization
+
 ### DevOps
 - Docker
 - AWS
 - Nginx
 - CI/CD Pipeline
+
+## 🌾 IoT Platform
+
+Krishi Mantra now includes a comprehensive IoT platform for real-time farm monitoring, similar to Fasal IoT devices.
+
+### Features
+- **Real-time Sensor Data**: Collects soil and weather data every 10 seconds
+- **Multi-Sensor Support**: 
+  - Soil sensors (moisture, temperature, pH, NPK)
+  - Weather sensors (temperature, humidity, pressure, wind, rainfall, light)
+- **Scalable Architecture**: Microservices-based with MQTT messaging
+- **Data Validation**: Comprehensive validation before storage
+- **Time-Series Storage**: Efficient ClickHouse database for sensor data
+
+### Architecture
+```
+IoT Device → MQTT → Parser Service → Soil/Weather Services → ClickHouse DB
+```
+
+### Quick Start
+
+```bash
+# Start all IoT services
+docker-compose -f docker-compose.iot.yml up -d
+
+# Or run individual services
+cd iot-service
+make run-device    # Start device simulator
+make run-parser    # Start parser service
+make run-soil      # Start soil consumer
+make run-weather   # Start weather consumer
+```
+
+For detailed documentation, see [IoT Service README](./iot-service/README.md).
+
 
