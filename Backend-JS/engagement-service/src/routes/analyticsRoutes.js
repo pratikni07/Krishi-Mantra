@@ -1,6 +1,10 @@
 /**
  * Analytics Routes
  * API endpoints for analytics and dashboard
+ * 
+ * SECURITY: Rate limiting is applied at the application level in src/index.js
+ * app.use('/api/engagement/analytics', analyticsRateLimiter)
+ * All routes in this file are automatically rate-limited (30 req/min)
  */
 
 const express = require('express');
