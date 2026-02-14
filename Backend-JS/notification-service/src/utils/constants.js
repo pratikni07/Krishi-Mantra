@@ -21,11 +21,13 @@ const HTTP_STATUS = {
 };
 
 const CACHE_TTL = {
-  SHORT: 60,           // 1 minute
-  MEDIUM: 300,         // 5 minutes
-  LONG: 3600,          // 1 hour
-  USER_PREFS: 3600,    // 1 hour for user preferences
-  NOTIFICATION: 300,   // 5 minutes for notification data
+  SHORT: 60,
+  MEDIUM: 300,
+  LONG: 3600,
+  USER_PREFS: 3600,
+  NOTIFICATION: 300,
+  DEDUPE: 1800,
+  DIGEST_WINDOW: 3600,
 };
 
 const CACHE_KEYS = {
@@ -33,6 +35,9 @@ const CACHE_KEYS = {
   NOTIFICATION: 'notification:',
   USER_NOTIFICATIONS: 'user_notifications:',
   UNREAD_COUNT: 'unread_count:',
+  DEDUPE: 'dedupe:',
+  RATE_LIMIT: 'notif_rate:',
+  DIGEST: 'digest:',
 };
 
 const PAGINATION = {
@@ -42,26 +47,31 @@ const PAGINATION = {
 };
 
 const RATE_LIMITS = {
-  // General API limits - optimized for 10k users
-  WINDOW_MS: 60 * 1000,        // 1 minute window
-  MAX_REQUESTS: 100,           // 100 requests per window
-
-  // Notification creation limits
+  WINDOW_MS: 60 * 1000,
+  MAX_REQUESTS: 100,
   CREATE_WINDOW_MS: 60 * 1000,
-  MAX_CREATE: 50,              // 50 notifications per minute
-
-  // Bulk notification limits
+  MAX_CREATE: 50,
   BULK_WINDOW_MS: 60 * 1000,
-  MAX_BULK: 10,                // 10 bulk requests per minute
-  MAX_BULK_SIZE: 1000,         // Max 1000 notifications per bulk request
-
-  // WebSocket limits
+  MAX_BULK: 10,
+  MAX_BULK_SIZE: 1000,
   WS_EVENTS_PER_SECOND: 10,
   WS_MAX_CONNECTIONS_PER_USER: 3,
 };
 
+const NOTIFICATION_DELIVERY_MODE = {
+  INSTANT: 'instant',
+  DIGEST: 'digest',
+};
+
+const DEFAULT_CATEGORY_CAPS = {
+  advertisement: { limit: 3, windowSeconds: 3600 },
+  promotion: { limit: 3, windowSeconds: 3600 },
+  post_engagement: { limit: 20, windowSeconds: 3600 },
+  reel_engagement: { limit: 20, windowSeconds: 3600 },
+  marketplace: { limit: 10, windowSeconds: 3600 },
+};
+
 const DB_CONFIG = {
-  // Optimized for 10k concurrent connections
   MAX_POOL_SIZE: 100,
   MIN_POOL_SIZE: 20,
   SOCKET_TIMEOUT_MS: 45000,
@@ -72,10 +82,9 @@ const DB_CONFIG = {
 };
 
 const WEBSOCKET_CONFIG = {
-  // Optimized for 10k concurrent WebSocket connections
   PING_INTERVAL: 25000,
   PING_TIMEOUT: 60000,
-  MAX_PAYLOAD: 10 * 1024,      // 10KB max message size
+  MAX_PAYLOAD: 10 * 1024,
   MAX_CONNECTIONS_PER_USER: 3,
   RECONNECTION_DELAY: 1000,
   RECONNECTION_DELAY_MAX: 5000,
@@ -94,6 +103,8 @@ const NOTIFICATION_STATUS = {
   DELIVERED: 'delivered',
   FAILED: 'failed',
   READ: 'read',
+  SKIPPED: 'skipped',
+  DEFERRED: 'deferred',
 };
 
 const NOTIFICATION_PRIORITY = {
@@ -104,26 +115,38 @@ const NOTIFICATION_PRIORITY = {
 
 const NOTIFICATION_CATEGORIES = {
   SYSTEM: 'system',
+  SUBSCRIPTION: 'subscription',
+  PROMOTION: 'promotion',
+  ADVERTISEMENT: 'advertisement',
+  POST_ENGAGEMENT: 'post_engagement',
+  REEL_ENGAGEMENT: 'reel_engagement',
+  MARKETPLACE: 'marketplace',
   CONSULTANT_SERVICE: 'consultant_service',
-  NEW_POST: 'new_post',
-  LIKE: 'new_post',
-  COMMENT: 'new_post',
-  NEW_REEL: 'new_reel',
-  FARM_VIDEOS: 'farm_videos',
-  CROP_CARE_AI: 'crop_care_ai',
-  MESSAGE: 'consultant_service',
+  MESSAGE: 'message',
+};
+
+const NOTIFICATION_EVENTS = {
+  SUBSCRIPTION_ENDING: 'subscription.ending',
+  SUBSCRIPTION_DISCOUNT: 'subscription.discount',
+  ADVERTISEMENT_BROADCAST: 'advertisement.broadcast',
+  POST_LIKED: 'post.liked',
+  POST_COMMENTED: 'post.commented',
+  REEL_LIKED: 'reel.liked',
+  REEL_COMMENTED: 'reel.commented',
+  MARKETPLACE_PRODUCT_MATCH: 'marketplace.product.match',
 };
 
 const BATCH_CONFIG = {
   DEFAULT_SIZE: 100,
   MAX_SIZE: 1000,
-  DEFAULT_INTERVAL_MS: 60000,  // 1 minute
-  MIN_INTERVAL_MS: 10000,      // 10 seconds minimum
+  DEFAULT_INTERVAL_MS: 60000,
+  MIN_INTERVAL_MS: 10000,
+  DIGEST_FLUSH_INTERVAL_MS: 300000,
 };
 
 const RABBITMQ_CONFIG = {
-  PREFETCH_COUNT: 10,          // Process 10 messages at a time for better throughput
-  MESSAGE_TTL: 86400000,       // 24 hours
+  PREFETCH_COUNT: 10,
+  MESSAGE_TTL: 86400000,
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000,
 };
@@ -140,6 +163,9 @@ module.exports = {
   NOTIFICATION_STATUS,
   NOTIFICATION_PRIORITY,
   NOTIFICATION_CATEGORIES,
+  NOTIFICATION_EVENTS,
+  NOTIFICATION_DELIVERY_MODE,
+  DEFAULT_CATEGORY_CAPS,
   BATCH_CONFIG,
   RABBITMQ_CONFIG,
 };

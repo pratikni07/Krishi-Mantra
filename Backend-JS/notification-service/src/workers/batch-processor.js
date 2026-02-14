@@ -2,30 +2,27 @@ const rabbitmq = require('../config/rabbitmq');
 const config = require('../config');
 const Notification = require('../models/notification.model');
 const processor = require('./processor');
+const eventNotificationService = require('../services/event-notification.service');
 const logger = require('../utils/logger');
+const digestService = require('../services/digest.service');
+const { NOTIFICATION_STATUS } = require('../utils/constants');
 
 class BatchProcessor {
   async startConsumer() {
     try {
       const channel = rabbitmq.getChannel();
-      
-      // Set prefetch to control concurrency
-      await channel.prefetch(1);
-      
-      // Process individual notifications
+      await channel.prefetch(10);
+
       await channel.consume(config.rabbitmq.queues.notification, async (msg) => {
         if (!msg) return;
 
         try {
           const notificationData = JSON.parse(msg.content.toString());
 
-          // Check if notification already exists in DB (has _id) or needs to be created
           let notification;
           if (notificationData._id) {
             notification = notificationData;
-            logger.debug(`Processing existing notification: ${notification._id}`);
           } else {
-            // Create notification in database (from feed-service or message-svc)
             notification = await Notification.create({
               userId: notificationData.userId,
               type: notificationData.type || 'in_app',
@@ -34,46 +31,51 @@ class BatchProcessor {
               data: notificationData.data,
               category: notificationData.category || 'system',
               priority: notificationData.priority || 'medium',
-              status: 'pending',
+              status: NOTIFICATION_STATUS.PENDING,
               scheduledFor: new Date(),
             });
-            logger.debug(`Created new notification: ${notification._id} from ${notificationData.source || 'unknown'}`);
           }
 
           await processor.processNotification(notification);
-
-          // Acknowledge message
           channel.ack(msg);
         } catch (error) {
           logger.error('Error processing notification from queue:', error);
-          // Negative acknowledge to requeue
           channel.nack(msg, false, true);
         }
       });
-      
-      // Process batches
+
       await channel.consume(config.rabbitmq.queues.batch, async (msg) => {
         if (!msg) return;
-        
+
         try {
           const batch = JSON.parse(msg.content.toString());
           logger.info(`Processing batch: ${batch.batchId} with ${batch.count} notifications`);
-          
-          // Process each notification in the batch
+
           for (const notification of batch.notifications) {
             await processor.processNotification(notification);
           }
-          
-          // Acknowledge message
+
           channel.ack(msg);
         } catch (error) {
           logger.error('Error processing batch from queue:', error);
-          // Negative acknowledge to requeue
           channel.nack(msg, false, true);
         }
       });
-      
-      logger.info('Batch processor started and consuming from queues');
+
+      await channel.consume(config.rabbitmq.queues.event, async (msg) => {
+        if (!msg) return;
+
+        try {
+          const eventPayload = JSON.parse(msg.content.toString());
+          await eventNotificationService.handleEvent(eventPayload);
+          channel.ack(msg);
+        } catch (error) {
+          logger.error('Error processing event from queue:', error);
+          channel.nack(msg, false, false);
+        }
+      });
+
+      logger.info('Batch processor started and consuming notification, batch and event queues');
     } catch (error) {
       logger.error('Failed to start batch processor:', error);
       throw error;
@@ -82,21 +84,28 @@ class BatchProcessor {
 
   async scheduleBatchProcessing() {
     const batchInterval = config.batch.intervalMs;
-    
-    // Run batch processing on a schedule
+
     setInterval(async () => {
       try {
         logger.debug('Starting scheduled batch processing');
-        
-        // Find pending notifications and process them in batches
         const pendingCount = await this._processPendingNotifications();
-        
         logger.info(`Scheduled batch processing completed. Processed ${pendingCount} notifications.`);
       } catch (error) {
         logger.error('Error in scheduled batch processing:', error);
       }
     }, batchInterval);
-    
+
+    setInterval(async () => {
+      try {
+        const flushed = await digestService.flushDigests();
+        if (flushed) {
+          logger.info(`Digest flush completed. Generated ${flushed} digest notifications.`);
+        }
+      } catch (error) {
+        logger.error('Error during digest flush:', error);
+      }
+    }, config.batch.digestFlushIntervalMs || 300000);
+
     logger.info(`Scheduled batch processing every ${batchInterval}ms`);
   }
 
@@ -104,41 +113,33 @@ class BatchProcessor {
     try {
       const now = new Date();
       const batchSize = config.batch.size;
-      
-      // Find notifications ready to send
+
       const pendingNotifications = await Notification.find({
-        status: 'pending',
-        scheduledFor: { $lte: now }
+        status: { $in: [NOTIFICATION_STATUS.PENDING, NOTIFICATION_STATUS.DEFERRED] },
+        scheduledFor: { $lte: now },
       }).limit(batchSize);
-      
+
       if (pendingNotifications.length === 0) {
         logger.debug('No pending notifications found for batch processing');
         return 0;
       }
-      
-      // Group notifications by user to avoid overwhelming users
+
       const groupedByUser = this._groupByUser(pendingNotifications);
-      
       let processedCount = 0;
-      
-      // Process each user's batch
+
       for (const [userId, notifications] of Object.entries(groupedByUser)) {
-        // Create a batch ID
         const batchId = `batch-${Date.now()}-${userId}`;
-        
-        // Update notifications with batch ID
-        const notificationIds = notifications.map(n => n._id);
+        const notificationIds = notifications.map((n) => n._id);
+
         await Notification.updateMany(
           { _id: { $in: notificationIds } },
-          { batchId, status: 'processing' }
+          { batchId, status: NOTIFICATION_STATUS.PROCESSING }
         );
-        
-        // Send to batch queue
+
         await this._sendToBatchQueue(notifications, batchId);
-        
         processedCount += notifications.length;
       }
-      
+
       return processedCount;
     } catch (error) {
       logger.error('Error processing pending notifications:', error);
@@ -148,33 +149,33 @@ class BatchProcessor {
 
   _groupByUser(notifications) {
     const grouped = {};
-    
+
     for (const notification of notifications) {
       if (!grouped[notification.userId]) {
         grouped[notification.userId] = [];
       }
       grouped[notification.userId].push(notification);
     }
-    
+
     return grouped;
   }
 
   async _sendToBatchQueue(notifications, batchId) {
     try {
       const channel = rabbitmq.getChannel();
-      
+
       const message = JSON.stringify({
         batchId,
         count: notifications.length,
-        notifications
+        notifications,
       });
-      
+
       await channel.sendToQueue(
         config.rabbitmq.queues.batch,
         Buffer.from(message),
         { persistent: true }
       );
-      
+
       logger.debug(`Sent batch ${batchId} with ${notifications.length} notifications to queue`);
       return true;
     } catch (error) {
@@ -184,4 +185,4 @@ class BatchProcessor {
   }
 }
 
-module.exports = new BatchProcessor(); 
+module.exports = new BatchProcessor();
