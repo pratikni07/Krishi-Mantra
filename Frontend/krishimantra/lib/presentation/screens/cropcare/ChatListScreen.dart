@@ -239,12 +239,24 @@ class _ChatListScreenState extends State<ChatListScreen> with TranslationMixin {
             CircleAvatar(
               radius: avatarRadius,
               backgroundColor: AppColors.faintGreen,
-              backgroundImage: isGroup
-                  ? null
-                  : NetworkImage(otherParticipant?.profilePhoto ?? ''),
+              backgroundImage: !isGroup &&
+                      otherParticipant?.profilePhoto != null &&
+                      otherParticipant!.profilePhoto!.isNotEmpty
+                  ? NetworkImage(otherParticipant.profilePhoto!)
+                  : null,
               child: isGroup
                   ? Icon(Icons.group, color: AppColors.green, size: AppSizes.iconM)
-                  : null,
+                  : (otherParticipant?.profilePhoto == null ||
+                          otherParticipant!.profilePhoto!.isEmpty)
+                      ? Text(
+                          (otherParticipant?.userName ?? '?')[0].toUpperCase(),
+                          style: TextStyle(
+                            color: AppColors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: AppSizes.fontL,
+                          ),
+                        )
+                      : null,
             ),
             SizedBox(width: AppSizes.paddingM),
             Expanded(
@@ -362,12 +374,16 @@ class _ChatListScreenState extends State<ChatListScreen> with TranslationMixin {
                   ),
                 ),
                 SizedBox(width: AppSizes.paddingM),
-                Text(
-                  getTranslation(KEY_CREATE_NEW_GROUP),
-                  style: TextStyle(
-                    fontSize: AppSizes.fontTitle,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textGrey,
+                Flexible(
+                  child: Text(
+                    getTranslation(KEY_CREATE_NEW_GROUP),
+                    style: TextStyle(
+                      fontSize: AppSizes.fontTitle,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textGrey,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -446,21 +462,24 @@ class _ChatListScreenState extends State<ChatListScreen> with TranslationMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Get.back(),
-                  style: TextButton.styleFrom(
-                    padding: RPadding.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  child: Text(
-                    getTranslation(KEY_CANCEL),
-                    style: TextStyle(
-                      color: AppColors.textGrey,
-                      fontSize: AppSizes.fontL,
+                Flexible(
+                  child: TextButton(
+                    onPressed: () => Get.back(),
+                    style: TextButton.styleFrom(
+                      padding: RPadding.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: Text(
+                      getTranslation(KEY_CANCEL),
+                      style: TextStyle(
+                        color: AppColors.textGrey,
+                        fontSize: AppSizes.fontL,
+                      ),
                     ),
                   ),
                 ),
-                SizedBox(width: AppSizes.paddingL),
-                ElevatedButton(
+                SizedBox(width: AppSizes.paddingS),
+                Flexible(
+                  child: ElevatedButton(
                   onPressed: () async {
                     if (_groupNameController.text.isNotEmpty) {
                       try {
@@ -517,6 +536,7 @@ class _ChatListScreenState extends State<ChatListScreen> with TranslationMixin {
                       fontSize: AppSizes.fontL,
                       fontWeight: FontWeight.w600,
                     ),
+                  ),
                   ),
                 ),
               ],

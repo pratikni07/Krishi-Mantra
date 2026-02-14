@@ -43,6 +43,7 @@ import 'package:krishimantra/presentation/controllers/notification_controller.da
 // Add subscription imports
 import 'package:krishimantra/data/repositories/subscription_repository.dart';
 import 'package:krishimantra/presentation/controllers/subscription_controller.dart';
+import 'package:krishimantra/presentation/controllers/background_upload_controller.dart';
 
 Future<void> initDependencies() async {
   // Initialize Dio and ApiService first
@@ -184,6 +185,15 @@ Future<void> initDependencies() async {
   Get.lazyPut(
     () => SubscriptionController(Get.find<SubscriptionRepository>()),
     fenix: true,
+  );
+
+  // Add background upload controller
+  Get.put(
+    BackgroundUploadController(
+      Get.find<FeedRepository>(),
+      Get.find<UserService>(),
+    ),
+    permanent: true,
   );
 
   // Initialize VideoController

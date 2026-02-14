@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/api"
 	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/config"
 	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/consumers"
 	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/database"
@@ -32,7 +33,7 @@ func main() {
 	case "device":
 		runDeviceSimulator(cfg, mqttClient)
 	case "parser":
-		runParserConsumer(mqttClient)
+		runParserConsumer(cfg, mqttClient)
 	case "soil":
 		runSoilConsumer(cfg, mqttClient)
 	case "weather":
@@ -56,10 +57,28 @@ func runDeviceSimulator(cfg *config.Config, mqttClient *mqtt.Client) {
 	go simulator.Start()
 }
 
-func runParserConsumer(mqttClient *mqtt.Client) {
+func runParserConsumer(cfg *config.Config, mqttClient *mqtt.Client) {
 	log.Println("Running in PARSER mode - Parser Consumer")
 
-	parser := consumers.NewParserConsumer(mqttClient)
+	// Create API client for main service integration
+	var apiClient *api.Client
+	if cfg.MainServiceURL != "" {
+		apiClient = api.NewClient(cfg.MainServiceURL, cfg.MainServiceAPIKey)
+		log.Printf("Main service API configured: %s", cfg.MainServiceURL)
+		
+		// Test API connectivity
+		if err := apiClient.HealthCheck(); err != nil {
+			log.Printf("Warning: Main service health check failed: %v", err)
+			log.Println("Parser will continue but subscription validation may fail")
+		} else {
+			log.Println("Main service API connection verified")
+		}
+	} else {
+		log.Println("Warning: Main service URL not configured (MAIN_SERVICE_URL)")
+		log.Println("Subscription validation will be skipped")
+	}
+
+	parser := consumers.NewParserConsumer(mqttClient, apiClient)
 	if err := parser.Start(); err != nil {
 		log.Fatalf("Failed to start parser consumer: %v", err)
 	}

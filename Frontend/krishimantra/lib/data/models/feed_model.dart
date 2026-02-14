@@ -6,12 +6,21 @@ class FeedModel {
   final String description;
   final String content;
   final String? mediaUrl;
+  final List<String> mediaUrls;
   final Map<String, dynamic> like;
   final Map<String, dynamic> comment;
   final Map<String, dynamic>? location;
   final DateTime date;
   final List<dynamic> recentComments;
   bool isLiked;
+
+  /// Returns all media URLs (merges mediaUrl + mediaUrls, no duplicates)
+  List<String> get allMediaUrls {
+    final urls = <String>{};
+    if (mediaUrl != null && mediaUrl!.isNotEmpty) urls.add(mediaUrl!);
+    urls.addAll(mediaUrls.where((u) => u.isNotEmpty));
+    return urls.toList();
+  }
 
   FeedModel({
     required this.id,
@@ -21,6 +30,7 @@ class FeedModel {
     required this.description,
     required this.content,
     this.mediaUrl,
+    this.mediaUrls = const [],
     required this.like,
     required this.comment,
     this.location,
@@ -38,6 +48,7 @@ class FeedModel {
       'description': description,
       'content': content,
       'mediaUrl': mediaUrl,
+      'mediaUrls': mediaUrls,
       'like': like,
       'comment': comment,
       'location': location,
@@ -56,6 +67,9 @@ class FeedModel {
       description: json['description'] ?? '',
       content: json['content'] ?? '',
       mediaUrl: json['mediaUrl'],
+      mediaUrls: json['mediaUrls'] != null
+          ? List<String>.from(json['mediaUrls'])
+          : const [],
       like: json['like'] ?? {'count': 0, 'users': []},
       comment: json['comment'] ?? {'count': 0},
       location: json['location'],
@@ -82,6 +96,7 @@ class FeedModel {
     String? description,
     String? content,
     String? mediaUrl,
+    List<String>? mediaUrls,
     Map<String, dynamic>? like,
     Map<String, dynamic>? comment,
     Map<String, dynamic>? location,
@@ -97,6 +112,7 @@ class FeedModel {
       description: description ?? this.description,
       content: content ?? this.content,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      mediaUrls: mediaUrls ?? List<String>.from(this.mediaUrls),
       like: like ?? Map<String, dynamic>.from(this.like),
       comment: comment ?? Map<String, dynamic>.from(this.comment),
       location: location ?? this.location,

@@ -9,6 +9,7 @@ import '../../../data/services/UserService.dart';
 import '../../../data/services/api_service.dart';
 import '../../../data/services/language_service.dart';
 import '../../controllers/auth_controller.dart';
+import '../../controllers/subscription_controller.dart';
 import '../../widgets/skeleton/skeleton_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final UserService _userService = UserService();
   final ApiService _apiService = Get.find<ApiService>();
   final AuthController _authController = Get.find<AuthController>();
+  late SubscriptionController _subscriptionController;
   late LanguageService _languageService;
   Map<String, dynamic>? userData;
   bool isLoading = true;
@@ -51,10 +53,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String logoutConfirmText = 'Are you sure you want to logout?';
   String cancelText = 'Cancel';
   String settingsText = 'Settings';
+  String manageSubscriptionText = 'Manage Subscription';
+  String currentPlanText = 'Current Plan';
+  String expiresOnText = 'Expires on';
+  String upgradePlanText = 'Upgrade Plan';
+  String freeText = 'FREE';
 
   @override
   void initState() {
     super.initState();
+    _subscriptionController = Get.find<SubscriptionController>();
     _loadUserData();
     _initializeLanguage();
   }
@@ -378,46 +386,249 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
 
-                  // Subscription Info
-                  Container(
-                    margin: EdgeInsets.symmetric(vertical: AppSizes.paddingS),
-                    decoration: BoxDecoration(
-                      color: AppColors.white,
-                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.shadowLight,
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: RPadding.only(left: 16, top: 16, right: 16, bottom: 8),
-                          child: Text(
-                            accountInfoText,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: AppSizes.fontL,
-                              color: AppColors.textDark,
+                  // Enhanced Subscription Section
+                  Obx(() {
+                    final subscription = _subscriptionController.currentSubscription.value;
+                    final currentPlan = _subscriptionController.currentPlan.value;
+                    final isFreePlan = _subscriptionController.isFreePlan.value;
+                    
+                    return Container(
+                      margin: EdgeInsets.symmetric(vertical: AppSizes.paddingS),
+                      decoration: BoxDecoration(
+                        gradient: isFreePlan
+                            ? null
+                            : LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  AppColors.green.withOpacity(0.1),
+                                  AppColors.green.withOpacity(0.05),
+                                ],
+                              ),
+                        color: isFreePlan ? AppColors.white : null,
+                        borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.shadowLight,
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                        border: isFreePlan
+                            ? null
+                            : Border.all(
+                                color: AppColors.green.withOpacity(0.3),
+                                width: 1,
+                              ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header with icon
+                          Padding(
+                            padding: RPadding.only(left: 16, top: 16, right: 16, bottom: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: RPadding.all(8),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.green.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                                      ),
+                                      child: Icon(
+                                        Icons.card_membership,
+                                        color: AppColors.green,
+                                        size: AppSizes.iconM,
+                                      ),
+                                    ),
+                                    SizedBox(width: AppSizes.paddingM),
+                                    Text(
+                                      subscriptionText,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: AppSizes.fontL,
+                                        color: AppColors.textDark,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                // Plan badge
+                                Container(
+                                  padding: RPadding.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: isFreePlan
+                                        ? AppColors.textGrey.withOpacity(0.1)
+                                        : AppColors.green,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    currentPlan?.displayName ?? freeText,
+                                    style: TextStyle(
+                                      color: isFreePlan ? AppColors.textGrey : AppColors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: AppSizes.fontS,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                        const Divider(color: AppColors.divider),
-                        _buildProfileInfoItem(Icons.card_membership,
-                            subscriptionText, subscriptionType),
-                        if (userData?['accountType'] == 'consultant') ...[
+                          const Divider(color: AppColors.divider),
+                          
+                          // Subscription details
+                          if (!isFreePlan && subscription != null) ...[
+                            Padding(
+                              padding: RPadding.symmetric(horizontal: 16, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_today,
+                                    color: AppColors.green,
+                                    size: AppSizes.iconS,
+                                  ),
+                                  SizedBox(width: AppSizes.paddingM),
+                                  Text(
+                                    '$expiresOnText: ',
+                                    style: TextStyle(
+                                      color: AppColors.textGrey,
+                                      fontSize: AppSizes.fontM,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatDate(subscription.endDate),
+                                    style: TextStyle(
+                                      color: AppColors.textDark,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: AppSizes.fontM,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Padding(
+                              padding: RPadding.symmetric(horizontal: 16, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.repeat,
+                                    color: AppColors.green,
+                                    size: AppSizes.iconS,
+                                  ),
+                                  SizedBox(width: AppSizes.paddingM),
+                                  Text(
+                                    subscription.billingCycle == 'yearly' ? 'Yearly' : 'Monthly',
+                                    style: TextStyle(
+                                      color: AppColors.textDark,
+                                      fontSize: AppSizes.fontM,
+                                    ),
+                                  ),
+                                  if (subscription.autoRenew) ...[
+                                    SizedBox(width: AppSizes.paddingM),
+                                    Container(
+                                      padding: RPadding.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.green.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        'Auto-renew',
+                                        style: TextStyle(
+                                          color: AppColors.green,
+                                          fontSize: AppSizes.fontXS,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ] else ...[
+                            Padding(
+                              padding: RPadding.all(16),
+                              child: Text(
+                                'Upgrade to unlock premium features',
+                                style: TextStyle(
+                                  color: AppColors.textGrey,
+                                  fontSize: AppSizes.fontM,
+                                ),
+                              ),
+                            ),
+                          ],
+                          
+                          // Manage Subscription Button
+                          Padding(
+                            padding: RPadding.all(16),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Get.toNamed('/subscription-plans');
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isFreePlan ? AppColors.green : AppColors.white,
+                                  foregroundColor: isFreePlan ? AppColors.white : AppColors.green,
+                                  elevation: 0,
+                                  side: isFreePlan ? null : BorderSide(color: AppColors.green),
+                                  padding: RPadding.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                                  ),
+                                ),
+                                child: Text(
+                                  isFreePlan ? upgradePlanText : manageSubscriptionText,
+                                  style: TextStyle(
+                                    fontSize: AppSizes.fontM,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+
+                  // Consultant Info (if applicable)
+                  if (userData?['accountType'] == 'consultant')
+                    Container(
+                      margin: EdgeInsets.symmetric(vertical: AppSizes.paddingS),
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(AppSizes.radiusXL),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.shadowLight,
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: RPadding.only(left: 16, top: 16, right: 16, bottom: 8),
+                            child: Text(
+                              accountInfoText,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: AppSizes.fontL,
+                                color: AppColors.textDark,
+                              ),
+                            ),
+                          ),
+                          const Divider(color: AppColors.divider),
                           _buildProfileInfoItem(Icons.work, experienceText,
                               '$experience $yearsText'),
                           _buildProfileInfoItem(
                               Icons.star, ratingText, '$rating/5'),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
 
                   // Edit Profile Button
                   Container(
@@ -623,5 +834,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 }

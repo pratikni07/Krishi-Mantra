@@ -26,6 +26,9 @@ const FeedSchema = new mongoose.Schema(
     mediaUrl: {
       type: String,
     },
+    mediaUrls: [{
+      type: String,
+    }],
     like: {
       count: {
         type: Number,
@@ -117,14 +120,14 @@ FeedSchema.index({
 });
 
 // Virtual for engagement score
-FeedSchema.virtual('engagementScore').get(function() {
+FeedSchema.virtual('engagementScore').get(function () {
   return (this.views?.count || 0) +
-         (this.like?.count || 0) * 3 +
-         (this.comment?.count || 0) * 5;
+    (this.like?.count || 0) * 3 +
+    (this.comment?.count || 0) * 5;
 });
 
 // Pre-save middleware to extract tags from content
-FeedSchema.pre('save', function(next) {
+FeedSchema.pre('save', function (next) {
   if (this.isModified('content')) {
     const tagRegex = /#(\w+)/g;
     const matches = this.content.match(tagRegex);
@@ -143,7 +146,7 @@ FeedSchema.pre('save', function(next) {
 });
 
 // Static methods for common queries
-FeedSchema.statics.findByLocation = function(longitude, latitude, maxDistanceKm = 50) {
+FeedSchema.statics.findByLocation = function (longitude, latitude, maxDistanceKm = 50) {
   return this.find({
     'location.coordinates': {
       $nearSphere: {
@@ -158,14 +161,14 @@ FeedSchema.statics.findByLocation = function(longitude, latitude, maxDistanceKm 
   });
 };
 
-FeedSchema.statics.findPopular = function(limit = 10) {
+FeedSchema.statics.findPopular = function (limit = 10) {
   return this.find({ isDeleted: false })
     .sort({ 'like.count': -1, 'comment.count': -1, date: -1 })
     .limit(limit)
     .lean();
 };
 
-FeedSchema.statics.findByTags = function(tags, limit = 20) {
+FeedSchema.statics.findByTags = function (tags, limit = 20) {
   return this.find({
     tags: { $in: tags },
     isDeleted: false,
@@ -176,13 +179,13 @@ FeedSchema.statics.findByTags = function(tags, limit = 20) {
 };
 
 // Instance methods
-FeedSchema.methods.incrementViews = async function() {
+FeedSchema.methods.incrementViews = async function () {
   this.views.count += 1;
   this.views.lastViewed = new Date();
   return this.save();
 };
 
-FeedSchema.methods.softDelete = async function() {
+FeedSchema.methods.softDelete = async function () {
   this.isDeleted = true;
   return this.save();
 };

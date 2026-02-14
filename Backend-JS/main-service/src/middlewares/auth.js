@@ -264,6 +264,52 @@ const adminAuth = async (req, res, next) => {
 };
 
 /**
+ * IoT service authentication middleware
+ * Validates requests from IoT microservice using API key
+ * Expected headers: X-API-Key, X-Service
+ */
+const iotServiceAuth = async (req, res, next) => {
+  try {
+    const apiKey = req.header('X-API-Key');
+    const serviceName = req.header('X-Service');
+
+    // Validate service identifier
+    if (serviceName !== 'iot-service') {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        success: false,
+        message: 'Invalid service identifier.',
+      });
+    }
+
+    // Validate API key
+    const expectedApiKey = process.env.IOT_SERVICE_API_KEY;
+    if (!expectedApiKey) {
+      console.error('IOT_SERVICE_API_KEY not configured');
+      return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: 'IoT service authentication not configured.',
+      });
+    }
+
+    if (apiKey !== expectedApiKey) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        message: 'Invalid API key.',
+      });
+    }
+
+    // Mark request as from IoT service
+    req.isIotService = true;
+    next();
+  } catch (error) {
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'IoT service authentication error.',
+    });
+  }
+};
+
+/**
  * Internal service authentication middleware
  * Validates requests from other microservices
  */
@@ -303,4 +349,5 @@ module.exports = {
   optionalAuth,
   internalAuth,
   adminAuth,
+  iotServiceAuth,
 };

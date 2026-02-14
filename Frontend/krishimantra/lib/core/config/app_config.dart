@@ -18,7 +18,7 @@ class AppConfig {
   /// Development IP address - change this to your computer's local IP for physical device testing
   /// Use 'localhost' for iOS simulator, '10.0.2.2' for Android emulator
   /// Use your actual IP (e.g., '192.168.1.100') for physical device testing
-  static const String _devHost = '192.168.1.46'; // Your local machine IP
+  static const String _devHost = '10.33.209.39'; // Your local machine IP
   static const String _devPort = '3001';
   static const String _devSocketPort = '3004';
 

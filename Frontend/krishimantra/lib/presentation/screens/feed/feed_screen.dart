@@ -16,6 +16,7 @@ import '../../widgets/skeleton/skeleton_widgets.dart';
 import 'widgets/feed_card.dart';
 import 'dart:math';
 import '../../../utils/image_utils.dart';
+import 'widgets/upload_status_overlay.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({Key? key}) : super(key: key);
@@ -272,7 +273,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver, Tr
         child: Container(
           color: AppColors.green,
           child: SafeArea(
-            child: Column(
+            child: Stack(
+              children: [
+                Column(
               children: [
                 Padding(
                   padding: RPadding.all(16),
@@ -355,18 +358,20 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver, Tr
                             ),
                           );
                         }
-
-                        return _buildFeedContent();
-                      }),
+                          return _buildFeedContent();
+                        }),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+              const UploadStatusOverlay(),
+            ],
           ),
         ),
       ),
-      floatingActionButton: _showCreatePost
+     ),
+     floatingActionButton: _showCreatePost
           ? FloatingActionButton(
               onPressed: () => Get.toNamed(AppRoutes.CREATE_POST),
               backgroundColor: AppColors.green,

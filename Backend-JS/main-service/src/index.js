@@ -35,6 +35,7 @@ const schemeRoutes = require('./routes/schemeRoutes');
 const analyticsRoutes = require('./routes/AnalyticsRoutes');
 const marketplaceRoutes = require('./routes/marketplaceRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const iotDeviceRoutes = require('./routes/iotDeviceRoutes');
 
 // Initialize express app
 const app = express();
@@ -189,6 +190,7 @@ app.use('/schemes', schemeRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/marketplace', marketplaceRoutes);
 app.use('/subscription', subscriptionRoutes);
+app.use('/api/v1/iot', iotDeviceRoutes);
 
 /**
  * 404 Handler

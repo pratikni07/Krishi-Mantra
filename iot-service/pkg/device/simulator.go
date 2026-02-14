@@ -7,39 +7,80 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/connection"
 	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/models"
 	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/mqtt"
 )
 
 type Simulator struct {
-	deviceID       string
-	mqttClient     *mqtt.Client
-	sensorInterval int
-	stopChan       chan struct{}
+	deviceID          string
+	deviceType        string
+	mqttClient        *mqtt.Client
+	sensorInterval    int
+	stopChan          chan struct{}
+	connectionManager *connection.Manager
+	isConnected       bool
 }
 
 // NewSimulator creates a new IoT device simulator
 func NewSimulator(deviceID string, mqttClient *mqtt.Client, sensorInterval int) *Simulator {
-	return &Simulator{
-		deviceID:       deviceID,
-		mqttClient:     mqttClient,
-		sensorInterval: sensorInterval,
-		stopChan:       make(chan struct{}),
+	// Determine device type (for demo, we'll use "combo" to send both soil and weather data)
+	deviceType := "combo"
+	firmwareVersion := "1.0.0"
+	macAddress := fmt.Sprintf("AA:BB:CC:DD:EE:%s", deviceID[len(deviceID)-2:])
+	
+	connMgr := connection.NewManager(deviceID, deviceType, firmwareVersion, macAddress, mqttClient)
+	
+	sim := &Simulator{
+		deviceID:          deviceID,
+		deviceType:        deviceType,
+		mqttClient:        mqttClient,
+		sensorInterval:    sensorInterval,
+		stopChan:          make(chan struct{}),
+		connectionManager: connMgr,
+		isConnected:       false,
 	}
+	
+	// Set connection callbacks
+	connMgr.SetCallbacks(
+		func() {
+			sim.isConnected = true
+			log.Printf("Device %s connected successfully", deviceID)
+		},
+		func() {
+			sim.isConnected = false
+			log.Printf("Device %s disconnected", deviceID)
+		},
+	)
+	
+	return sim
 }
 
 // Start starts the device simulator
 func (s *Simulator) Start() {
 	log.Printf("Starting IoT device simulator for device: %s", s.deviceID)
+	
+	// Start connection manager
+	if err := s.connectionManager.Start(); err != nil {
+		log.Fatalf("Failed to start connection manager: %v", err)
+	}
+	
 	ticker := time.NewTicker(time.Duration(s.sensorInterval) * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			s.sendSensorData()
+			// Only send data if connected
+			if s.connectionManager.IsConnected() {
+				s.sendSensorData()
+			} else {
+				log.Printf("Device %s not connected, skipping data send (state: %s)", 
+					s.deviceID, s.connectionManager.GetState())
+			}
 		case <-s.stopChan:
 			log.Println("Stopping IoT device simulator")
+			s.connectionManager.Stop()
 			return
 		}
 	}
@@ -65,6 +106,12 @@ func (s *Simulator) sendSensorData() {
 
 // sendSoilData generates and sends soil sensor data
 func (s *Simulator) sendSoilData() error {
+	// Get session ID for authenticated data transmission
+	sessionID := s.connectionManager.GetSessionID()
+	if sessionID == "" {
+		return fmt.Errorf("no active session")
+	}
+	
 	moisture := 20.0 + rand.Float64()*60.0          // 20-80%
 	temperature := 15.0 + rand.Float64()*20.0       // 15-35°C
 	ph := 5.5 + rand.Float64()*2.5                  // 5.5-8.0
@@ -74,6 +121,7 @@ func (s *Simulator) sendSoilData() error {
 
 	data := models.SensorData{
 		DeviceID:  s.deviceID,
+		SessionID: sessionID,
 		Timestamp: time.Now(),
 		Type:      "soil",
 		Data: models.DataPoint{
@@ -95,12 +143,19 @@ func (s *Simulator) sendSoilData() error {
 		return fmt.Errorf("failed to publish soil data: %w", err)
 	}
 
-	log.Printf("Sent soil data: moisture=%.2f%%, temp=%.2f°C, pH=%.2f", moisture, temperature, ph)
+	log.Printf("Sent soil data: moisture=%.2f%%, temp=%.2f°C, pH=%.2f (session: %s)", 
+		moisture, temperature, ph, sessionID)
 	return nil
 }
 
 // sendWeatherData generates and sends weather sensor data
 func (s *Simulator) sendWeatherData() error {
+	// Get session ID for authenticated data transmission
+	sessionID := s.connectionManager.GetSessionID()
+	if sessionID == "" {
+		return fmt.Errorf("no active session")
+	}
+	
 	airTemp := 20.0 + rand.Float64()*20.0           // 20-40°C
 	humidity := 30.0 + rand.Float64()*50.0          // 30-80%
 	pressure := 980.0 + rand.Float64()*40.0         // 980-1020 hPa
@@ -110,6 +165,7 @@ func (s *Simulator) sendWeatherData() error {
 
 	data := models.SensorData{
 		DeviceID:  s.deviceID,
+		SessionID: sessionID,
 		Timestamp: time.Now(),
 		Type:      "weather",
 		Data: models.DataPoint{
@@ -131,6 +187,7 @@ func (s *Simulator) sendWeatherData() error {
 		return fmt.Errorf("failed to publish weather data: %w", err)
 	}
 
-	log.Printf("Sent weather data: temp=%.2f°C, humidity=%.2f%%, pressure=%.2f hPa", airTemp, humidity, pressure)
+	log.Printf("Sent weather data: temp=%.2f°C, humidity=%.2f%%, pressure=%.2f hPa (session: %s)", 
+		airTemp, humidity, pressure, sessionID)
 	return nil
 }

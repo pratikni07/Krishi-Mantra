@@ -239,7 +239,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         onPressed: _canResend
                             ? () {
                                 _resetCountdown();
-                                _authController.initiateAuth(widget.phoneNumber);
+                                final languageCode = _languageService.getLanguageCode();
+                                _authController.initiateAuth(widget.phoneNumber, language: languageCode);
                               }
                             : null,
                         child: Text(

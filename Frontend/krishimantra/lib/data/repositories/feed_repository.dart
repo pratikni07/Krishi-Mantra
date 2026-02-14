@@ -1,7 +1,9 @@
+import 'dart:io';
 import '../models/feed_model.dart';
 import '../models/comment_model.dart';
 import '../services/api_service.dart';
 import '../../core/utils/api_helper.dart';
+import 'package:dio/dio.dart' as dio;
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../../core/constants/api_constants.dart';
@@ -454,6 +456,70 @@ class FeedRepository {
     } catch (e) {
       print('Error syncing initial interests: $e');
       return false;
+    }
+  }
+
+  /// Get presigned URL for upload
+  Future<Map<String, dynamic>> getPresignedUrl({
+    required String fileName,
+    required String fileType,
+    required String contentType,
+    String? userId,
+  }) async {
+    try {
+      final response = await _apiService.post(
+        ApiConstants.GET_PRESIGNED_URL,
+        data: {
+          'fileName': fileName,
+          'fileType': fileType,
+          'contentType': contentType,
+          if (userId != null) 'userId': userId,
+        },
+      );
+
+      final data = ApiHelper.handleResponse(response);
+      return data['data'];
+    } catch (e) {
+      throw ApiHelper.handleError(e);
+    }
+  }
+
+  /// Upload file to S3 using presigned URL
+  Future<void> uploadFileToS3({
+    required String presignedUrl,
+    required String filePath,
+    required String contentType,
+    Function(double)? onProgress,
+  }) async {
+    try {
+      final file = File(filePath);
+      final int fileLength = await file.length();
+      
+      // Use a fresh Dio instance to avoid any global interceptors (like Auth headers)
+      final uploadDio = dio.Dio();
+      
+      await uploadDio.put(
+        presignedUrl,
+        data: file.openRead(),
+        options: dio.Options(
+          headers: {
+            'Content-Type': contentType,
+            'Content-Length': fileLength,
+          },
+        ),
+        onSendProgress: (sent, total) {
+          if (onProgress != null && total > 0) {
+            onProgress(sent / total);
+          }
+        },
+      );
+    } catch (e) {
+      print('S3 Upload Error: $e');
+      if (e is dio.DioException) {
+        print('S3 Upload Error Response: ${e.response?.data}');
+        print('S3 Upload Error Headers: ${e.response?.headers}');
+      }
+      throw ApiHelper.handleError(e);
     }
   }
 }

@@ -294,8 +294,22 @@ class MessageController extends GetxController {
 
       // Check if both chat and group details exist
       if (groupChat.chat != null) {
+        // Attach group details to the chat so the name displays immediately
+        final chat = groupChat.chat!;
+        final chatWithGroup = Chat(
+          id: chat.id,
+          type: chat.type,
+          participants: chat.participants,
+          unreadCount: chat.unreadCount,
+          createdAt: chat.createdAt,
+          updatedAt: chat.updatedAt,
+          lastMessage: chat.lastMessage,
+          lastMessageDetails: chat.lastMessageDetails,
+          groupDetails: groupChat.group ?? chat.groupDetails,
+          otherParticipants: chat.otherParticipants,
+        );
         // Insert at the beginning of the chats list
-        chats.insert(0, groupChat.chat!);
+        chats.insert(0, chatWithGroup);
       } else {
         throw Exception('Failed to create group chat');
       }

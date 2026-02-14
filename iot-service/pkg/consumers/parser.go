@@ -6,24 +6,41 @@ import (
 	"log"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/api"
+	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/handlers"
 	mqttClient "github.com/pratikni07/Krishi-Mantra/iot-service/pkg/mqtt"
 	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/models"
+	"github.com/pratikni07/Krishi-Mantra/iot-service/pkg/session"
 )
 
 type ParserConsumer struct {
-	mqttClient *mqttClient.Client
+	mqttClient        *mqttClient.Client
+	sessionManager    *session.Manager
+	handshakeHandler  *handlers.HandshakeHandler
+	apiClient         *api.Client
 }
 
 // NewParserConsumer creates a new parser consumer
-func NewParserConsumer(client *mqttClient.Client) *ParserConsumer {
+func NewParserConsumer(client *mqttClient.Client, apiClient *api.Client) *ParserConsumer {
+	sessionMgr := session.NewManager()
+	handshakeHandler := handlers.NewHandshakeHandler(client, sessionMgr, apiClient)
+	
 	return &ParserConsumer{
-		mqttClient: client,
+		mqttClient:       client,
+		sessionManager:   sessionMgr,
+		handshakeHandler: handshakeHandler,
+		apiClient:        apiClient,
 	}
 }
 
 // Start starts the parser consumer
 func (p *ParserConsumer) Start() error {
 	log.Println("Starting Parser Consumer...")
+
+	// Start handshake handler (handles device connections)
+	if err := p.handshakeHandler.Start(); err != nil {
+		return fmt.Errorf("failed to start handshake handler: %w", err)
+	}
 
 	// Subscribe to raw sensor data topic
 	err := p.mqttClient.Subscribe("krishi/sensors/raw", p.handleMessage)
@@ -45,6 +62,12 @@ func (p *ParserConsumer) handleMessage(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
+	// Validate session before processing data
+	if err := p.validateSession(&sensorData); err != nil {
+		log.Printf("Session validation failed for device %s: %v", sensorData.DeviceID, err)
+		return
+	}
+
 	// Route data based on sensor type
 	switch sensorData.Type {
 	case "soil":
@@ -58,6 +81,23 @@ func (p *ParserConsumer) handleMessage(client mqtt.Client, msg mqtt.Message) {
 	default:
 		log.Printf("Unknown sensor type: %s", sensorData.Type)
 	}
+}
+
+// validateSession validates the device session
+func (p *ParserConsumer) validateSession(data *models.SensorData) error {
+	if data.DeviceID == "" {
+		return fmt.Errorf("device_id is required")
+	}
+	if data.SessionID == "" {
+		return fmt.Errorf("session_id is required")
+	}
+
+	// Validate session with session manager
+	if err := p.handshakeHandler.ValidateDeviceSession(data.DeviceID, data.SessionID); err != nil {
+		return fmt.Errorf("invalid session: %w", err)
+	}
+
+	return nil
 }
 
 // routeSoilData routes soil sensor data to soil topic

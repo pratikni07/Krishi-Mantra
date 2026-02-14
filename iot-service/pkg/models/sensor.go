@@ -5,6 +5,7 @@ import "time"
 // SensorData represents the raw sensor data from IoT device
 type SensorData struct {
 	DeviceID  string    `json:"device_id"`
+	SessionID string    `json:"session_id"` // Required for authenticated transmission
 	Timestamp time.Time `json:"timestamp"`
 	Type      string    `json:"type"` // "soil" or "weather"
 	Data      DataPoint `json:"data"`

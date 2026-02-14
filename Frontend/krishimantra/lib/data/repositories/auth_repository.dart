@@ -77,12 +77,13 @@ class AuthRepository {
   }
 
   // Phone authentication methods
-  Future<Map<String, dynamic>> initiateAuth(String phoneNo) async {
+  Future<Map<String, dynamic>> initiateAuth(String phoneNo, {String language = 'hi'}) async {
     try {
       final response = await _apiService.post(
         ApiConstants.INITIATE_AUTH,
         data: {
           'phoneNo': phoneNo,
+          'language': language,
         },
       );
 

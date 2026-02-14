@@ -222,7 +222,9 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
               children: [
                 PostHeader(feed: widget.feed),
                 PostContent(feed: widget.feed),
-                if (widget.feed['mediaUrl'] != null)
+                if (_getAllMediaUrls().length > 1)
+                  _MediaCarousel(urls: _getAllMediaUrls())
+                else if (widget.feed['mediaUrl'] != null)
                   MediaContent(mediaUrl: widget.feed['mediaUrl']),
                 PostActions(feed: widget.feed),
                 _buildCommentsSection(),
@@ -283,6 +285,19 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
         onReply: _initiateReply,
       );
     });
+  }
+
+  List<String> _getAllMediaUrls() {
+    final urls = <String>{};
+    if (widget.feed['mediaUrl'] != null && widget.feed['mediaUrl'].toString().isNotEmpty) {
+      urls.add(widget.feed['mediaUrl'].toString());
+    }
+    if (widget.feed['mediaUrls'] != null && widget.feed['mediaUrls'] is List) {
+      for (final url in widget.feed['mediaUrls']) {
+        if (url != null && url.toString().isNotEmpty) urls.add(url.toString());
+      }
+    }
+    return urls.toList();
   }
 }
 
@@ -347,5 +362,78 @@ class MediaContent extends StatelessWidget {
         },
       );
     }
+  }
+}
+
+class _MediaCarousel extends StatefulWidget {
+  final List<String> urls;
+  const _MediaCarousel({required this.urls});
+
+  @override
+  State<_MediaCarousel> createState() => _MediaCarouselState();
+}
+
+class _MediaCarouselState extends State<_MediaCarousel> {
+  int _currentPage = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    ResponsiveUtils.init(context);
+    final mediaHeight = ResponsiveUtils.hp(30);
+
+    return Column(
+      children: [
+        SizedBox(
+          height: mediaHeight,
+          child: PageView.builder(
+            itemCount: widget.urls.length,
+            onPageChanged: (index) => setState(() => _currentPage = index),
+            itemBuilder: (context, index) {
+              final validatedUrl = ImageUtils.validateUrl(widget.urls[index]);
+              if (validatedUrl.isEmpty) {
+                return Container(
+                  color: Colors.grey.withOpacity(0.2),
+                  child: const Center(
+                    child: Icon(Icons.broken_image, color: Colors.grey, size: 48),
+                  ),
+                );
+              }
+              return Image.network(
+                validatedUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey.withOpacity(0.2),
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: Colors.grey, size: 48),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(widget.urls.length, (index) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: _currentPage == index ? 10 : 7,
+              height: _currentPage == index ? 10 : 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _currentPage == index
+                    ? AppColors.green
+                    : Colors.grey.shade400,
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
   }
 }

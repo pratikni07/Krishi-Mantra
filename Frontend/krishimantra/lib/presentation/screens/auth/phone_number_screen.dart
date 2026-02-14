@@ -202,7 +202,11 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
   void _handleContinue() async {
     if (_formKey.currentState?.validate() ?? false) {
       final phoneNumber = _phoneController.text.trim();
-      final success = await _authController.initiateAuth(phoneNumber);
+      
+      // Get current language code to send OTP in user's preferred language
+      final languageCode = _languageService.getLanguageCode();
+      
+      final success = await _authController.initiateAuth(phoneNumber, language: languageCode);
 
       if (success) {
         Get.to(() => OTPVerificationScreen(phoneNumber: phoneNumber));

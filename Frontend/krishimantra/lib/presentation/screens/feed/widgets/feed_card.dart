@@ -45,6 +45,7 @@ class _FeedCardState extends State<FeedCard> {
   bool _isExpanded = false;
   bool _isVideoPlaying = false;
   bool _hasTrackedView = false;
+  int _carouselPage = 0;
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
 
@@ -60,7 +61,12 @@ class _FeedCardState extends State<FeedCard> {
   void _trackViewIfNeeded() {
     if (!_hasTrackedView && widget.onView != null) {
       _hasTrackedView = true;
-      widget.onView!();
+      // Add a small delay to avoid flooding the API during fast scrolling
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          widget.onView!();
+        }
+      });
     }
   }
 
@@ -304,7 +310,9 @@ class _FeedCardState extends State<FeedCard> {
           ),
 
           // Media Content
-          if (widget.feed.mediaUrl != null)
+          if (widget.feed.allMediaUrls.length > 1)
+            _buildMediaCarousel(widget.feed.allMediaUrls)
+          else if (widget.feed.mediaUrl != null)
             _buildMediaContent(widget.feed.mediaUrl!),
 
           // Text Content
@@ -463,6 +471,65 @@ class _FeedCardState extends State<FeedCard> {
         },
       );
     }
+  }
+
+  Widget _buildMediaCarousel(List<String> urls) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 300,
+          child: PageView.builder(
+            itemCount: urls.length,
+            onPageChanged: (index) {
+              setState(() => _carouselPage = index);
+            },
+            itemBuilder: (context, index) {
+              final validatedUrl = ImageUtils.validateUrl(urls[index]);
+              if (validatedUrl.isEmpty) {
+                return Container(
+                  color: Colors.grey.withOpacity(0.2),
+                  child: const Center(
+                    child: Icon(Icons.broken_image, color: Colors.grey, size: 48),
+                  ),
+                );
+              }
+              return Image.network(
+                validatedUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey.withOpacity(0.2),
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: Colors.grey, size: 48),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(urls.length, (index) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: _carouselPage == index ? 10 : 7,
+              height: _carouselPage == index ? 10 : 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _carouselPage == index
+                    ? Colors.green
+                    : Colors.grey.shade400,
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
   }
 
   void _initializeAndPlayVideo(String videoUrl) async {

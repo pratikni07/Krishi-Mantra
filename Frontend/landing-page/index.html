@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Krishi Mantra — Empowering Indian Farmers with Technology</title>
+  <meta name="description" content="Krishi Mantra is a comprehensive mobile app empowering Indian farmers with expert consultation, weather insights, IoT farm monitoring, AI crop care, marketplace and more." />
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="Krishi Mantra — Empowering Indian Farmers with Technology" />
+  <meta property="og:description" content="Comprehensive mobile app for Indian farmers — expert advice, weather, IoT sensors, marketplace, crop care, reels & more." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://krishimantra.com" />
+  <meta property="og:image" content="/assets/images/og-image.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Krishi Mantra — Empowering Indian Farmers" />
+  <meta name="twitter:description" content="Expert consultation, IoT monitoring, AI crop care, marketplace — all in one app for Indian farmers." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌾</text></svg>" />
+
+  <link rel="stylesheet" href="/style.css" />
+
+  <!-- Schema.org -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Krishi Mantra",
+    "operatingSystem": "Android",
+    "applicationCategory": "LifestyleApplication",
+    "description": "Comprehensive mobile app empowering Indian farmers with expert consultation, weather insights, IoT monitoring, AI-powered crop care, marketplace, and community features.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "INR"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ============ NAVBAR ============ -->
+  <header class="navbar" id="navbar">
+    <div class="container navbar__inner">
+      <a href="#" class="navbar__logo">
+        <span class="navbar__logo-icon">🌾</span>
+        <span class="navbar__logo-text">Krishi<span class="text-accent">Mantra</span></span>
+      </a>
+      <nav class="navbar__links" id="navLinks">
+        <a href="#features" class="navbar__link" onclick="closeMenu()">Features</a>
+        <a href="#how-it-works" class="navbar__link" onclick="closeMenu()">How It Works</a>
+        <a href="#iot" class="navbar__link" onclick="closeMenu()">IoT</a>
+        <a href="#community" class="navbar__link" onclick="closeMenu()">Community</a>
+        <a href="#download" class="navbar__link navbar__link--cta" onclick="closeMenu()">Download App</a>
+      </nav>
+      <button class="navbar__hamburger" id="hamburger" aria-label="Toggle navigation menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ HERO ============ -->
+    <section class="hero" id="hero">
+      <div class="hero__bg-shapes">
+        <div class="hero__shape hero__shape--1"></div>
+        <div class="hero__shape hero__shape--2"></div>
+        <div class="hero__shape hero__shape--3"></div>
+      </div>
+      <div class="container hero__inner">
+        <div class="hero__content" data-animate="fade-right">
+          <span class="hero__badge">🚀 India's Smartest Farming App</span>
+          <h1 class="hero__title">
+            Empowering <span class="text-gradient">Indian Farmers</span> with Technology
+          </h1>
+          <p class="hero__subtitle">
+            Expert consultation, real-time weather, AI-powered crop care, IoT farm monitoring, marketplace, reels & community — everything a modern farmer needs, in one powerful app.
+          </p>
+          <div class="hero__ctas">
+            <a href="#download" class="btn btn--primary btn--lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-17A1.5 1.5 0 0 1 4.77 2l14.4 8.5a1 1 0 0 1 0 1.74L4.77 21A1.5 1.5 0 0 1 3 20.5z"/></svg>
+              Download on Google Play
+            </a>
+            <a href="#features" class="btn btn--outline btn--lg">
+              Explore Features
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </a>
+          </div>
+        </div>
+        <div class="hero__visual" data-animate="fade-left">
+          <div class="hero__phone-wrapper">
+            <div class="hero__phone-frame">
+              <!-- IMAGE PLACEHOLDER: hero-phone-mockup.png -->
+              <div class="image-placeholder hero__phone-img" id="hero-phone-placeholder">
+                <div class="image-placeholder__inner">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                  <span class="image-placeholder__label">hero-phone-mockup.png</span>
+                  <span class="image-placeholder__desc">Phone mockup showing the Krishi Mantra home screen with services grid, weather widget, and navigation</span>
+                </div>
+              </div>
+            </div>
+            <div class="hero__floating hero__floating--leaf">🍃</div>
+            <div class="hero__floating hero__floating--grain">🌾</div>
+            <div class="hero__floating hero__floating--sun">☀️</div>
+          </div>
+        </div>
+      </div>
+      <div class="hero__wave">
+        <svg viewBox="0 0 1440 120" preserveAspectRatio="none"><path d="M0,64 C360,110 720,10 1080,64 C1260,90 1380,70 1440,64 L1440,120 L0,120 Z" fill="var(--color-bg)"/></svg>
+      </div>
+    </section>
+
+    <!-- ============ STATS BAR ============ -->
+    <section class="stats" id="stats">
+      <div class="container stats__inner">
+        <div class="stats__item" data-animate="fade-up">
+          <span class="stats__number" data-target="50000">0</span>
+          <span class="stats__suffix">+</span>
+          <span class="stats__label">Farmers Served</span>
+        </div>
+        <div class="stats__divider"></div>
+        <div class="stats__item" data-animate="fade-up" data-delay="100">
+          <span class="stats__number" data-target="10000">0</span>
+          <span class="stats__suffix">+</span>
+          <span class="stats__label">Expert Consultations</span>
+        </div>
+        <div class="stats__divider"></div>
+        <div class="stats__item" data-animate="fade-up" data-delay="200">
+          <span class="stats__number" data-target="200">0</span>
+          <span class="stats__suffix">+</span>
+          <span class="stats__label">Crops Tracked</span>
+        </div>
+        <div class="stats__divider"></div>
+        <div class="stats__item" data-animate="fade-up" data-delay="300">
+          <span class="stats__number" data-target="500">0</span>
+          <span class="stats__suffix">+</span>
+          <span class="stats__label">IoT Sensors Active</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FEATURES ============ -->
+    <section class="features" id="features">
+      <div class="container">
+        <div class="section-header" data-animate="fade-up">
+          <span class="section-tag">What We Offer</span>
+          <h2 class="section-title">Everything a Farmer Needs, <span class="text-gradient">In One App</span></h2>
+          <p class="section-subtitle">From AI-powered crop analysis to real-time market rates — Krishi Mantra is your complete digital farming companion.</p>
+        </div>
+        <div class="features__grid">
+          <div class="feature-card" data-animate="fade-up">
+            <div class="feature-card__icon feature-card__icon--green">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <h3 class="feature-card__title">Expert Consultation</h3>
+            <p class="feature-card__desc">Chat with agricultural experts for personalized, one-on-one farming advice tailored to your crops & soil.</p>
+          </div>
+          <div class="feature-card" data-animate="fade-up" data-delay="50">
+            <div class="feature-card__icon feature-card__icon--blue">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <h3 class="feature-card__title">Crop Calendar</h3>
+            <p class="feature-card__desc">Season-wise planting, fertilizing & harvesting schedules so you never miss the right window.</p>
+          </div>
+          <div class="feature-card" data-animate="fade-up" data-delay="100">
+            <div class="feature-card__icon feature-card__icon--yellow">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m17.66 17.66 1.41 1.41"/><path d="M12 20v2"/><path d="m6.34 17.66-1.41 1.41"/><path d="M2 12h2"/><circle cx="12" cy="12" r="4"/></svg>
+            </div>
+            <h3 class="feature-card__title">Weather Insights</h3>
+            <p class="feature-card__desc">Real-time local forecasts with crop-specific weather alerts & agricultural advisories.</p>
+          </div>
+          <div class="feature-card" data-animate="fade-up" data-delay="150">
+            <div class="feature-card__icon feature-card__icon--purple">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="2" y="2" width="20" height="20" rx="5"/><path d="m2 14 6-6 4 4 4-4 6 6"/></svg>
+            </div>
+            <h3 class="feature-card__title">Krishi AI</h3>
+            <p class="feature-card__desc">AI-powered crop disease detection, pest identification & smart farming recommendations at your fingertips.</p>
+          </div>
+          <div class="feature-card" data-animate="fade-up" data-delay="200">
+            <div class="feature-card__icon feature-card__icon--orange">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+            </div>
+            <h3 class="feature-card__title">Knowledge Feed</h3>
+            <p class="feature-card__desc">Community posts, best practices, success stories & farming tips from experts and fellow farmers.</p>
+          </div>
+          <div class="feature-card" data-animate="fade-up" data-delay="250">
+            <div class="feature-card__icon feature-card__icon--red">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            </div>
+            <h3 class="feature-card__title">Short Reels</h3>
+            <p class="feature-card__desc">Bite-sized farming tutorials, field demos & expert interviews — learn on the go, just like social media.</p>
+          </div>
+          <div class="feature-card" data-animate="fade-up" data-delay="300">
+            <div class="feature-card__icon feature-card__icon--teal">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+            </div>
+            <h3 class="feature-card__title">Marketplace</h3>
+            <p class="feature-card__desc">Browse & buy fertilizers, seeds, tools and farming equipment from trusted sellers at best prices.</p>
+          </div>
+          <div class="feature-card" data-animate="fade-up" data-delay="350">
+            <div class="feature-card__icon feature-card__icon--indigo">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </div>
+            <h3 class="feature-card__title">Government Schemes</h3>
+            <p class="feature-card__desc">Stay updated on the latest subsidies, loan programs & government farming schemes — never miss a benefit.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HOW IT WORKS ============ -->
+    <section class="how-it-works" id="how-it-works">
+      <div class="container">
+        <div class="section-header" data-animate="fade-up">
+          <span class="section-tag">Simple & Easy</span>
+          <h2 class="section-title">Get Started in <span class="text-gradient">3 Simple Steps</span></h2>
+          <p class="section-subtitle">From download to data-driven farming decisions — it only takes minutes.</p>
+        </div>
+        <div class="steps">
+          <div class="steps__line"></div>
+          
+          <div class="step" data-animate="fade-up">
+            <div class="step__number">1</div>
+            <div class="step__visual">
+              <!-- IMAGE PLACEHOLDER: step-1-signup.png -->
+              <div class="image-placeholder step__img" id="step1-placeholder">
+                <div class="image-placeholder__inner">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                  <span class="image-placeholder__label">step-1-signup.png</span>
+                  <span class="image-placeholder__desc">App signup / registration screen</span>
+                </div>
+              </div>
+            </div>
+            <div class="step__content">
+              <h3 class="step__title">Download & Sign Up</h3>
+              <p class="step__desc">Get started in under 30 seconds. Download from Google Play, enter your phone number, select your language — and you're in!</p>
+            </div>
+          </div>
+
+          <div class="step step--reverse" data-animate="fade-up" data-delay="150">
+            <div class="step__number">2</div>
+            <div class="step__visual">
+              <!-- IMAGE PLACEHOLDER: step-2-explore.png -->
+              <div class="image-placeholder step__img" id="step2-placeholder">
+                <div class="image-placeholder__inner">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                  <span class="image-placeholder__label">step-2-explore.png</span>
+                  <span class="image-placeholder__desc">Home screen with services grid & features</span>
+                </div>
+              </div>
+            </div>
+            <div class="step__content">
+              <h3 class="step__title">Explore Services</h3>
+              <p class="step__desc">Access all farming tools in one place — weather forecasts, expert chat, marketplace, crop calendar, government schemes, Krishi AI, and more.</p>
+            </div>
+          </div>
+
+          <div class="step" data-animate="fade-up" data-delay="300">
+            <div class="step__number">3</div>
+            <div class="step__visual">
+              <!-- IMAGE PLACEHOLDER: step-3-grow.png -->
+              <div class="image-placeholder step__img" id="step3-placeholder">
+                <div class="image-placeholder__inner">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                  <span class="image-placeholder__label">step-3-grow.png</span>
+                  <span class="image-placeholder__desc">Weather / IoT / crop analysis in action</span>
+                </div>
+              </div>
+            </div>
+            <div class="step__content">
+              <h3 class="step__title">Grow Smarter</h3>
+              <p class="step__desc">Make data-driven decisions with real-time soil & weather data, AI pest detection, market price trends, and expert advice — all from your phone.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ IoT SECTION ============ -->
+    <section class="iot" id="iot">
+      <div class="container iot__inner">
+        <div class="iot__content" data-animate="fade-right">
+          <span class="section-tag">Smart Farming</span>
+          <h2 class="section-title section-title--left">IoT-Powered <span class="text-gradient">Farm Monitoring</span></h2>
+          <p class="iot__desc">
+            Krishi Mantra integrates real-time IoT sensors to bring precision agriculture to every farm. Monitor your soil and weather conditions 24/7, get automated alerts, and make informed decisions backed by data.
+          </p>
+          <ul class="iot__features">
+            <li class="iot__feature">
+              <div class="iot__feature-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div>
+                <strong>Real-Time Soil Monitoring</strong>
+                <span>Moisture, temperature, pH & NPK levels every 10 seconds</span>
+              </div>
+            </li>
+            <li class="iot__feature">
+              <div class="iot__feature-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M17.66 17.66l1.41 1.41M12 20v2M6.34 17.66l-1.41 1.41M2 12h2"/><circle cx="12" cy="12" r="4"/></svg>
+              </div>
+              <div>
+                <strong>Weather Station Data</strong>
+                <span>Temperature, humidity, pressure, wind, rainfall & light intensity</span>
+              </div>
+            </li>
+            <li class="iot__feature">
+              <div class="iot__feature-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </div>
+              <div>
+                <strong>Historical Analytics</strong>
+                <span>Trend analysis & predictive insights from time-series data</span>
+              </div>
+            </li>
+            <li class="iot__feature">
+              <div class="iot__feature-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              </div>
+              <div>
+                <strong>Automated Alerts</strong>
+                <span>Get notified when conditions need attention</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="iot__visual" data-animate="fade-left">
+          <!-- IMAGE PLACEHOLDER: iot-dashboard.png -->
+          <div class="image-placeholder iot__dashboard-img" id="iot-placeholder">
+            <div class="image-placeholder__inner">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <span class="image-placeholder__label">iot-dashboard.png</span>
+              <span class="image-placeholder__desc">IoT monitoring dashboard — soil sensors, weather data, graphs & pump controls</span>
+            </div>
+          </div>
+          <div class="iot__data-card iot__data-card--1">
+            <span class="iot__data-label">Soil Moisture</span>
+            <span class="iot__data-value">67%</span>
+            <div class="iot__data-bar"><div class="iot__data-bar-fill" style="width:67%"></div></div>
+          </div>
+          <div class="iot__data-card iot__data-card--2">
+            <span class="iot__data-label">Temperature</span>
+            <span class="iot__data-value">28°C</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMMUNITY / REELS ============ -->
+    <section class="community" id="community">
+      <div class="container">
+        <div class="section-header" data-animate="fade-up">
+          <span class="section-tag">Learn & Connect</span>
+          <h2 class="section-title">A Thriving <span class="text-gradient">Farmer Community</span></h2>
+          <p class="section-subtitle">Share knowledge through feeds, watch short farming reels, and connect with thousands of farmers across India.</p>
+        </div>
+        <div class="community__inner">
+          <div class="community__features" data-animate="fade-right">
+            <div class="community__feature">
+              <div class="community__feature-emoji">📰</div>
+              <div>
+                <h3>Knowledge Feed</h3>
+                <p>Post farming tips, ask questions, share success stories & learn from the community. Like, comment & save posts.</p>
+              </div>
+            </div>
+            <div class="community__feature">
+              <div class="community__feature-emoji">🎬</div>
+              <div>
+                <h3>Farming Reels</h3>
+                <p>Swipe through short, engaging videos — field demos, tutorials, expert interviews, and crop care guides.</p>
+              </div>
+            </div>
+            <div class="community__feature">
+              <div class="community__feature-emoji">🏷️</div>
+              <div>
+                <h3>Trending Hashtags</h3>
+                <p>Discover what's hot in agriculture. Follow trending topics to stay ahead of the curve.</p>
+              </div>
+            </div>
+            <div class="community__feature">
+              <div class="community__feature-emoji">🌐</div>
+              <div>
+                <h3>Multi-Language Support</h3>
+                <p>Use the app in your preferred language — Hindi, Marathi, Telugu, Tamil, Kannada & more.</p>
+              </div>
+            </div>
+          </div>
+          <div class="community__visual" data-animate="fade-left">
+            <!-- IMAGE PLACEHOLDER: reels-screenshot.png -->
+            <div class="image-placeholder community__img" id="community-placeholder">
+              <div class="image-placeholder__inner">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                <span class="image-placeholder__label">reels-screenshot.png</span>
+                <span class="image-placeholder__desc">Feed / Reels screen showing community posts and short-form video content</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TESTIMONIALS ============ -->
+    <section class="testimonials" id="testimonials">
+      <div class="container">
+        <div class="section-header" data-animate="fade-up">
+          <span class="section-tag">Real Stories</span>
+          <h2 class="section-title">Trusted by <span class="text-gradient">Farmers Across India</span></h2>
+        </div>
+        <div class="testimonials__grid">
+          <div class="testimonial-card" data-animate="fade-up">
+            <div class="testimonial-card__stars">★★★★★</div>
+            <p class="testimonial-card__text">"Krishi Mantra's expert consultation feature helped me identify a pest problem early and save my entire cotton crop. The advice was accurate and timely — like having an agricultural officer in my pocket!"</p>
+            <div class="testimonial-card__author">
+              <div class="testimonial-card__avatar">RK</div>
+              <div>
+                <strong>Rajesh Kumar</strong>
+                <span>Cotton Farmer, Maharashtra</span>
+              </div>
+            </div>
+          </div>
+          <div class="testimonial-card" data-animate="fade-up" data-delay="100">
+            <div class="testimonial-card__stars">★★★★★</div>
+            <p class="testimonial-card__text">"The IoT sensors showed me my soil moisture was too high, so I adjusted irrigation. My water bill dropped 30% and crop yield increased. This technology is a game-changer for small farmers."</p>
+            <div class="testimonial-card__author">
+              <div class="testimonial-card__avatar">PS</div>
+              <div>
+                <strong>Priya Sharma</strong>
+                <span>Paddy Farmer, Andhra Pradesh</span>
+              </div>
+            </div>
+          </div>
+          <div class="testimonial-card" data-animate="fade-up" data-delay="200">
+            <div class="testimonial-card__stars">★★★★★</div>
+            <p class="testimonial-card__text">"I learned about a government subsidy through Krishi Mantra's Schemes section that I never knew existed. It saved me ₹25,000 on new equipment. The reels make learning new techniques so easy!"</p>
+            <div class="testimonial-card__author">
+              <div class="testimonial-card__avatar">AV</div>
+              <div>
+                <strong>Amit Verma</strong>
+                <span>Wheat Farmer, Uttar Pradesh</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DOWNLOAD CTA ============ -->
+    <section class="download-cta" id="download">
+      <div class="download-cta__bg-shapes">
+        <div class="download-cta__shape download-cta__shape--1"></div>
+        <div class="download-cta__shape download-cta__shape--2"></div>
+      </div>
+      <div class="container download-cta__inner" data-animate="fade-up">
+        <h2 class="download-cta__title">Ready to Transform<br/>Your Farming?</h2>
+        <p class="download-cta__subtitle">Join 50,000+ farmers who are already growing smarter with Krishi Mantra. Download the app today — it's free!</p>
+        <div class="download-cta__buttons">
+          <a href="#" class="btn btn--white btn--lg download-cta__badge">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-1.707l2.583 1.494a1.003 1.003 0 0 1 0 1.738L17.7 15.726l-2.537-2.537 2.535-2.189zM5.864 2.658L16.8 8.99l-2.302 2.302L5.864 2.658z"/></svg>
+            <div>
+              <small>GET IT ON</small>
+              <strong>Google Play</strong>
+            </div>
+          </a>
+          <a href="#" class="btn btn--glass btn--lg download-cta__badge">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            <div>
+              <small>COMING SOON ON</small>
+              <strong>App Store</strong>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">
+        <a href="#" class="navbar__logo">
+          <span class="navbar__logo-icon">🌾</span>
+          <span class="navbar__logo-text">Krishi<span class="text-accent">Mantra</span></span>
+        </a>
+        <p class="footer__tagline">Empowering Indian Farmers with Technology — bringing expert knowledge, real-time data & a thriving community to every farm.</p>
+        <div class="footer__social">
+          <a href="#" class="footer__social-link" aria-label="Facebook">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+          </a>
+          <a href="#" class="footer__social-link" aria-label="Twitter / X">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          </a>
+          <a href="#" class="footer__social-link" aria-label="Instagram">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>
+          </a>
+          <a href="#" class="footer__social-link" aria-label="YouTube">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="footer__links">
+        <div class="footer__col">
+          <h4>Product</h4>
+          <a href="#features">Features</a>
+          <a href="#iot">IoT Monitoring</a>
+          <a href="#how-it-works">How It Works</a>
+          <a href="#download">Download</a>
+        </div>
+        <div class="footer__col">
+          <h4>Company</h4>
+          <a href="#">About Us</a>
+          <a href="#">Careers</a>
+          <a href="#">Blog</a>
+          <a href="#">Contact</a>
+        </div>
+        <div class="footer__col">
+          <h4>Legal</h4>
+          <a href="#">Privacy Policy</a>
+          <a href="#">Terms of Service</a>
+          <a href="#">Cookie Policy</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <div class="container footer__bottom-inner">
+        <p>© 2026 Krishi Mantra. All rights reserved.</p>
+        <p>Made with ❤️ for Indian Farmers</p>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

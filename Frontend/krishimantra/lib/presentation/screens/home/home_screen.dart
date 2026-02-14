@@ -32,6 +32,8 @@ import '../feed/widgets/feed_card.dart';
 import '../../../data/services/weather_service.dart';
 import '../../../data/models/feed_model.dart';
 import '../../widgets/skeleton/skeleton_widgets.dart';
+import '../../widgets/iot/pump_card.dart';
+import '../../widgets/iot/crop_sensor_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -731,6 +733,16 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                 margin: EdgeInsets.symmetric(vertical: sectionSpacing * 0.5),
                 child: _buildCarouselSlider(),
               ),
+            ),
+
+            // IoT Pump Section (shown if user has pump subscription)
+            const SliverToBoxAdapter(
+              child: IoTPumpSection(),
+            ),
+
+            // IoT Crop Sensor Section (shown if user has crop sensor subscription)
+            const SliverToBoxAdapter(
+              child: IoTCropSensorSection(),
             ),
 
             // Services Section

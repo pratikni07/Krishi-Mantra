@@ -72,11 +72,11 @@ class AuthController extends GetxController {
   }
 
   // Phone authentication methods
-  Future<bool> initiateAuth(String phoneNo) async {
+  Future<bool> initiateAuth(String phoneNo, {String language = 'hi'}) async {
     try {
       isLoading.value = true;
 
-      final response = await _authRepository.initiateAuth(phoneNo);
+      final response = await _authRepository.initiateAuth(phoneNo, language: language);
       if (response['success'] == true) {
         return true;
       } else {

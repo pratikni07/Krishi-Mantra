@@ -156,7 +156,7 @@ exports.findUserIp = asyncHandler(async (req, res) => {
  * Initiate phone authentication
  */
 exports.initiateAuth = asyncHandler(async (req, res) => {
-  const { phoneNo } = req.body;
+  const { phoneNo, language = 'hi' } = req.body; // Default to Hindi
 
   if (!phoneNo) {
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -174,9 +174,12 @@ exports.initiateAuth = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check if user exists
+  // Check if user exists - if exists, use their saved language preference
   const existingUser = await User.findOne({ phoneNo });
   const isRegistered = !!existingUser;
+
+  // Use user's saved language if available, otherwise use the provided language
+  const userLanguage = existingUser?.additionalDetails?.language || language;
 
   // Generate OTP
   const otp = otpGenerator.generate(OTP_CONFIG.LENGTH, {
@@ -199,12 +202,12 @@ exports.initiateAuth = asyncHandler(async (req, res) => {
   // Send OTP via Twilio SMS
   let smsSent = false;
   try {
-    await sendSMSOTP(phoneNo, otp);
+    await sendSMSOTP(phoneNo, otp, userLanguage);
     smsSent = true;
     // Mark OTP as sent
     otpRecord.isSent = true;
     await otpRecord.save();
-    logger.info(`OTP sent via SMS to ${phoneNo}`);
+    logger.info(`OTP sent via SMS to ${phoneNo} in ${userLanguage}`);
   } catch (smsError) {
     logger.error(`Failed to send OTP via SMS to ${phoneNo}:`, smsError.message);
     // SMS failed but OTP is still saved, admin can manually send if needed

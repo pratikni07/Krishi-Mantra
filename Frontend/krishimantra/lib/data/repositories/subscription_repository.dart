@@ -9,10 +9,10 @@ class SubscriptionRepository {
   /// Get all available subscription plans
   Future<List<SubscriptionPlan>> getPlans() async {
     try {
-      final response = await _apiService.get('/subscription/plans');
+      final response = await _apiService.get('/api/main/subscription/plans');
 
-      if (response['success'] == true && response['data'] != null) {
-        final List<dynamic> plansData = response['data'];
+      if (response.data['success'] == true && response.data['data'] != null) {
+        final List<dynamic> plansData = response.data['data'];
         return plansData.map((json) => SubscriptionPlan.fromJson(json)).toList();
       }
 
@@ -26,17 +26,17 @@ class SubscriptionRepository {
   /// Get current user's subscription
   Future<Map<String, dynamic>> getCurrentSubscription() async {
     try {
-      final response = await _apiService.get('/subscription/current');
+      final response = await _apiService.get('/api/main/subscription/current');
 
-      if (response['success'] == true) {
+      if (response.data['success'] == true) {
         return {
-          'subscription': response['data']['subscription'] != null
-              ? UserSubscription.fromJson(response['data']['subscription'])
+          'subscription': response.data['data']['subscription'] != null
+              ? UserSubscription.fromJson(response.data['data']['subscription'])
               : null,
-          'currentPlan': response['data']['currentPlan'] != null
-              ? SubscriptionPlan.fromJson(response['data']['currentPlan'])
+          'currentPlan': response.data['data']['currentPlan'] != null
+              ? SubscriptionPlan.fromJson(response.data['data']['currentPlan'])
               : null,
-          'isFreePlan': response['data']['isFreePlan'] ?? true,
+          'isFreePlan': response.data['data']['isFreePlan'] ?? true,
         };
       }
 
@@ -54,10 +54,10 @@ class SubscriptionRepository {
   /// Get usage stats
   Future<UsageStats> getUsageStats() async {
     try {
-      final response = await _apiService.get('/subscription/usage');
+      final response = await _apiService.get('/api/main/subscription/usage');
 
-      if (response['success'] == true && response['data'] != null) {
-        return UsageStats.fromJson(response['data']);
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return UsageStats.fromJson(response.data['data']);
       }
 
       // Return default free tier usage
@@ -95,23 +95,23 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/payment-intent',
+        '/api/main/subscription/payment-intent',
         data: {
           'planName': planName,
           'billingCycle': billingCycle,
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
+      if (response.data['success'] == true && response.data['data'] != null) {
         return {
-          'clientSecret': response['data']['clientSecret'],
-          'paymentIntentId': response['data']['paymentIntentId'],
-          'amount': response['data']['amount'],
-          'currency': response['data']['currency'],
+          'clientSecret': response.data['data']['clientSecret'],
+          'paymentIntentId': response.data['data']['paymentIntentId'],
+          'amount': response.data['data']['amount'],
+          'currency': response.data['data']['currency'],
         };
       }
 
-      throw Exception(response['message'] ?? 'Failed to create payment intent');
+      throw Exception(response.data['message'] ?? 'Failed to create payment intent');
     } catch (e) {
       print('Error creating payment intent: $e');
       rethrow;
@@ -126,7 +126,7 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/confirm-payment',
+        '/api/main/subscription/confirm-payment',
         data: {
           'paymentIntentId': paymentIntentId,
           'planName': planName,
@@ -134,14 +134,14 @@ class SubscriptionRepository {
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
+      if (response.data['success'] == true && response.data['data'] != null) {
         return {
-          'subscription': UserSubscription.fromJson(response['data']['subscription']),
-          'plan': SubscriptionPlan.fromJson(response['data']['plan']),
+          'subscription': UserSubscription.fromJson(response.data['data']['subscription']),
+          'plan': SubscriptionPlan.fromJson(response.data['data']['plan']),
         };
       }
 
-      throw Exception(response['message'] ?? 'Failed to confirm payment');
+      throw Exception(response.data['message'] ?? 'Failed to confirm payment');
     } catch (e) {
       print('Error confirming payment: $e');
       rethrow;
@@ -155,21 +155,21 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/checkout',
+        '/api/main/subscription/checkout',
         data: {
           'planName': planName,
           'billingCycle': billingCycle,
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
+      if (response.data['success'] == true && response.data['data'] != null) {
         return {
-          'sessionId': response['data']['sessionId'],
-          'url': response['data']['url'],
+          'sessionId': response.data['data']['sessionId'],
+          'url': response.data['data']['url'],
         };
       }
 
-      throw Exception(response['message'] ?? 'Failed to create checkout session');
+      throw Exception(response.data['message'] ?? 'Failed to create checkout session');
     } catch (e) {
       print('Error creating checkout session: $e');
       rethrow;
@@ -183,18 +183,18 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/cancel',
+        '/api/main/subscription/cancel',
         data: {
           'cancelImmediately': cancelImmediately,
           'reason': reason,
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
-        return UserSubscription.fromJson(response['data']);
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return UserSubscription.fromJson(response.data['data']);
       }
 
-      throw Exception(response['message'] ?? 'Failed to cancel subscription');
+      throw Exception(response.data['message'] ?? 'Failed to cancel subscription');
     } catch (e) {
       print('Error cancelling subscription: $e');
       rethrow;
@@ -204,13 +204,13 @@ class SubscriptionRepository {
   /// Resume cancelled subscription
   Future<UserSubscription> resumeSubscription() async {
     try {
-      final response = await _apiService.post('/subscription/resume');
+      final response = await _apiService.post('/api/main/subscription/resume');
 
-      if (response['success'] == true && response['data'] != null) {
-        return UserSubscription.fromJson(response['data']);
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return UserSubscription.fromJson(response.data['data']);
       }
 
-      throw Exception(response['message'] ?? 'Failed to resume subscription');
+      throw Exception(response.data['message'] ?? 'Failed to resume subscription');
     } catch (e) {
       print('Error resuming subscription: $e');
       rethrow;
@@ -224,15 +224,15 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.get(
-        '/subscription/payments',
+        '/api/main/subscription/payments',
         queryParameters: {
           'page': page.toString(),
           'limit': limit.toString(),
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
-        final List<dynamic> payments = response['data']['payments'] ?? [];
+      if (response.data['success'] == true && response.data['data'] != null) {
+        final List<dynamic> payments = response.data['data']['payments'] ?? [];
         return payments.map((json) => PaymentHistory.fromJson(json)).toList();
       }
 
@@ -246,10 +246,10 @@ class SubscriptionRepository {
   /// Check feature access
   Future<Map<String, dynamic>> checkFeatureAccess(String feature) async {
     try {
-      final response = await _apiService.get('/subscription/feature/$feature');
+      final response = await _apiService.get('/api/main/subscription/feature/$feature');
 
-      if (response['success'] == true && response['data'] != null) {
-        return response['data'];
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return response.data['data'];
       }
 
       return {'allowed': false};
@@ -264,10 +264,10 @@ class SubscriptionRepository {
   /// Get all IoT add-ons
   Future<List<IotAddon>> getIotAddons() async {
     try {
-      final response = await _apiService.get('/subscription/iot/addons');
+      final response = await _apiService.get('/api/main/subscription/iot/addons');
 
-      if (response['success'] == true && response['data'] != null) {
-        final List<dynamic> addonsData = response['data'];
+      if (response.data['success'] == true && response.data['data'] != null) {
+        final List<dynamic> addonsData = response.data['data'];
         return addonsData.map((json) => IotAddon.fromJson(json)).toList();
       }
 
@@ -281,10 +281,10 @@ class SubscriptionRepository {
   /// Get user's active IoT add-ons
   Future<List<UserIotAddon>> getUserIotAddons() async {
     try {
-      final response = await _apiService.get('/subscription/iot/my-addons');
+      final response = await _apiService.get('/api/main/subscription/iot/my-addons');
 
-      if (response['success'] == true && response['data'] != null) {
-        final List<dynamic> addonsData = response['data'];
+      if (response.data['success'] == true && response.data['data'] != null) {
+        final List<dynamic> addonsData = response.data['data'];
         return addonsData.map((json) => UserIotAddon.fromJson(json)).toList();
       }
 
@@ -302,23 +302,23 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/iot/payment-intent',
+        '/api/main/subscription/iot/payment-intent',
         data: {
           'addonName': addonName,
           'billingCycle': billingCycle,
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
+      if (response.data['success'] == true && response.data['data'] != null) {
         return {
-          'clientSecret': response['data']['clientSecret'],
-          'paymentIntentId': response['data']['paymentIntentId'],
-          'amount': response['data']['amount'],
-          'currency': response['data']['currency'],
+          'clientSecret': response.data['data']['clientSecret'],
+          'paymentIntentId': response.data['data']['paymentIntentId'],
+          'amount': response.data['data']['amount'],
+          'currency': response.data['data']['currency'],
         };
       }
 
-      throw Exception(response['message'] ?? 'Failed to create IoT add-on payment intent');
+      throw Exception(response.data['message'] ?? 'Failed to create IoT add-on payment intent');
     } catch (e) {
       print('Error creating IoT add-on payment intent: $e');
       rethrow;
@@ -333,7 +333,7 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/iot/confirm-payment',
+        '/api/main/subscription/iot/confirm-payment',
         data: {
           'paymentIntentId': paymentIntentId,
           'addonName': addonName,
@@ -341,14 +341,14 @@ class SubscriptionRepository {
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
+      if (response.data['success'] == true && response.data['data'] != null) {
         return {
-          'userIotAddon': UserIotAddon.fromJson(response['data']['userIotAddon']),
-          'addon': IotAddon.fromJson(response['data']['addon']),
+          'userIotAddon': UserIotAddon.fromJson(response.data['data']['userIotAddon']),
+          'addon': IotAddon.fromJson(response.data['data']['addon']),
         };
       }
 
-      throw Exception(response['message'] ?? 'Failed to confirm IoT add-on payment');
+      throw Exception(response.data['message'] ?? 'Failed to confirm IoT add-on payment');
     } catch (e) {
       print('Error confirming IoT add-on payment: $e');
       rethrow;
@@ -363,7 +363,7 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/iot/cancel',
+        '/api/main/subscription/iot/cancel',
         data: {
           'addonName': addonName,
           'cancelImmediately': cancelImmediately,
@@ -371,11 +371,11 @@ class SubscriptionRepository {
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
-        return UserIotAddon.fromJson(response['data']);
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return UserIotAddon.fromJson(response.data['data']);
       }
 
-      throw Exception(response['message'] ?? 'Failed to cancel IoT add-on');
+      throw Exception(response.data['message'] ?? 'Failed to cancel IoT add-on');
     } catch (e) {
       print('Error cancelling IoT add-on: $e');
       rethrow;
@@ -385,10 +385,10 @@ class SubscriptionRepository {
   /// Check IoT feature access
   Future<Map<String, dynamic>> checkIotFeatureAccess(String feature) async {
     try {
-      final response = await _apiService.get('/subscription/iot/feature/$feature');
+      final response = await _apiService.get('/api/main/subscription/iot/feature/$feature');
 
-      if (response['success'] == true && response['data'] != null) {
-        return response['data'];
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return response.data['data'];
       }
 
       return {'allowed': false};
@@ -407,7 +407,7 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/iot/device/link',
+        '/api/main/subscription/iot/device/link',
         data: {
           'addonName': addonName,
           'deviceId': deviceId,
@@ -416,11 +416,11 @@ class SubscriptionRepository {
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
-        return UserIotAddon.fromJson(response['data']);
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return UserIotAddon.fromJson(response.data['data']);
       }
 
-      throw Exception(response['message'] ?? 'Failed to link IoT device');
+      throw Exception(response.data['message'] ?? 'Failed to link IoT device');
     } catch (e) {
       print('Error linking IoT device: $e');
       rethrow;
@@ -434,18 +434,18 @@ class SubscriptionRepository {
   }) async {
     try {
       final response = await _apiService.post(
-        '/subscription/iot/device/unlink',
+        '/api/main/subscription/iot/device/unlink',
         data: {
           'addonName': addonName,
           'deviceId': deviceId,
         },
       );
 
-      if (response['success'] == true && response['data'] != null) {
-        return UserIotAddon.fromJson(response['data']);
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return UserIotAddon.fromJson(response.data['data']);
       }
 
-      throw Exception(response['message'] ?? 'Failed to unlink IoT device');
+      throw Exception(response.data['message'] ?? 'Failed to unlink IoT device');
     } catch (e) {
       print('Error unlinking IoT device: $e');
       rethrow;

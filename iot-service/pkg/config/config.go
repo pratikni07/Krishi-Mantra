@@ -16,6 +16,8 @@ type Config struct {
 	ClickHousePass    string
 	SensorInterval    int
 	DeviceID          string
+	MainServiceURL    string
+	MainServiceAPIKey string
 }
 
 func LoadConfig() *Config {
@@ -35,6 +37,8 @@ func LoadConfig() *Config {
 		ClickHousePass:    getEnv("CLICKHOUSE_PASS", ""),
 		SensorInterval:    sensorInterval,
 		DeviceID:          getEnv("DEVICE_ID", "device-001"),
+		MainServiceURL:    getEnv("MAIN_SERVICE_URL", "http://localhost:3000"),
+		MainServiceAPIKey: getEnv("MAIN_SERVICE_API_KEY", ""),
 	}
 }
 

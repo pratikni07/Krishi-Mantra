@@ -8,12 +8,19 @@ build:
 # Run tests
 test:
 	@echo "Running tests..."
-	go test ./... -v
+	go test ./... -v -race -coverprofile=coverage.out
+
+# Test with coverage report
+test-coverage: test
+	@echo "Generating coverage report..."
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
 
 # Clean build artifacts
 clean:
 	@echo "Cleaning..."
 	rm -f iot-service
+	rm -f coverage.out coverage.html
 	go clean
 
 # Run as device simulator
@@ -68,18 +75,19 @@ lint:
 
 # Help
 help:
-	@echo "Available targets:"
-	@echo "  build         - Build the IoT service binary"
-	@echo "  test          - Run all tests"
-	@echo "  clean         - Clean build artifacts"
-	@echo "  run-device    - Run as device simulator"
-	@echo "  run-parser    - Run as parser service"
-	@echo "  run-soil      - Run as soil consumer"
-	@echo "  run-weather   - Run as weather consumer"
-	@echo "  docker-build  - Build Docker image"
-	@echo "  docker-up     - Start all services with docker-compose"
-	@echo "  docker-down   - Stop all services"
-	@echo "  docker-logs   - View service logs"
-	@echo "  fmt           - Format code"
-	@echo "  lint          - Run linter"
+	@echo "Available target  - Build the IoT service binary"
+	@echo "  test            - Run all tests"
+	@echo "  test-coverage   - Run tests and generate coverage report"
+	@echo "  clean           - Clean build artifacts"
+	@echo "  run-device      - Run as device simulator"
+	@echo "  run-parser      - Run as parser service"
+	@echo "  run-soil        - Run as soil consumer"
+	@echo "  run-weather     - Run as weather consumer"
+	@echo "  docker-build    - Build Docker image"
+	@echo "  docker-up       - Start all services with docker-compose"
+	@echo "  docker-down     - Stop all services"
+	@echo "  docker-logs     - View service logs"
+	@echo "  fmt             - Format code"
+	@echo "  lint            - Run linter"
+	@echo "  help            - Run linter"
 	@echo "  help          - Show this help message"

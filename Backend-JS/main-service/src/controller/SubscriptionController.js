@@ -61,7 +61,7 @@ const getPlans = async (req, res) => {
  */
 const getCurrentSubscription = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     // Get active subscription
     const subscription = await UserSubscription.findOne({
@@ -113,6 +113,9 @@ const createCheckoutSession = async (req, res) => {
     const { planName, billingCycle } = req.body;
     const user = req.user;
 
+    // Handle both `_id` (from DB) and `id` (from JWT token)
+    const userId = user._id || user.id;
+
     if (!planName || !billingCycle) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
@@ -136,7 +139,7 @@ const createCheckoutSession = async (req, res) => {
 
     // Check if user already has an active subscription
     const existingSubscription = await UserSubscription.findOne({
-      userId: user._id,
+      userId: userId,
       status: 'active',
       endDate: { $gt: new Date() },
     });
@@ -224,6 +227,9 @@ const confirmPayment = async (req, res) => {
     const { paymentIntentId, planName, billingCycle } = req.body;
     const user = req.user;
 
+    // Handle both `_id` (from DB) and `id` (from JWT token)
+    const userId = user._id || user.id;
+
     if (!paymentIntentId || !planName || !billingCycle) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
@@ -261,9 +267,9 @@ const confirmPayment = async (req, res) => {
 
     // Create or update subscription
     const subscription = await UserSubscription.findOneAndUpdate(
-      { userId: user._id },
+      { userId: userId },
       {
-        userId: user._id,
+        userId: userId,
         planId: plan._id,
         planName: plan.name,
         stripeCustomerId: paymentIntent.customer,
@@ -281,7 +287,7 @@ const confirmPayment = async (req, res) => {
 
     // Create payment history
     await PaymentHistory.create({
-      userId: user._id,
+      userId: userId,
       subscriptionId: subscription._id,
       stripePaymentIntentId: paymentIntentId,
       amount: paymentIntent.amount,
@@ -292,7 +298,7 @@ const confirmPayment = async (req, res) => {
 
     // Update user detail
     await UserDetail.findOneAndUpdate(
-      { userId: user._id },
+      { userId: userId },
       {
         'subscription.type': plan.name,
         'subscription.endDate': endDate,
@@ -307,9 +313,9 @@ const confirmPayment = async (req, res) => {
     );
 
     // Clear cache
-    await redis.del(`subscription:user:${user._id}`);
+    await redis.del(`subscription:user:${userId}`);
 
-    logger.info(`Subscription activated for user ${user._id}: ${plan.name}`);
+    logger.info(`Subscription activated for user ${userId}: ${plan.name}`);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -335,7 +341,7 @@ const confirmPayment = async (req, res) => {
 const cancelSubscription = async (req, res) => {
   try {
     const { cancelImmediately, reason } = req.body;
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     const subscription = await UserSubscription.findOne({
       userId,
@@ -407,7 +413,7 @@ const cancelSubscription = async (req, res) => {
  */
 const resumeSubscription = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     const subscription = await UserSubscription.findOne({
       userId,
@@ -524,7 +530,7 @@ const getUsageStats = async (req, res) => {
  */
 const getPaymentHistory = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
     const { page = 1, limit = 10 } = req.query;
 
     const payments = await PaymentHistory.find({ userId })
@@ -564,7 +570,7 @@ const getPaymentHistory = async (req, res) => {
 const checkFeatureAccess = async (req, res) => {
   try {
     const { feature } = req.params;
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     const access = await checkUserFeatureAccess(userId, feature);
 
@@ -1003,7 +1009,7 @@ const getIotAddons = async (req, res) => {
  */
 const getUserIotAddons = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     const userAddons = await UserIotAddon.find({
       userId,
@@ -1034,6 +1040,9 @@ const createIotAddonPaymentIntent = async (req, res) => {
     const { addonName, billingCycle } = req.body;
     const user = req.user;
 
+    // Handle both `_id` (from DB) and `id` (from JWT token)
+    const userId = user._id || user.id;
+
     if (!addonName || !billingCycle) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
@@ -1057,7 +1066,7 @@ const createIotAddonPaymentIntent = async (req, res) => {
 
     // Check if user already has this addon (or bundle that includes it)
     const existingAddon = await UserIotAddon.findOne({
-      userId: user._id,
+      userId: userId,
       status: 'active',
       endDate: { $gt: new Date() },
       $or: [
@@ -1086,13 +1095,13 @@ const createIotAddonPaymentIntent = async (req, res) => {
     // If buying bundle, check if they have individual addons (offer discount info)
     if (addonName === 'IOT_BUNDLE') {
       const hasWaterPump = await UserIotAddon.findOne({
-        userId: user._id,
+        userId: userId,
         addonName: 'WATER_PUMP',
         status: 'active',
         endDate: { $gt: new Date() },
       });
       const hasCropIot = await UserIotAddon.findOne({
-        userId: user._id,
+        userId: userId,
         addonName: 'CROP_IOT',
         status: 'active',
         endDate: { $gt: new Date() },
@@ -1147,6 +1156,9 @@ const confirmIotAddonPayment = async (req, res) => {
     const { paymentIntentId, addonName, billingCycle } = req.body;
     const user = req.user;
 
+    // Handle both `_id` (from DB) and `id` (from JWT token)
+    const userId = user._id || user.id;
+
     if (!paymentIntentId || !addonName || !billingCycle) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
@@ -1184,7 +1196,7 @@ const confirmIotAddonPayment = async (req, res) => {
 
     // Create user IoT addon subscription
     const userIotAddon = await UserIotAddon.create({
-      userId: user._id,
+      userId: userId,
       addonId: addon._id,
       addonName: addon.name,
       stripeCustomerId: paymentIntent.customer,
@@ -1200,7 +1212,7 @@ const confirmIotAddonPayment = async (req, res) => {
 
     // Create payment history
     await PaymentHistory.create({
-      userId: user._id,
+      userId: userId,
       subscriptionId: userIotAddon._id,
       stripePaymentIntentId: paymentIntentId,
       amount: paymentIntent.amount,
@@ -1214,9 +1226,9 @@ const confirmIotAddonPayment = async (req, res) => {
     });
 
     // Clear cache
-    await redis.del(`iot:user:${user._id}`);
+    await redis.del(`iot:user:${userId}`);
 
-    logger.info(`IoT add-on activated for user ${user._id}: ${addon.name}`);
+    logger.info(`IoT add-on activated for user ${userId}: ${addon.name}`);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -1242,7 +1254,7 @@ const confirmIotAddonPayment = async (req, res) => {
 const cancelIotAddon = async (req, res) => {
   try {
     const { addonName, cancelImmediately, reason } = req.body;
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     const userAddon = await UserIotAddon.findOne({
       userId,
@@ -1304,7 +1316,7 @@ const cancelIotAddon = async (req, res) => {
 const checkIotFeatureAccess = async (req, res) => {
   try {
     const { feature } = req.params;
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     const access = await checkUserIotAccess(userId, feature);
 
@@ -1410,7 +1422,7 @@ async function seedIotAddons() {
 const linkIotDevice = async (req, res) => {
   try {
     const { addonName, deviceId, deviceType, deviceName } = req.body;
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     if (!addonName || !deviceId || !deviceType) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -1493,7 +1505,7 @@ const linkIotDevice = async (req, res) => {
 const unlinkIotDevice = async (req, res) => {
   try {
     const { addonName, deviceId } = req.body;
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
     const userAddon = await UserIotAddon.findOne({
       userId,
@@ -2556,6 +2568,243 @@ const adminDeleteIotAddon = async (req, res) => {
   }
 };
 
+// ========== IoT DEVICE SERVICE-TO-SERVICE ENDPOINTS ==========
+
+/**
+ * Validate device subscription during handshake
+ * Called by IoT service when device attempts to connect
+ * POST /api/v1/iot/validate-subscription
+ */
+const validateDeviceSubscription = async (req, res) => {
+  try {
+    const { device_id, device_type, mac_address } = req.body;
+
+    if (!device_id || !mac_address) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        is_valid: false,
+        reason: 'INVALID_REQUEST',
+        message: 'device_id and mac_address are required',
+      });
+    }
+
+    logger.info(`Validating device subscription: ${device_id} (MAC: ${mac_address})`);
+
+    // Find if this device MAC is linked to any active IoT add-on
+    const userAddon = await UserIotAddon.findOne({
+      'linkedDevices.deviceId': device_id,
+      'linkedDevices.macAddress': mac_address,
+      status: 'active',
+      endDate: { $gt: new Date() },
+    }).populate('addonId');
+
+    if (!userAddon) {
+      // Check if device is registered but subscription expired
+      const expiredAddon = await UserIotAddon.findOne({
+        'linkedDevices.deviceId': device_id,
+        'linkedDevices.macAddress': mac_address,
+      });
+
+      if (expiredAddon) {
+        return res.status(HTTP_STATUS.OK).json({
+          is_valid: false,
+          reason: 'SUBSCRIPTION_EXPIRED',
+          message: 'Device subscription has expired',
+        });
+      }
+
+      return res.status(HTTP_STATUS.OK).json({
+        is_valid: false,
+        reason: 'DEVICE_NOT_REGISTERED',
+        message: 'Device is not registered to any subscription',
+      });
+    }
+
+    // Check if addon supports this device type
+    const addon = userAddon.addonId;
+    if (device_type && addon.supportedDeviceTypes &&
+      !addon.supportedDeviceTypes.includes(device_type)) {
+      return res.status(HTTP_STATUS.OK).json({
+        is_valid: false,
+        reason: 'UNSUPPORTED_DEVICE_TYPE',
+        message: `Device type ${device_type} not supported by addon ${addon.name}`,
+      });
+    }
+
+    // Success - return subscription details
+    res.status(HTTP_STATUS.OK).json({
+      is_valid: true,
+      reason: 'ACTIVE',
+      message: 'Device has active subscription',
+      subscription: {
+        device_id: device_id,
+        user_id: userAddon.userId.toString(),
+        subscription_id: userAddon._id.toString(),
+        status: userAddon.status,
+        plan_name: addon.name,
+        start_date: userAddon.startDate,
+        end_date: userAddon.endDate,
+        is_active: true,
+        features: addon.features,
+        max_devices: addon.maxDevices,
+      },
+    });
+  } catch (error) {
+    logger.error('Error validating device subscription:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      is_valid: false,
+      reason: 'VALIDATION_ERROR',
+      message: 'Internal error during validation',
+    });
+  }
+};
+
+/**
+ * Get device subscription details
+ * GET /api/v1/iot/devices/:deviceId/subscription
+ */
+const getDeviceSubscriptionDetails = async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+
+    const userAddon = await UserIotAddon.findOne({
+      'linkedDevices.deviceId': deviceId,
+    }).populate('addonId');
+
+    if (!userAddon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'Device not found in any subscription',
+      });
+    }
+
+    const device = userAddon.linkedDevices.find(d => d.deviceId === deviceId);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        device_id: deviceId,
+        user_id: userAddon.userId.toString(),
+        subscription_id: userAddon._id.toString(),
+        status: userAddon.status,
+        plan_name: userAddon.addonId?.name,
+        start_date: userAddon.startDate,
+        end_date: userAddon.endDate,
+        is_active: userAddon.status === 'active' && userAddon.endDate > new Date(),
+        device_details: {
+          name: device.deviceName,
+          type: device.deviceType,
+          mac_address: device.macAddress,
+          linked_at: device.linkedAt,
+          last_active: device.lastActive,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Error getting device subscription:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to get device subscription',
+    });
+  }
+};
+
+/**
+ * Update device online/offline status
+ * PUT /api/v1/iot/devices/:deviceId/status
+ */
+const updateDeviceStatus = async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { status, metadata, timestamp } = req.body;
+
+    if (!status || !['ONLINE', 'OFFLINE'].includes(status)) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Invalid status. Must be ONLINE or OFFLINE',
+      });
+    }
+
+    // Find the device and update its status
+    const userAddon = await UserIotAddon.findOneAndUpdate(
+      { 'linkedDevices.deviceId': deviceId },
+      {
+        $set: {
+          'linkedDevices.$.lastActive': timestamp || new Date(),
+          'linkedDevices.$.status': status,
+          ...(metadata?.session_id && { 'linkedDevices.$.lastSessionId': metadata.session_id }),
+        },
+      },
+      { new: true }
+    );
+
+    if (!userAddon) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'Device not found',
+      });
+    }
+
+    logger.info(`Device ${deviceId} status updated to ${status}`);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Device status updated',
+    });
+  } catch (error) {
+    logger.error('Error updating device status:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to update device status',
+    });
+  }
+};
+
+/**
+ * Log device activity
+ * POST /api/v1/iot/devices/activity
+ */
+const logDeviceActivity = async (req, res) => {
+  try {
+    const { device_id, activity_type, details, timestamp } = req.body;
+
+    if (!device_id || !activity_type) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'device_id and activity_type are required',
+      });
+    }
+
+    // Log the activity (can be stored in a separate collection if needed)
+    logger.info(`Device activity: ${device_id} - ${activity_type}`, {
+      device_id,
+      activity_type,
+      details,
+      timestamp: timestamp || new Date(),
+    });
+
+    // Update last activity timestamp on the device
+    await UserIotAddon.updateOne(
+      { 'linkedDevices.deviceId': device_id },
+      {
+        $set: {
+          'linkedDevices.$.lastActive': timestamp || new Date(),
+        },
+      }
+    );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Activity logged',
+    });
+  } catch (error) {
+    logger.error('Error logging device activity:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to log activity',
+    });
+  }
+};
+
 // Export all functions
 module.exports = {
   // Subscription functions
@@ -2607,4 +2856,9 @@ module.exports = {
   adminCreateIotAddon,
   adminUpdateIotAddon,
   adminDeleteIotAddon,
+  // IoT device service-to-service functions
+  validateDeviceSubscription,
+  getDeviceSubscriptionDetails,
+  updateDeviceStatus,
+  logDeviceActivity,
 };

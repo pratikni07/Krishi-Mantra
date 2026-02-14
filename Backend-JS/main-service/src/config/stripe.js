@@ -281,10 +281,17 @@ const IOT_ADDONS = {
  */
 const getOrCreateCustomer = async (user) => {
   try {
+    // Handle both `_id` (from DB) and `id` (from JWT token)
+    const userId = user._id || user.id;
+
+    if (!userId) {
+      throw new Error('User ID is required to create Stripe customer');
+    }
+
     // Check if user already has a Stripe customer ID
     const { UserSubscription } = require('../model/Subscription');
     const existingSub = await UserSubscription.findOne({
-      userId: user._id,
+      userId: userId,
       stripeCustomerId: { $exists: true, $ne: null },
     });
 
@@ -306,8 +313,8 @@ const getOrCreateCustomer = async (user) => {
       phone: user.phoneNo ? `+91${user.phoneNo}` : undefined,
       name: user.name,
       metadata: {
-        userId: user._id.toString(),
-        accountType: user.accountType,
+        userId: userId.toString(),
+        accountType: user.accountType || 'user',
       },
     });
 
@@ -352,6 +359,7 @@ const createCheckoutSession = async ({ user, planName, billingCycle, successUrl,
       },
     };
 
+    const userId = user._id || user.id;
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ['card'],
@@ -365,13 +373,13 @@ const createCheckoutSession = async ({ user, planName, billingCycle, successUrl,
       success_url: successUrl || `${process.env.APP_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${process.env.APP_URL}/subscription/cancel`,
       metadata: {
-        userId: user._id.toString(),
+        userId: userId.toString(),
         planName: plan.name,
         billingCycle,
       },
       subscription_data: {
         metadata: {
-          userId: user._id.toString(),
+          userId: userId.toString(),
           planName: plan.name,
           billingCycle,
         },
@@ -408,12 +416,13 @@ const createPaymentIntent = async ({ user, planName, billingCycle }) => {
     const customer = await getOrCreateCustomer(user);
     const amount = plan.pricing[billingCycle].amount;
 
+    const userId = user._id || user.id;
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'inr',
       customer: customer.id,
       metadata: {
-        userId: user._id.toString(),
+        userId: userId.toString(),
         planName: plan.name,
         billingCycle,
       },
@@ -422,7 +431,7 @@ const createPaymentIntent = async ({ user, planName, billingCycle }) => {
       payment_method_types: ['card'],
     });
 
-    logger.info(`Created payment intent: ${paymentIntent.id} for user: ${user._id}`);
+    logger.info(`Created payment intent: ${paymentIntent.id} for user: ${userId}`);
     return paymentIntent;
   } catch (error) {
     logger.error('Error creating payment intent:', error);
@@ -527,12 +536,13 @@ const createIotAddonPaymentIntent = async ({ user, addonName, billingCycle }) =>
     const customer = await getOrCreateCustomer(user);
     const amount = addon.pricing[billingCycle].amount;
 
+    const userId = user._id || user.id;
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'inr',
       customer: customer.id,
       metadata: {
-        userId: user._id.toString(),
+        userId: userId.toString(),
         addonName: addon.name,
         billingCycle,
         type: 'iot_addon',
@@ -541,7 +551,7 @@ const createIotAddonPaymentIntent = async ({ user, addonName, billingCycle }) =>
       payment_method_types: ['card'],
     });
 
-    logger.info(`Created IoT addon payment intent: ${paymentIntent.id} for user: ${user._id}, addon: ${addonName}`);
+    logger.info(`Created IoT addon payment intent: ${paymentIntent.id} for user: ${userId}, addon: ${addonName}`);
     return paymentIntent;
   } catch (error) {
     logger.error('Error creating IoT addon payment intent:', error);
@@ -578,6 +588,7 @@ const createIotAddonCheckoutSession = async ({ user, addonName, billingCycle, su
       },
     };
 
+    const userId = user._id || user.id;
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ['card'],
@@ -591,14 +602,14 @@ const createIotAddonCheckoutSession = async ({ user, addonName, billingCycle, su
       success_url: successUrl || `${process.env.APP_URL}/iot-addon/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${process.env.APP_URL}/iot-addon/cancel`,
       metadata: {
-        userId: user._id.toString(),
+        userId: userId.toString(),
         addonName: addon.name,
         billingCycle,
         type: 'iot_addon',
       },
       subscription_data: {
         metadata: {
-          userId: user._id.toString(),
+          userId: userId.toString(),
           addonName: addon.name,
           billingCycle,
           type: 'iot_addon',
@@ -613,7 +624,7 @@ const createIotAddonCheckoutSession = async ({ user, addonName, billingCycle, su
       allow_promotion_codes: true,
     });
 
-    logger.info(`Created IoT addon checkout session: ${session.id} for user: ${user._id}, addon: ${addonName}`);
+    logger.info(`Created IoT addon checkout session: ${session.id} for user: ${userId}, addon: ${addonName}`);
     return session;
   } catch (error) {
     logger.error('Error creating IoT addon checkout session:', error);
