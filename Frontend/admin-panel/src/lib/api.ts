@@ -31,6 +31,13 @@ export const notificationApi = axios.create({
   },
 });
 
+export const engagementApi = axios.create({
+  baseURL: `${API_BASE}/engagement`,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
 // Add auth token to requests
 const addAuthInterceptor = (instance: typeof mainApi) => {
   instance.interceptors.request.use(
@@ -65,6 +72,7 @@ addAuthInterceptor(mainApi);
 addAuthInterceptor(feedApi);
 addAuthInterceptor(reelApi);
 addAuthInterceptor(notificationApi);
+addAuthInterceptor(engagementApi);
 
 // Auth APIs
 export const authAPI = {
@@ -176,6 +184,97 @@ export const analyticsAPI = {
   getGeoData: () => mainApi.get("/analytics/geo-data"),
   getFeedStats: () => feedApi.get("/analytics/stats"),
   getReelStats: () => reelApi.get("/analytics/stats"),
+};
+
+// Engagement/Activity Tracking APIs
+export const engagementAPI = {
+  // Dashboard
+  getDashboard: (params?: { startDate?: string; endDate?: string; timeframe?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    if (params?.timeframe) query.append("timeframe", params.timeframe);
+    return engagementApi.get(`/analytics/dashboard?${query.toString()}`);
+  },
+  getRealTimeStats: () => engagementApi.get("/analytics/realtime"),
+  getPeriodComparison: (params?: { startDate?: string; endDate?: string; compareWith?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    if (params?.compareWith) query.append("compareWith", params.compareWith);
+    return engagementApi.get(`/analytics/comparison?${query.toString()}`);
+  },
+
+  // Engagement Analytics
+  getEngagementBreakdown: (params?: { startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    return engagementApi.get(`/analytics/engagement?${query.toString()}`);
+  },
+  getFeatureUsage: (params?: { startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    return engagementApi.get(`/analytics/features?${query.toString()}`);
+  },
+  getTopContent: (params?: { startDate?: string; endDate?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    if (params?.limit) query.append("limit", String(params.limit));
+    return engagementApi.get(`/analytics/content?${query.toString()}`);
+  },
+
+  // Session Analytics
+  getSessionAnalytics: (params?: { startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    return engagementApi.get(`/analytics/sessions?${query.toString()}`);
+  },
+  getTopScreens: (params?: { startDate?: string; endDate?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    if (params?.limit) query.append("limit", String(params.limit));
+    return engagementApi.get(`/analytics/screens?${query.toString()}`);
+  },
+  getHourlyPattern: (params?: { startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    return engagementApi.get(`/analytics/hourly?${query.toString()}`);
+  },
+
+  // User Analytics
+  getUserAnalytics: (userId: string, params?: { startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    return engagementApi.get(`/analytics/users/${userId}?${query.toString()}`);
+  },
+  getLeaderboard: (params?: { metric?: string; limit?: number; startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.metric) query.append("metric", params.metric);
+    if (params?.limit) query.append("limit", String(params.limit));
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    return engagementApi.get(`/analytics/leaderboard?${query.toString()}`);
+  },
+
+  // Retention and Churn
+  getRetentionMetrics: (params?: { startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    return engagementApi.get(`/analytics/retention?${query.toString()}`);
+  },
+  getChurnRiskAnalysis: (params?: { threshold?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.threshold) query.append("threshold", String(params.threshold));
+    return engagementApi.get(`/analytics/churn?${query.toString()}`);
+  },
 };
 
 // Scheme APIs
