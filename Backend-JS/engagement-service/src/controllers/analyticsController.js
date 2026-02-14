@@ -5,6 +5,7 @@
 
 const AnalyticsService = require('../services/analyticsService');
 const SessionService = require('../services/sessionService');
+const Event = require('../models/event.model');
 const UserMetrics = require('../models/userMetrics.model');
 const logger = require('../utils/logger');
 const { HTTP_STATUS, ERROR_CODES } = require('../utils/constants');
@@ -388,6 +389,187 @@ class AnalyticsController {
         success: false,
         error: ERROR_CODES.INTERNAL_ERROR,
         message: 'Failed to get leaderboard',
+      });
+    }
+  }
+
+  /**
+   * Get user analytics
+   * GET /api/engagement/analytics/users/:userId
+   */
+  static async getUserAnalytics(req, res) {
+    try {
+      const { userId } = req.params;
+      const { days = 30 } = req.query;
+
+      const metrics = await UserMetrics.findOne({ userId }).lean();
+
+      if (!metrics) {
+        return res.status(HTTP_STATUS.NOT_FOUND).json({
+          success: false,
+          error: ERROR_CODES.NOT_FOUND,
+          message: 'User metrics not found',
+        });
+      }
+
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: metrics,
+      });
+    } catch (error) {
+      logger.error('Error in getUserAnalytics:', error.message);
+      return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        error: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to get user analytics',
+      });
+    }
+  }
+
+  /**
+   * Get flexible dashboard data with timeframe support
+   * GET /api/engagement/analytics/dashboard?timeframe=week
+   */
+  static async getDashboard(req, res) {
+    try {
+      const { timeframe = 'week', startDate, endDate } = req.query;
+      
+      // Calculate date range based on timeframe
+      let days = 7; // default: week
+      switch (timeframe) {
+        case 'today':
+          days = 1;
+          break;
+        case 'week':
+          days = 7;
+          break;
+        case 'month':
+          days = 30;
+          break;
+        case 'quarter':
+          days = 90;
+          break;
+        case 'year':
+          days = 365;
+          break;
+        default:
+          days = 7;
+      }
+
+      // Get dashboard summary
+      const summary = await AnalyticsService.getDashboardSummary(days);
+      
+      // Get session analytics for the period
+      const now = new Date();
+      const start = startDate || new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+      const end = endDate || now.toISOString();
+      
+      const sessionAnalytics = await SessionService.getSessionAnalytics(start, end);
+
+      // Combine data
+      const dashboardData = {
+        ...summary,
+        ...sessionAnalytics,
+        period: {
+          timeframe,
+          days,
+          startDate: start,
+          endDate: end,
+        },
+      };
+
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: dashboardData,
+      });
+    } catch (error) {
+      logger.error('Error in getDashboard:', error.message);
+      return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        error: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to get dashboard data',
+      });
+    }
+  }
+
+  /**
+   * Get hourly pattern with flexible timeframe
+   * GET /api/engagement/analytics/hourly?timeframe=week
+   */
+  static async getHourlyPattern(req, res) {
+    try {
+      const { timeframe = 'week', startDate, endDate } = req.query;
+      
+      // Calculate date range based on timeframe
+      let days = 7;
+      switch (timeframe) {
+        case 'today':
+          days = 1;
+          break;
+        case 'week':
+          days = 7;
+          break;
+        case 'month':
+          days = 30;
+          break;
+        case 'quarter':
+          days = 90;
+          break;
+      }
+
+      const now = new Date();
+      const start = startDate || new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      const end = endDate || now;
+
+      // Aggregate events by hour
+      const hourlyData = await Event.aggregate([
+        {
+          $match: {
+            timestamp: {
+              $gte: start,
+              $lte: end,
+            },
+          },
+        },
+        {
+          $group: {
+            _id: { $hour: '$timestamp' },
+            events: { $sum: 1 },
+            sessions: { $addToSet: '$sessionId' },
+          },
+        },
+        {
+          $project: {
+            hour: '$_id',
+            events: 1,
+            sessions: { $size: '$sessions' },
+          },
+        },
+        {
+          $sort: { hour: 1 },
+        },
+      ]);
+
+      // Format the result
+      const formatted = Array.from({ length: 24 }, (_, i) => {
+        const hourData = hourlyData.find((d) => d.hour === i);
+        return {
+          hour: `${i}:00`,
+          events: hourData?.events || 0,
+          sessions: hourData?.sessions || 0,
+        };
+      });
+
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: formatted,
+      });
+    } catch (error) {
+      logger.error('Error in getHourlyPattern:', error.message);
+      return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        error: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to get hourly pattern',
       });
     }
   }

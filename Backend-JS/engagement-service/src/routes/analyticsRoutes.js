@@ -8,7 +8,8 @@ const router = express.Router();
 const AnalyticsController = require('../controllers/analyticsController');
 
 // Dashboard
-router.get('/dashboard', AnalyticsController.getDashboardSummary);
+router.get('/dashboard', AnalyticsController.getDashboard); // New flexible dashboard endpoint
+router.get('/dashboard-summary', AnalyticsController.getDashboardSummary); // Legacy endpoint
 router.get('/realtime', AnalyticsController.getRealTimeStats);
 router.get('/comparison', AnalyticsController.getPeriodComparison);
 
@@ -20,7 +21,7 @@ router.get('/content', AnalyticsController.getTopContent);
 // Session analytics
 router.get('/sessions', AnalyticsController.getSessionAnalytics);
 router.get('/screens', AnalyticsController.getTopScreens);
-router.get('/hourly', AnalyticsController.getHourlyPattern);
+router.get('/hourly', AnalyticsController.getHourlyPattern); // New hourly pattern endpoint
 
 // User analytics
 router.get('/users/:userId', AnalyticsController.getUserAnalytics);
