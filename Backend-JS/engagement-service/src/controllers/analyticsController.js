@@ -9,6 +9,7 @@ const Event = require('../models/event.model');
 const UserMetrics = require('../models/userMetrics.model');
 const logger = require('../utils/logger');
 const { HTTP_STATUS, ERROR_CODES } = require('../utils/constants');
+const { timeframeToDays } = require('../utils/timeframeHelper');
 
 class AnalyticsController {
   /**
@@ -435,26 +436,7 @@ class AnalyticsController {
       const { timeframe = 'week', startDate, endDate } = req.query;
       
       // Calculate date range based on timeframe
-      let days = 7; // default: week
-      switch (timeframe) {
-        case 'today':
-          days = 1;
-          break;
-        case 'week':
-          days = 7;
-          break;
-        case 'month':
-          days = 30;
-          break;
-        case 'quarter':
-          days = 90;
-          break;
-        case 'year':
-          days = 365;
-          break;
-        default:
-          days = 7;
-      }
+      const days = timeframeToDays(timeframe);
 
       // Get dashboard summary
       const summary = await AnalyticsService.getDashboardSummary(days);
@@ -501,21 +483,7 @@ class AnalyticsController {
       const { timeframe = 'week', startDate, endDate } = req.query;
       
       // Calculate date range based on timeframe
-      let days = 7;
-      switch (timeframe) {
-        case 'today':
-          days = 1;
-          break;
-        case 'week':
-          days = 7;
-          break;
-        case 'month':
-          days = 30;
-          break;
-        case 'quarter':
-          days = 90;
-          break;
-      }
+      const days = timeframeToDays(timeframe);
 
       const now = new Date();
       const start = startDate || new Date(now.getTime() - days * 24 * 60 * 60 * 1000);

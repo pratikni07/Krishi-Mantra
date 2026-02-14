@@ -50,6 +50,9 @@ import {
 
 const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
+// Estimated percentage of unique users vs total views (industry average ~70%)
+const UNIQUE_USER_ESTIMATE_FACTOR = 0.7;
+
 const timeframeOptions = [
   { value: "today", label: "Today" },
   { value: "week", label: "This Week" },
@@ -57,14 +60,48 @@ const timeframeOptions = [
   { value: "quarter", label: "This Quarter" },
 ];
 
+// Type definitions
+interface DashboardStats {
+  totalUsers?: number;
+  activeUsers?: number;
+  totalSessions?: number;
+  avgSessionDuration?: number;
+  totalEvents?: number;
+  avgEventsPerSession?: number;
+  totalScreenViews?: number;
+  bounceRate?: number;
+  activeDevices?: number;
+}
+
+interface ScreenData {
+  screenName?: string;
+  name?: string;
+  count?: number;
+  views?: number;
+  avgDuration?: number;
+  uniqueUsers?: number;
+  totalDuration?: number;
+}
+
+interface FeatureData {
+  feature: string;
+  count: number;
+}
+
+interface HourlyData {
+  hour: string;
+  sessions: number;
+  events: number;
+}
+
 export default function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [timeframe, setTimeframe] = useState("week");
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [topScreens, setTopScreens] = useState<any[]>([]);
-  const [featureUsage, setFeatureUsage] = useState<any[]>([]);
-  const [sessionData, setSessionData] = useState<any>(null);
-  const [hourlyData, setHourlyData] = useState<any[]>([]);
+  const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
+  const [topScreens, setTopScreens] = useState<ScreenData[]>([]);
+  const [featureUsage, setFeatureUsage] = useState<FeatureData[]>([]);
+  const [sessionData, setSessionData] = useState<DashboardStats | null>(null);
+  const [hourlyData, setHourlyData] = useState<HourlyData[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -438,11 +475,11 @@ export default function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody>
-                {(topScreens.length > 0 ? topScreens : generateMockScreenData()).map((screen: any, index: number) => (
+                {(topScreens.length > 0 ? topScreens : generateMockScreenData()).map((screen: ScreenData, index: number) => (
                   <tr key={index} className="border-b last:border-0 hover:bg-muted/50">
                     <td className="p-2 font-medium">{screen.screenName || screen.name}</td>
                     <td className="text-right p-2">{formatNumber(screen.views || screen.count || 0)}</td>
-                    <td className="text-right p-2">{formatNumber(screen.uniqueUsers || Math.floor((screen.count || 0) * 0.7))}</td>
+                    <td className="text-right p-2">{formatNumber(screen.uniqueUsers || Math.floor((screen.count || 0) * UNIQUE_USER_ESTIMATE_FACTOR))}</td>
                     <td className="text-right p-2">{formatDuration(screen.avgDuration || 0)}</td>
                     <td className="text-right p-2">{formatDuration(screen.totalDuration || (screen.avgDuration || 0) * (screen.count || 0))}</td>
                   </tr>
@@ -457,7 +494,7 @@ export default function AnalyticsPage() {
 }
 
 // Mock data generators for when API doesn't return data
-function generateMockHourlyData() {
+function generateMockHourlyData(): HourlyData[] {
   return Array.from({ length: 24 }, (_, i) => ({
     hour: `${i}:00`,
     sessions: Math.floor(Math.random() * 50) + 10,
@@ -465,7 +502,7 @@ function generateMockHourlyData() {
   }));
 }
 
-function generateMockScreenData() {
+function generateMockScreenData(): ScreenData[] {
   const screens = ["Home", "Feed", "Reels", "Marketplace", "Weather", "Crop Calendar", "AI Chat", "Profile"];
   return screens.map((name) => ({
     screenName: name,
@@ -477,7 +514,7 @@ function generateMockScreenData() {
   }));
 }
 
-function generateMockFeatureData() {
+function generateMockFeatureData(): FeatureData[] {
   const features = ["Feed Like", "Reel View", "Product View", "Weather Check", "AI Chat", "Scheme View"];
   return features.map((feature) => ({
     feature,
