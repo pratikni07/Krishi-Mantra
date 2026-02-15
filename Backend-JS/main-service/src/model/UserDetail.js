@@ -61,6 +61,28 @@ const UserDetailSchema = new mongoose.Schema(
       endDate: Date,
       purchasedDate: Date,
     },
+    deviceAccess: {
+      pump: {
+        purchased: {
+          type: Boolean,
+          default: false,
+        },
+        enabled: {
+          type: Boolean,
+          default: false,
+        },
+      },
+      krishiDoctor: {
+        purchased: {
+          type: Boolean,
+          default: false,
+        },
+        enabled: {
+          type: Boolean,
+          default: false,
+        },
+      },
+    },
     experience: {
       type: Number,
       default: 0,

@@ -3,6 +3,18 @@ const UserDetail = require('../model/UserDetail');
 const { asyncHandler } = require('../utils');
 const { HTTP_STATUS, PAGINATION } = require('../utils/constants');
 
+const getDefaultDeviceAccess = () => ({
+  pump: {
+    purchased: false,
+    enabled: false,
+  },
+  krishiDoctor: {
+    purchased: false,
+    enabled: false,
+  },
+});
+
+
 /**
  * Update user profile
  */
@@ -138,6 +150,7 @@ exports.getUserByPage = asyncHandler(async (req, res) => {
     image: user.image,
     additionalDetails: {
       subscription: user.additionalDetails?.subscription,
+      deviceAccess: user.additionalDetails?.deviceAccess || getDefaultDeviceAccess(),
       location: user.additionalDetails?.location,
       address: user.additionalDetails?.address,
     },
@@ -281,5 +294,67 @@ exports.searchUsersByPartialUsername = asyncHandler(async (req, res) => {
   return res.status(HTTP_STATUS.OK).json({
     success: true,
     data: users,
+  });
+});
+
+
+/**
+ * Admin: update user IoT device purchase/enable state
+ */
+exports.updateUserDeviceAccess = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const { deviceAccess } = req.body;
+
+  if (!userId) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'User ID is required',
+    });
+  }
+
+  if (!deviceAccess) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'deviceAccess payload is required',
+    });
+  }
+
+  let userDetails = await UserDetail.findOne({ userId });
+
+  if (!userDetails) {
+    userDetails = new UserDetail({ userId });
+  }
+
+  const currentAccess = userDetails.deviceAccess || getDefaultDeviceAccess();
+
+  userDetails.deviceAccess = {
+    pump: {
+      purchased: deviceAccess.pump?.purchased !== undefined
+        ? Boolean(deviceAccess.pump.purchased)
+        : Boolean(currentAccess.pump?.purchased),
+      enabled: deviceAccess.pump?.enabled !== undefined
+        ? Boolean(deviceAccess.pump.enabled)
+        : Boolean(currentAccess.pump?.enabled),
+    },
+    krishiDoctor: {
+      purchased: deviceAccess.krishiDoctor?.purchased !== undefined
+        ? Boolean(deviceAccess.krishiDoctor.purchased)
+        : Boolean(currentAccess.krishiDoctor?.purchased),
+      enabled: deviceAccess.krishiDoctor?.enabled !== undefined
+        ? Boolean(deviceAccess.krishiDoctor.enabled)
+        : Boolean(currentAccess.krishiDoctor?.enabled),
+    },
+  };
+
+  await userDetails.save();
+
+  await User.findByIdAndUpdate(userId, {
+    additionalDetails: userDetails._id,
+  });
+
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'User device access updated successfully',
+    deviceAccess: userDetails.deviceAccess,
   });
 });

@@ -89,7 +89,7 @@ class IoTCropSensorSection extends StatelessWidget {
                     ),
                     SizedBox(width: AppSizes.paddingS),
                     Text(
-                      'My Crop Sensors',
+                      'Krishi Doctor',
                       style: TextStyle(
                         fontSize: AppSizes.fontXL,
                         fontWeight: FontWeight.bold,

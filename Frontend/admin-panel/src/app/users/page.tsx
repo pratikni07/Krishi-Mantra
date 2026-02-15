@@ -58,6 +58,11 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/utils";
 import { userAPI } from "@/lib/api";
 
+interface DeviceStatus {
+  purchased: boolean;
+  enabled: boolean;
+}
+
 interface User {
   _id: string;
   name: string;
@@ -69,6 +74,10 @@ interface User {
   subscription: {
     type: string;
     expiresAt?: string;
+  };
+  deviceAccess: {
+    pump: DeviceStatus;
+    krishiDoctor: DeviceStatus;
   };
   isActive: boolean;
   createdAt: string;
@@ -89,13 +98,38 @@ export default function UsersPage() {
     fetchUsers();
   }, [page, subscriptionFilter]);
 
+  const normalizeDeviceStatus = (value?: Partial<DeviceStatus>): DeviceStatus => ({
+    purchased: Boolean(value?.purchased),
+    enabled: Boolean(value?.enabled),
+  });
+
+  const mapUser = (user: any): User => ({
+    _id: user._id,
+    name: user.name || "Unknown",
+    email: user.email || "-",
+    phone: user.phoneNo || user.phone || "-",
+    profileImage: user.image || user.profileImage,
+    state: user.additionalDetails?.state || user.state,
+    district: user.additionalDetails?.district || user.district,
+    subscription: {
+      type: user.additionalDetails?.subscription?.type?.toLowerCase() || user.subscription?.type || "free",
+      expiresAt: user.additionalDetails?.subscription?.endDate || user.subscription?.expiresAt,
+    },
+    deviceAccess: {
+      pump: normalizeDeviceStatus(user.additionalDetails?.deviceAccess?.pump),
+      krishiDoctor: normalizeDeviceStatus(user.additionalDetails?.deviceAccess?.krishiDoctor),
+    },
+    isActive: user.isActive ?? true,
+    createdAt: user.createdAt,
+  });
+
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
       const response = await userAPI.getUsers(page, 20);
       // API returns: { success, users, pagination: { currentPage, totalPages, totalUsers, hasNextPage, hasPreviousPage } }
       if (response.data.success) {
-        setUsers(response.data.users || []);
+        setUsers((response.data.users || []).map(mapUser));
         setTotalPages(response.data.pagination?.totalPages || 1);
       }
     } catch (error: any) {
@@ -114,6 +148,7 @@ export default function UsersPage() {
           state: "Maharashtra",
           district: "Pune",
           subscription: { type: "premium", expiresAt: "2024-12-31" },
+          deviceAccess: { pump: { purchased: true, enabled: true }, krishiDoctor: { purchased: true, enabled: true } },
           isActive: true,
           createdAt: "2024-01-15",
         },
@@ -125,6 +160,7 @@ export default function UsersPage() {
           state: "Gujarat",
           district: "Ahmedabad",
           subscription: { type: "free" },
+          deviceAccess: { pump: { purchased: false, enabled: false }, krishiDoctor: { purchased: false, enabled: false } },
           isActive: true,
           createdAt: "2024-02-20",
         },
@@ -136,6 +172,7 @@ export default function UsersPage() {
           state: "Rajasthan",
           district: "Jaipur",
           subscription: { type: "premium", expiresAt: "2024-06-30" },
+          deviceAccess: { pump: { purchased: true, enabled: false }, krishiDoctor: { purchased: false, enabled: false } },
           isActive: false,
           createdAt: "2024-03-10",
         },
@@ -154,7 +191,7 @@ export default function UsersPage() {
       setIsLoading(true);
       const response = await userAPI.searchUsers(searchQuery);
       if (response.data.success) {
-        setUsers(response.data.data);
+        setUsers((response.data.data || []).map(mapUser));
       }
     } catch (error) {
       toast({
@@ -187,6 +224,42 @@ export default function UsersPage() {
       });
     }
   };
+
+
+  const updateDeviceAccess = async (
+    user: User,
+    device: "pump" | "krishiDoctor",
+    field: "purchased" | "enabled",
+    value: boolean
+  ) => {
+    try {
+      await userAPI.updateDeviceAccess(user._id, {
+        deviceAccess: {
+          [device]: {
+            [field]: value,
+          },
+        },
+      });
+      toast({
+        title: "Success",
+        description: "Device access updated",
+        variant: "success",
+      });
+      fetchUsers();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update device access",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getDeviceBadge = (name: string, status: DeviceStatus) => (
+    <Badge variant={status.enabled ? "success" : "secondary"}>
+      {name}: {status.purchased ? (status.enabled ? "Enabled" : "Purchased") : "Not Purchased"}
+    </Badge>
+  );
 
   const getSubscriptionBadge = (subscription: User["subscription"]) => {
     if (subscription?.type === "premium") {
@@ -276,6 +349,7 @@ export default function UsersPage() {
                     <TableHead>Contact</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Subscription</TableHead>
+                    <TableHead>Devices</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Joined</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
@@ -317,6 +391,12 @@ export default function UsersPage() {
                         </div>
                       </TableCell>
                       <TableCell>{getSubscriptionBadge(user.subscription)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {getDeviceBadge("Pump", user.deviceAccess.pump)}
+                          {getDeviceBadge("Krishi Doctor", user.deviceAccess.krishiDoctor)}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={user.isActive ? "success" : "destructive"}>
                           {user.isActive ? "Active" : "Inactive"}
@@ -427,6 +507,65 @@ export default function UsersPage() {
                   {getSubscriptionBadge(selectedUser.subscription)}
                 </div>
               </div>
+
+              <div className="space-y-3">
+                <p className="font-medium">Device Access (Admin Control)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant={selectedUser.deviceAccess.pump.purchased ? "default" : "outline"}
+                    onClick={() =>
+                      updateDeviceAccess(
+                        selectedUser,
+                        "pump",
+                        "purchased",
+                        !selectedUser.deviceAccess.pump.purchased
+                      )
+                    }
+                  >
+                    Pump Purchased: {selectedUser.deviceAccess.pump.purchased ? "Yes" : "No"}
+                  </Button>
+                  <Button
+                    variant={selectedUser.deviceAccess.pump.enabled ? "default" : "outline"}
+                    onClick={() =>
+                      updateDeviceAccess(
+                        selectedUser,
+                        "pump",
+                        "enabled",
+                        !selectedUser.deviceAccess.pump.enabled
+                      )
+                    }
+                  >
+                    Pump Enabled: {selectedUser.deviceAccess.pump.enabled ? "Yes" : "No"}
+                  </Button>
+                  <Button
+                    variant={selectedUser.deviceAccess.krishiDoctor.purchased ? "default" : "outline"}
+                    onClick={() =>
+                      updateDeviceAccess(
+                        selectedUser,
+                        "krishiDoctor",
+                        "purchased",
+                        !selectedUser.deviceAccess.krishiDoctor.purchased
+                      )
+                    }
+                  >
+                    Krishi Doctor Purchased: {selectedUser.deviceAccess.krishiDoctor.purchased ? "Yes" : "No"}
+                  </Button>
+                  <Button
+                    variant={selectedUser.deviceAccess.krishiDoctor.enabled ? "default" : "outline"}
+                    onClick={() =>
+                      updateDeviceAccess(
+                        selectedUser,
+                        "krishiDoctor",
+                        "enabled",
+                        !selectedUser.deviceAccess.krishiDoctor.enabled
+                      )
+                    }
+                  >
+                    Krishi Doctor Enabled: {selectedUser.deviceAccess.krishiDoctor.enabled ? "Yes" : "No"}
+                  </Button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Phone</p>

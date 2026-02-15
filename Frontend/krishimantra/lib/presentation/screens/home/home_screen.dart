@@ -28,6 +28,7 @@ import 'widgets/hot_products_section.dart';
 import 'widgets/trending_hashtags.dart';
 import 'widgets/latest_schemes_section.dart';
 import '../../controllers/feed_controller.dart';
+import '../../controllers/subscription_controller.dart';
 import '../feed/widgets/feed_card.dart';
 import '../../../data/services/weather_service.dart';
 import '../../../data/models/feed_model.dart';
@@ -64,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   int _currentPage = 0;
   Timer? _timer;
   final FeedController _feedController = Get.find<FeedController>();
+  final SubscriptionController _subscriptionController = Get.find<SubscriptionController>();
   final WeatherService _weatherService = WeatherService();
   Position? _currentPosition;
   List<Map<String, String>> _testimonials = [];
@@ -735,14 +737,22 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
               ),
             ),
 
-            // IoT Pump Section (shown if user has pump subscription)
-            const SliverToBoxAdapter(
-              child: IoTPumpSection(),
+            // IoT Pump Section (shown only when admin enabled + active add-on)
+            SliverToBoxAdapter(
+              child: Obx(
+                () => _subscriptionController.hasWaterPumpAccess
+                    ? const IoTPumpSection()
+                    : const SizedBox.shrink(),
+              ),
             ),
 
-            // IoT Crop Sensor Section (shown if user has crop sensor subscription)
-            const SliverToBoxAdapter(
-              child: IoTCropSensorSection(),
+            // Krishi Doctor Section (shown only when admin enabled + active add-on)
+            SliverToBoxAdapter(
+              child: Obx(
+                () => _subscriptionController.hasCropMonitoringAccess
+                    ? const IoTCropSensorSection()
+                    : const SizedBox.shrink(),
+              ),
             ),
 
             // Services Section

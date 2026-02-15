@@ -12,7 +12,9 @@ const {
   getDashboardStats,
   getUserByUsername,
   searchUsersByPartialUsername,
+  updateUserDeviceAccess,
 } = require("../controller/UserController");
+const { adminAuth } = require('../middlewares/auth');
 
 router.get("/users", getUserByPage);
 router.get("/users/:id", getUserById);
@@ -26,5 +28,6 @@ router.get("/consultant", getConsultant);
 router.get("/users/username/:username", getUserByUsername);
 
 router.get("/username/search", searchUsersByPartialUsername);
+router.put('/admin/users/:userId/device-access', adminAuth, updateUserDeviceAccess);
 
 module.exports = router;

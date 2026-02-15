@@ -66,7 +66,7 @@ router.post('/resume', auth, subscriptionController.resumeSubscription);
  */
 
 // Get all IoT add-ons (public)
-router.get('/iot/addons', subscriptionController.getIotAddons);
+router.get('/iot/addons', optionalAuth, subscriptionController.getIotAddons);
 
 // Get user's active IoT add-ons
 router.get('/iot/my-addons', auth, subscriptionController.getUserIotAddons);

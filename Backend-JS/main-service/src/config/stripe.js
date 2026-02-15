@@ -191,8 +191,8 @@ const IOT_ADDONS = {
   },
   CROP_IOT: {
     name: 'CROP_IOT',
-    displayName: 'Crop IoT Sensors',
-    displayNameHindi: 'फसल IoT सेंसर',
+    displayName: 'Krishi Doctor',
+    displayNameHindi: 'कृषि डॉक्टर',
     description: 'Monitor soil moisture, temperature, humidity, and get AI-powered crop recommendations',
     descriptionHindi: 'मिट्टी की नमी, तापमान, आर्द्रता की निगरानी करें और AI-संचालित फसल सिफारिशें प्राप्त करें',
     pricing: {
