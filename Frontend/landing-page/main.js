@@ -281,7 +281,7 @@ function openProductModal(deviceType) {
         
         <div class="form-group">
           <label for="phone">Phone Number <span class="required">*</span></label>
-          <input type="tel" id="phone" name="phone" placeholder="10-digit mobile number" pattern="[0-9]{10}" required>
+          <input type="tel" id="phone" name="phone" placeholder="10-digit mobile number" pattern="[0-9]{10}" inputmode="numeric" required>
         </div>
         
         <div class="form-group">

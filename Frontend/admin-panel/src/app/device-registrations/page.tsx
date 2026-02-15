@@ -123,17 +123,20 @@ export default function DeviceRegistrationsPage() {
   const fetchRegistrations = async () => {
     try {
       setLoading(true);
-      const params: any = {};
+      const params: Record<string, string> = {};
       if (deviceTypeFilter !== "all") params.deviceType = deviceTypeFilter;
       if (statusFilter !== "all") params.status = statusFilter;
 
       const response = await mainApi.get("/api/device-registration/admin", { params });
       setRegistrations(response.data.data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching registrations:", error);
+      const errorMessage = error instanceof Error && 'response' in error 
+        ? (error as any).response?.data?.message 
+        : "Failed to fetch registrations";
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to fetch registrations",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -178,11 +181,14 @@ export default function DeviceRegistrationsPage() {
       setSelectedRegistration(null);
       fetchRegistrations();
       fetchStats();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error sending reply:", error);
+      const errorMessage = error instanceof Error && 'response' in error 
+        ? (error as any).response?.data?.message 
+        : "Failed to send reply";
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to send reply",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -199,11 +205,14 @@ export default function DeviceRegistrationsPage() {
       });
       fetchRegistrations();
       fetchStats();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating status:", error);
+      const errorMessage = error instanceof Error && 'response' in error 
+        ? (error as any).response?.data?.message 
+        : "Failed to update status";
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to update status",
+        description: errorMessage,
         variant: "destructive",
       });
     }

@@ -4,6 +4,13 @@ const { HTTP_STATUS } = require('../utils/constants');
 const axios = require('axios');
 
 /**
+ * Helper function to get device display name
+ */
+const getDeviceDisplayName = (deviceType) => {
+  return deviceType === 'auto_pump' ? 'Auto Pump Starter' : 'Krishi Doctor';
+};
+
+/**
  * Create a new device registration
  * POST /api/device-registration
  */
@@ -140,7 +147,7 @@ exports.replyToRegistration = asyncHandler(async (req, res) => {
     await axios.post(`${notificationServiceUrl}/api/notifications`, {
       userId: null, // No user ID, using phone number
       title: 'IoT Device Registration Update',
-      message: `Your registration for ${registration.deviceType === 'auto_pump' ? 'Auto Pump' : 'Krishi Doctor'} has been reviewed. Reply: ${message}`,
+      message: `Your registration for ${getDeviceDisplayName(registration.deviceType)} has been reviewed. Reply: ${message}`,
       type: 'device_registration',
       data: {
         registrationId: registration._id,
