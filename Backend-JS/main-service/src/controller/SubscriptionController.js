@@ -136,7 +136,6 @@ const createCheckoutSession = async (req, res) => {
         message: 'Billing cycle must be monthly or yearly',
       });
     }
-
     // Check if user already has an active subscription
     const existingSubscription = await UserSubscription.findOne({
       userId: userId,
@@ -960,6 +959,41 @@ const incrementUsageInternal = async (req, res) => {
 
 // ========== IoT ADD-ON FUNCTIONS ==========
 
+
+const getDefaultDeviceAccess = () => ({
+  pump: { purchased: false, enabled: false },
+  krishiDoctor: { purchased: false, enabled: false },
+});
+
+const getUserDeviceAccess = async (userId) => {
+  const userDetails = await UserDetail.findOne({ userId }).select('deviceAccess').lean();
+  const access = userDetails?.deviceAccess || getDefaultDeviceAccess();
+
+  return {
+    pump: {
+      purchased: Boolean(access.pump?.purchased),
+      enabled: Boolean(access.pump?.enabled),
+    },
+    krishiDoctor: {
+      purchased: Boolean(access.krishiDoctor?.purchased),
+      enabled: Boolean(access.krishiDoctor?.enabled),
+    },
+  };
+};
+
+const getAllowedAddonNames = (deviceAccess) => {
+  const allowed = [];
+
+  const hasPump = deviceAccess.pump.purchased && deviceAccess.pump.enabled;
+  const hasKrishiDoctor = deviceAccess.krishiDoctor.purchased && deviceAccess.krishiDoctor.enabled;
+
+  if (hasPump) allowed.push('WATER_PUMP');
+  if (hasKrishiDoctor) allowed.push('CROP_IOT');
+  if (hasPump && hasKrishiDoctor) allowed.push('IOT_BUNDLE');
+
+  return allowed;
+};
+
 /**
  * Get all IoT add-ons
  */
@@ -969,25 +1003,29 @@ const getIotAddons = async (req, res) => {
     const cacheKey = 'iot:addons';
     const cachedAddons = await redis.get(cacheKey);
 
-    if (cachedAddons) {
-      return res.status(HTTP_STATUS.OK).json({
-        success: true,
-        message: 'IoT add-ons retrieved from cache',
-        data: JSON.parse(cachedAddons),
-      });
-    }
+    let addons = cachedAddons ? JSON.parse(cachedAddons) : [];
 
-    // Get from database
-    let addons = await IotAddon.find({ isActive: true }).sort({ order: 1 }).lean();
-
-    // If no addons in DB, seed them
-    if (addons.length === 0) {
-      await seedIotAddons();
+    // Get from database if cache miss
+    if (!cachedAddons) {
       addons = await IotAddon.find({ isActive: true }).sort({ order: 1 }).lean();
+
+      // If no addons in DB, seed them
+      if (addons.length === 0) {
+        await seedIotAddons();
+        addons = await IotAddon.find({ isActive: true }).sort({ order: 1 }).lean();
+      }
+
+      // Cache for 1 hour
+      await redis.set(cacheKey, JSON.stringify(addons), CACHE_TTL.VERY_LONG);
     }
 
-    // Cache for 1 hour
-    await redis.set(cacheKey, JSON.stringify(addons), CACHE_TTL.VERY_LONG);
+    // If authenticated user is available, filter by admin-enabled device access
+    if (req.user) {
+      const userId = req.user._id || req.user.id;
+      const deviceAccess = await getUserDeviceAccess(userId);
+      const allowedAddonNames = getAllowedAddonNames(deviceAccess);
+      addons = addons.filter((addon) => allowedAddonNames.includes(addon.name));
+    }
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -1011,8 +1049,20 @@ const getUserIotAddons = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
 
+    const deviceAccess = await getUserDeviceAccess(userId);
+    const allowedAddonNames = getAllowedAddonNames(deviceAccess);
+
+    if (allowedAddonNames.length === 0) {
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'User IoT add-ons retrieved successfully',
+        data: [],
+      });
+    }
+
     const userAddons = await UserIotAddon.find({
       userId,
+      addonName: { $in: allowedAddonNames },
       status: 'active',
       endDate: { $gt: new Date() },
     }).populate('addonId').lean();
@@ -1061,6 +1111,16 @@ const createIotAddonPaymentIntent = async (req, res) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         message: 'Billing cycle must be monthly or yearly',
+      });
+    }
+
+    const deviceAccess = await getUserDeviceAccess(userId);
+    const allowedAddonNames = getAllowedAddonNames(deviceAccess);
+
+    if (!allowedAddonNames.includes(addonName)) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        success: false,
+        message: 'Addon is not enabled for this user. Please contact admin.',
       });
     }
 
@@ -1163,6 +1223,16 @@ const confirmIotAddonPayment = async (req, res) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         message: 'Payment intent ID, addon name, and billing cycle are required',
+      });
+    }
+
+    const deviceAccess = await getUserDeviceAccess(userId);
+    const allowedAddonNames = getAllowedAddonNames(deviceAccess);
+
+    if (!allowedAddonNames.includes(addonName)) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        success: false,
+        message: 'Addon is not enabled for this user. Please contact admin.',
       });
     }
 
@@ -1340,8 +1410,16 @@ const checkIotFeatureAccess = async (req, res) => {
  */
 async function checkUserIotAccess(userId, feature) {
   // Get user's active IoT addons
+  const deviceAccess = await getUserDeviceAccess(userId);
+  const allowedAddonNames = getAllowedAddonNames(deviceAccess);
+
+  if (allowedAddonNames.length === 0) {
+    return { allowed: false, message: 'IoT devices are not enabled by admin' };
+  }
+
   const userAddons = await UserIotAddon.find({
     userId,
+    addonName: { $in: allowedAddonNames },
     status: 'active',
     endDate: { $gt: new Date() },
   }).populate('addonId');

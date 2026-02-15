@@ -84,6 +84,8 @@ export const userAPI = {
     mainApi.get(`/user/username/search?query=${query}`),
   updateSubscription: (userId: string, data: any) =>
     mainApi.put("/user/subscription", { userId, ...data }),
+  updateDeviceAccess: (userId: string, data: any) =>
+    mainApi.put(`/user/admin/users/${userId}/device-access`, data),
 };
 
 // News APIs
