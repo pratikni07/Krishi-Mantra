@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Crown,
   BarChart3,
+  Cpu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth.store";
@@ -103,6 +104,11 @@ const menuItems = [
     title: "Crop Calendar",
     href: "/crop-calendar",
     icon: Calendar,
+  },
+  {
+    title: "Device Registrations",
+    href: "/device-registrations",
+    icon: Cpu,
   },
   {
     title: "Notifications",

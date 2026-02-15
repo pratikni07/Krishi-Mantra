@@ -354,6 +354,69 @@
       </div>
     </section>
 
+    <!-- ============ IoT PRODUCTS ============ -->
+    <section class="iot-products" id="iot-products">
+      <div class="container">
+        <div class="section-header" data-animate="fade-up">
+          <span class="section-tag">Smart IoT Devices</span>
+          <h2 class="section-title">Transform Your Farm with <span class="text-gradient">IoT Technology</span></h2>
+          <p class="section-subtitle">Get started with our cutting-edge IoT devices designed specifically for Indian farmers</p>
+        </div>
+        
+        <div class="iot-products__grid">
+          <!-- Auto Pump Device -->
+          <div class="iot-product-card" data-animate="fade-up">
+            <div class="iot-product-card__badge">Smart Irrigation</div>
+            <div class="iot-product-card__icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v6m0 6v6m6-11h-6m6 0h6m-17 5h6m-6 0H1"/>
+              </svg>
+            </div>
+            <h3 class="iot-product-card__title">Auto Pump Starter</h3>
+            <p class="iot-product-card__desc">Automate your water pump based on soil moisture levels. Save water, reduce electricity costs, and ensure optimal irrigation 24/7.</p>
+            <ul class="iot-product-card__features">
+              <li>✓ Remote pump control via mobile app</li>
+              <li>✓ Scheduled watering timers</li>
+              <li>✓ Real-time water usage tracking</li>
+              <li>✓ Automatic shut-off on moisture threshold</li>
+              <li>✓ Power consumption monitoring</li>
+            </ul>
+            <button class="btn btn--primary" onclick="openProductModal('auto_pump')">Learn More & Register</button>
+          </div>
+
+          <!-- Krishi Doctor Device -->
+          <div class="iot-product-card" data-animate="fade-up" data-delay="150">
+            <div class="iot-product-card__badge">Crop Health Monitor</div>
+            <div class="iot-product-card__icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+            </div>
+            <h3 class="iot-product-card__title">Krishi Doctor</h3>
+            <p class="iot-product-card__desc">Complete crop health monitoring system with soil sensors and weather station. Get AI-powered insights and alerts for optimal crop growth.</p>
+            <ul class="iot-product-card__features">
+              <li>✓ Soil NPK, pH, moisture & temperature sensors</li>
+              <li>✓ Weather station (humidity, rainfall, wind)</li>
+              <li>✓ AI-powered crop health analysis</li>
+              <li>✓ Disease & pest early warning alerts</li>
+              <li>✓ Historical data & trend analytics</li>
+            </ul>
+            <button class="btn btn--primary" onclick="openProductModal('krishi_doctor')">Learn More & Register</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Product Detail Modal -->
+    <div id="productModal" class="modal">
+      <div class="modal__overlay" onclick="closeProductModal()"></div>
+      <div class="modal__content">
+        <button class="modal__close" onclick="closeProductModal()">×</button>
+        <div id="modalBody"></div>
+      </div>
+    </div>
+
     <!-- ============ COMMUNITY / REELS ============ -->
     <section class="community" id="community">
       <div class="container">
