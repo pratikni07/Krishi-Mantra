@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/constants/api_constants.dart';
 
 /// Event categories for tracking
 class EventCategory {
@@ -226,7 +227,7 @@ class EngagementService {
   Future<void> _startSession() async {
     try {
       final response = await apiService.post(
-        '/engagement/sessions/start',
+        ApiConstants.ENGAGEMENT_SESSION_START,
         data: {
           'userId': _userId,
           'device': _deviceInfo,
@@ -261,7 +262,7 @@ class EngagementService {
       await _flushEvents();
 
       await apiService.post(
-        '/engagement/sessions/end',
+        ApiConstants.ENGAGEMENT_SESSION_END,
         data: {
           'sessionId': _sessionId,
           'userId': _userId,
@@ -582,7 +583,7 @@ class EngagementService {
 
     try {
       final response = await apiService.post(
-        '/engagement/events/batch',
+        ApiConstants.ENGAGEMENT_EVENTS_BATCH,
         data: {'events': eventsToSend},
       );
 
@@ -610,7 +611,7 @@ class EngagementService {
 
     try {
       await apiService.post(
-        '/engagement/sessions/heartbeat',
+        ApiConstants.ENGAGEMENT_SESSION_HEARTBEAT,
         data: {
           'sessionId': _sessionId,
           'userId': _userId,

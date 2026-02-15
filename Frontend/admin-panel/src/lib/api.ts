@@ -31,6 +31,13 @@ export const notificationApi = axios.create({
   },
 });
 
+export const engagementApi = axios.create({
+  baseURL: `${API_BASE}/engagement`,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
 // Add auth token to requests
 const addAuthInterceptor = (instance: typeof mainApi) => {
   instance.interceptors.request.use(
@@ -65,6 +72,7 @@ addAuthInterceptor(mainApi);
 addAuthInterceptor(feedApi);
 addAuthInterceptor(reelApi);
 addAuthInterceptor(notificationApi);
+addAuthInterceptor(engagementApi);
 
 // Auth APIs
 export const authAPI = {
@@ -178,6 +186,81 @@ export const analyticsAPI = {
   getGeoData: () => mainApi.get("/analytics/geo-data"),
   getFeedStats: () => feedApi.get("/analytics/stats"),
   getReelStats: () => reelApi.get("/analytics/stats"),
+};
+
+// Engagement/Activity Tracking APIs
+export const engagementAPI = {
+  // Helper function to build query parameters
+  _buildQueryParams: (params?: { startDate?: string; endDate?: string; timeframe?: string; limit?: number; metric?: string; threshold?: number; compareWith?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append("startDate", params.startDate);
+    if (params?.endDate) query.append("endDate", params.endDate);
+    if (params?.timeframe) query.append("timeframe", params.timeframe);
+    if (params?.limit) query.append("limit", String(params.limit));
+    if (params?.metric) query.append("metric", params.metric);
+    if (params?.threshold) query.append("threshold", String(params.threshold));
+    if (params?.compareWith) query.append("compareWith", params.compareWith);
+    return query.toString();
+  },
+
+  // Dashboard
+  getDashboard: (params?: { startDate?: string; endDate?: string; timeframe?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/dashboard?${query}`);
+  },
+  getRealTimeStats: () => engagementApi.get("/analytics/realtime"),
+  getPeriodComparison: (params?: { startDate?: string; endDate?: string; compareWith?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/comparison?${query}`);
+  },
+
+  // Engagement Analytics
+  getEngagementBreakdown: (params?: { startDate?: string; endDate?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/engagement?${query}`);
+  },
+  getFeatureUsage: (params?: { startDate?: string; endDate?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/features?${query}`);
+  },
+  getTopContent: (params?: { startDate?: string; endDate?: string; limit?: number }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/content?${query}`);
+  },
+
+  // Session Analytics
+  getSessionAnalytics: (params?: { startDate?: string; endDate?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/sessions?${query}`);
+  },
+  getTopScreens: (params?: { startDate?: string; endDate?: string; limit?: number }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/screens?${query}`);
+  },
+  getHourlyPattern: (params?: { startDate?: string; endDate?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/hourly?${query}`);
+  },
+
+  // User Analytics
+  getUserAnalytics: (userId: string, params?: { startDate?: string; endDate?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/users/${userId}?${query}`);
+  },
+  getLeaderboard: (params?: { metric?: string; limit?: number; startDate?: string; endDate?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/leaderboard?${query}`);
+  },
+
+  // Retention and Churn
+  getRetentionMetrics: (params?: { startDate?: string; endDate?: string }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/retention?${query}`);
+  },
+  getChurnRiskAnalysis: (params?: { threshold?: number }) => {
+    const query = engagementAPI._buildQueryParams(params);
+    return engagementApi.get(`/analytics/churn?${query}`);
+  },
 };
 
 // Scheme APIs

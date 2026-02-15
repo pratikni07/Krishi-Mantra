@@ -115,6 +115,15 @@ class ApiConstants {
   static const String CONSULTANTS = '/api/main/consultants';
   static const String CONSULTANT_DETAIL = '/api/main/consultants/:id';
 
+  // Engagement/Analytics Endpoints
+  static const String ENGAGEMENT_SESSION_START = '/api/engagement/sessions/start';
+  static const String ENGAGEMENT_SESSION_END = '/api/engagement/sessions/end';
+  static const String ENGAGEMENT_SESSION_HEARTBEAT = '/api/engagement/sessions/heartbeat';
+  static const String ENGAGEMENT_EVENTS_BATCH = '/api/engagement/events/batch';
+  static const String ENGAGEMENT_ANALYTICS_DASHBOARD = '/api/engagement/analytics/dashboard';
+  static const String ENGAGEMENT_ANALYTICS_SCREENS = '/api/engagement/analytics/screens';
+  static const String ENGAGEMENT_ANALYTICS_USER = '/api/engagement/analytics/users/:userId';
+
   // API Headers
   static const Map<String, String> headers = {
     'Content-Type': 'application/json',
