@@ -44,6 +44,7 @@ import 'package:krishimantra/presentation/controllers/notification_controller.da
 import 'package:krishimantra/data/repositories/subscription_repository.dart';
 import 'package:krishimantra/presentation/controllers/subscription_controller.dart';
 import 'package:krishimantra/presentation/controllers/background_upload_controller.dart';
+import 'package:krishimantra/data/services/device_registration_service.dart';
 
 Future<void> initDependencies() async {
   // Initialize Dio and ApiService first
@@ -56,6 +57,7 @@ Future<void> initDependencies() async {
   final socketService = SocketService();
   await Get.putAsync(() async => socketService, permanent: true);
   await Get.putAsync(() async => LocationService(), permanent: true);
+  await Get.putAsync(() async => DeviceRegistrationService(), permanent: true);
 
   // Initialize connectivity controller early as it's needed by many components
   Get.put(
