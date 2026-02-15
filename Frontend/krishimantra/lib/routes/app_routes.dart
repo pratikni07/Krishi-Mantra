@@ -25,6 +25,7 @@ import '../presentation/screens/marketplace/marketplace_screen.dart';
 import '../presentation/screens/marketplace/add_product_screen.dart';
 import '../presentation/screens/notification/notification_screen.dart';
 import '../presentation/screens/subscription/subscription_plans_screen.dart';
+import '../presentation/screens/iot/device_registration_screen.dart';
 
 class AppRoutes {
   static const String SPLASH = '/splash';
@@ -62,6 +63,9 @@ class AppRoutes {
   static const String SUBSCRIPTION_PLANS = '/subscription-plans';
   static const String PAYMENT_HISTORY = '/payment-history';
 
+  // IoT Device Registration routes
+  static const String DEVICE_REGISTRATION = '/device-registration';
+
   static final routes = [
     GetPage(name: SPLASH, page: () => SplashScreen()),
     GetPage(name: LOGIN, page: () => LoginScreen()),
@@ -98,6 +102,14 @@ class AppRoutes {
     ),
     GetPage(
         name: ADD_MARKETPLACE_PRODUCT, page: () => const AddProductScreen()),
+
+    // IoT Device Registration route
+    GetPage(
+      name: DEVICE_REGISTRATION,
+      page: () => DeviceRegistrationScreen(
+        deviceType: Get.arguments as String,
+      ),
+    ),
 
     // Subscription routes
     GetPage(
