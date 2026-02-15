@@ -221,6 +221,83 @@ class NotificationService {
       throw error;
     }
   }
+
+  async muteEntities(userId, { actorIds = [], entityIds = [], categories = [] }) {
+    try {
+      const update = {
+        $addToSet: {
+          'muted.actorIds': { $each: actorIds },
+          'muted.entityIds': { $each: entityIds },
+          'muted.categories': { $each: categories },
+        },
+      };
+
+      const updatedPreferences = await UserNotificationPreferences.findOneAndUpdate(
+        { userId },
+        update,
+        { new: true, upsert: true }
+      );
+
+      await redis.setex(`${CACHE_KEYS.USER_PREFS}${userId}`, CACHE_TTL.USER_PREFS, JSON.stringify(updatedPreferences));
+      return updatedPreferences;
+    } catch (error) {
+      logger.error('Error muting entities/categories:', error.message);
+      throw error;
+    }
+  }
+
+  async unmuteEntities(userId, { actorIds = [], entityIds = [], categories = [] }) {
+    try {
+      const update = {
+        $pullAll: {
+          'muted.actorIds': actorIds,
+          'muted.entityIds': entityIds,
+          'muted.categories': categories,
+        },
+      };
+
+      const updatedPreferences = await UserNotificationPreferences.findOneAndUpdate(
+        { userId },
+        update,
+        { new: true, upsert: true }
+      );
+
+      await redis.setex(`${CACHE_KEYS.USER_PREFS}${userId}`, CACHE_TTL.USER_PREFS, JSON.stringify(updatedPreferences));
+      return updatedPreferences;
+    } catch (error) {
+      logger.error('Error unmuting entities/categories:', error.message);
+      throw error;
+    }
+  }
+
+  async trackNotificationInteraction(notificationId, userId, action = 'clicked') {
+    const update = { updatedAt: new Date() };
+    if (action === 'clicked') update.clickedAt = new Date();
+    if (action === 'actioned') update.actionedAt = new Date();
+
+    const notification = await Notification.findOneAndUpdate(
+      { _id: notificationId, userId },
+      update,
+      { new: true }
+    );
+
+    return notification;
+  }
+
+  async sendTestNotification(userId, payload = {}) {
+    return this.createNotification({
+      userId,
+      type: payload.type || 'in_app',
+      title: payload.title || 'Test notification',
+      body: payload.body || 'This is a test notification from notification-service.',
+      category: payload.category || 'system',
+      priority: payload.priority || 'low',
+      data: {
+        ...(payload.data || {}),
+        isTest: true,
+      },
+    });
+  }
 }
 
 module.exports = new NotificationService();

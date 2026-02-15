@@ -12,13 +12,16 @@ module.exports = {
   },
   rabbitmq: {
     url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
+    exchange: process.env.RABBITMQ_EVENT_EXCHANGE || 'notification.events',
     queues: {
       notification: process.env.RABBITMQ_NOTIFICATION_QUEUE || 'notifications',
-      batch: process.env.RABBITMQ_BATCH_QUEUE || 'notification_batches'
+      batch: process.env.RABBITMQ_BATCH_QUEUE || 'notification_batches',
+      event: process.env.RABBITMQ_EVENT_QUEUE || 'notification_events'
     }
   },
   batch: {
     size: parseInt(process.env.BATCH_SIZE || '100'),
-    intervalMs: parseInt(process.env.BATCH_INTERVAL_MS || '60000')
+    intervalMs: parseInt(process.env.BATCH_INTERVAL_MS || '60000'),
+    digestFlushIntervalMs: parseInt(process.env.DIGEST_FLUSH_INTERVAL_MS || '300000')
   }
 }; 

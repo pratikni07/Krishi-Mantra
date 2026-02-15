@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { NOTIFICATION_CATEGORIES } = require('../utils/constants');
+const { NOTIFICATION_DELIVERY_MODE } = require('../utils/constants');
 
 const UserNotificationPreferencesSchema = new mongoose.Schema(
   {
@@ -12,6 +12,11 @@ const UserNotificationPreferencesSchema = new mongoose.Schema(
     enabled: {
       type: Boolean,
       default: true,
+    },
+    locale: {
+      type: String,
+      default: 'en',
+      maxlength: 10,
     },
     channels: {
       push: {
@@ -34,12 +39,57 @@ const UserNotificationPreferencesSchema = new mongoose.Schema(
       },
     },
     categories: {
-      consultant_service: { type: Boolean, default: true },
-      new_post: { type: Boolean, default: true },
-      new_reel: { type: Boolean, default: true },
-      farm_videos: { type: Boolean, default: true },
-      crop_care_ai: { type: Boolean, default: true },
       system: { type: Boolean, default: true },
+      subscription: { type: Boolean, default: true },
+      promotion: { type: Boolean, default: true },
+      advertisement: { type: Boolean, default: true },
+      post_engagement: { type: Boolean, default: true },
+      reel_engagement: { type: Boolean, default: true },
+      marketplace: { type: Boolean, default: true },
+      consultant_service: { type: Boolean, default: true },
+      message: { type: Boolean, default: true },
+    },
+    interests: {
+      crops: { type: [String], default: [] },
+      livestock: { type: [String], default: [] },
+      marketplaceTags: { type: [String], default: [] },
+      contentTopics: { type: [String], default: [] },
+      locations: { type: [String], default: [] },
+    },
+    muted: {
+      actorIds: { type: [String], default: [] },
+      entityIds: { type: [String], default: [] },
+      categories: { type: [String], default: [] },
+    },
+    delivery: {
+      defaultMode: {
+        type: String,
+        enum: Object.values(NOTIFICATION_DELIVERY_MODE),
+        default: NOTIFICATION_DELIVERY_MODE.INSTANT,
+      },
+      categoryModes: {
+        type: Map,
+        of: {
+          type: String,
+          enum: Object.values(NOTIFICATION_DELIVERY_MODE),
+        },
+        default: {},
+      },
+      digest: {
+        enabled: { type: Boolean, default: true },
+        frequencyMinutes: { type: Number, default: 60, min: 15, max: 1440 },
+      },
+      channelFallback: {
+        enabled: { type: Boolean, default: true },
+      },
+    },
+    frequencyCaps: {
+      type: Map,
+      of: {
+        limit: { type: Number, min: 1, default: 20 },
+        windowSeconds: { type: Number, min: 60, default: 3600 },
+      },
+      default: {},
     },
     quietHours: {
       enabled: { type: Boolean, default: false },
@@ -57,11 +107,9 @@ const UserNotificationPreferencesSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for efficient queries (optimized for 10k users)
 UserNotificationPreferencesSchema.index({ 'channels.push.token': 1 });
 UserNotificationPreferencesSchema.index({ enabled: 1 });
 
-// Static method to get or create preferences
 UserNotificationPreferencesSchema.statics.getOrCreate = async function(userId) {
   let preferences = await this.findOne({ userId });
 
@@ -72,7 +120,6 @@ UserNotificationPreferencesSchema.statics.getOrCreate = async function(userId) {
   return preferences;
 };
 
-// Static method to update push token
 UserNotificationPreferencesSchema.statics.updatePushToken = function(userId, token, platform) {
   return this.findOneAndUpdate(
     { userId },
@@ -85,30 +132,36 @@ UserNotificationPreferencesSchema.statics.updatePushToken = function(userId, tok
   );
 };
 
-// Static method to get users by category preference
 UserNotificationPreferencesSchema.statics.getUsersForCategory = function(category, limit = 1000) {
   return this.find({
     enabled: true,
-    [`categories.${category}`]: true,
+    [`categories.${category}`]: { $ne: false },
+    'muted.categories': { $ne: category },
   })
-    .select('userId channels')
+    .select('userId channels interests muted delivery frequencyCaps locale')
     .limit(limit)
     .lean();
 };
 
-// Instance method to check if category is enabled
 UserNotificationPreferencesSchema.methods.isCategoryEnabled = function(category) {
   if (!this.enabled) return false;
-  return this.categories[category] !== false;
+  if (this.muted?.categories?.includes(category)) return false;
+  return this.categories?.[category] !== false;
 };
 
-// Instance method to check if channel is enabled
 UserNotificationPreferencesSchema.methods.isChannelEnabled = function(channel) {
   if (!this.enabled) return false;
-  return this.channels[channel]?.enabled !== false;
+  return this.channels?.[channel]?.enabled !== false;
 };
 
-// Instance method to check if in quiet hours
+UserNotificationPreferencesSchema.methods.isEntityMuted = function(entityId, actorId) {
+  if (!this.muted) return false;
+  return Boolean(
+    (entityId && this.muted.entityIds?.includes(entityId)) ||
+    (actorId && this.muted.actorIds?.includes(actorId))
+  );
+};
+
 UserNotificationPreferencesSchema.methods.isInQuietHours = function() {
   if (!this.quietHours.enabled) return false;
 
@@ -124,7 +177,6 @@ UserNotificationPreferencesSchema.methods.isInQuietHours = function() {
   const startTime = this.quietHours.start.replace(':', '');
   const endTime = this.quietHours.end.replace(':', '');
 
-  // Handle overnight quiet hours (e.g., 22:00 to 07:00)
   if (startTime > endTime) {
     return currentTime >= startTime || currentTime < endTime;
   }

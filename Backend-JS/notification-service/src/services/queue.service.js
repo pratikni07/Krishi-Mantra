@@ -7,16 +7,16 @@ class QueueService {
     try {
       const channel = rabbitmq.getChannel();
       const message = JSON.stringify(notification);
-      
+
       await channel.sendToQueue(
         config.rabbitmq.queues.notification,
         Buffer.from(message),
-        { 
+        {
           persistent: true,
-          priority: this._getPriorityValue(notification.priority)
+          priority: this._getPriorityValue(notification.priority),
         }
       );
-      
+
       logger.debug(`Notification sent to queue: ${notification._id}`);
     } catch (error) {
       logger.error('Error sending to notification queue:', error);
@@ -28,25 +28,24 @@ class QueueService {
     try {
       const channel = rabbitmq.getChannel();
       const batchId = new Date().getTime().toString();
-      
-      // Add batch ID to each notification
-      const batchedNotifications = notifications.map(notification => ({
+
+      const batchedNotifications = notifications.map((notification) => ({
         ...notification.toObject(),
-        batchId
+        batchId,
       }));
-      
+
       const message = JSON.stringify({
         batchId,
         count: batchedNotifications.length,
-        notifications: batchedNotifications
+        notifications: batchedNotifications,
       });
-      
+
       await channel.sendToQueue(
         config.rabbitmq.queues.batch,
         Buffer.from(message),
         { persistent: true }
       );
-      
+
       logger.debug(`Batch sent to queue: ${batchId} with ${batchedNotifications.length} notifications`);
       return batchId;
     } catch (error) {
@@ -55,8 +54,26 @@ class QueueService {
     }
   }
 
+  async publishEvent(eventType, payload) {
+    try {
+      const channel = rabbitmq.getChannel();
+      const message = JSON.stringify(payload);
+      const routingKey = `notification.event.${eventType}`;
+
+      channel.publish(config.rabbitmq.exchange, routingKey, Buffer.from(message), {
+        persistent: true,
+        contentType: 'application/json',
+      });
+
+      logger.info(`Event published to exchange: ${routingKey}`);
+    } catch (error) {
+      logger.error('Error publishing notification event:', error);
+      throw error;
+    }
+  }
+
   _getPriorityValue(priority) {
-    switch(priority) {
+    switch (priority) {
       case 'high': return 3;
       case 'medium': return 2;
       case 'low': return 1;
@@ -65,4 +82,4 @@ class QueueService {
   }
 }
 
-module.exports = new QueueService(); 
+module.exports = new QueueService();

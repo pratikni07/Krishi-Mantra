@@ -56,6 +56,11 @@ const NotificationSchema = new mongoose.Schema(
       default: Date.now,
       index: true,
     },
+    dedupeKey: {
+      type: String,
+      default: null,
+      index: true,
+    },
     batchId: {
       type: String,
       index: true,
@@ -67,6 +72,18 @@ const NotificationSchema = new mongoose.Schema(
     seenAt: {
       type: Date,
       default: null,
+    },
+    clickedAt: {
+      type: Date,
+      default: null,
+    },
+    actionedAt: {
+      type: Date,
+      default: null,
+    },
+    channelTrail: {
+      type: [String],
+      default: [],
     },
     error: {
       type: String,
@@ -82,16 +99,15 @@ const NotificationSchema = new mongoose.Schema(
   }
 );
 
-// Compound indexes for common query patterns (optimized for 10k users)
-NotificationSchema.index({ userId: 1, createdAt: -1 }); // User notifications list
-NotificationSchema.index({ userId: 1, status: 1, createdAt: -1 }); // User notifications by status
-NotificationSchema.index({ status: 1, scheduledFor: 1 }); // Batch processing
-NotificationSchema.index({ status: 1, scheduledFor: 1, priority: -1 }); // Priority processing
-NotificationSchema.index({ userId: 1, category: 1, createdAt: -1 }); // Category filtering
-NotificationSchema.index({ batchId: 1, status: 1 }); // Batch status tracking
-NotificationSchema.index({ userId: 1, seenAt: 1 }); // Unread notifications
+NotificationSchema.index({ userId: 1, createdAt: -1 });
+NotificationSchema.index({ userId: 1, status: 1, createdAt: -1 });
+NotificationSchema.index({ status: 1, scheduledFor: 1 });
+NotificationSchema.index({ status: 1, scheduledFor: 1, priority: -1 });
+NotificationSchema.index({ userId: 1, category: 1, createdAt: -1 });
+NotificationSchema.index({ batchId: 1, status: 1 });
+NotificationSchema.index({ userId: 1, seenAt: 1 });
+NotificationSchema.index({ dedupeKey: 1, userId: 1, createdAt: -1 });
 
-// Static method to get user notifications
 NotificationSchema.statics.getByUser = function(userId, { page = 1, limit = 20, status = null } = {}) {
   const skip = (page - 1) * limit;
   const query = { userId };
@@ -107,7 +123,6 @@ NotificationSchema.statics.getByUser = function(userId, { page = 1, limit = 20, 
     .lean();
 };
 
-// Static method to count unread notifications
 NotificationSchema.statics.countUnread = function(userId) {
   return this.countDocuments({
     userId,
@@ -116,10 +131,9 @@ NotificationSchema.statics.countUnread = function(userId) {
   });
 };
 
-// Static method to get pending notifications for batch processing
 NotificationSchema.statics.getPendingForBatch = function(limit = 100) {
   return this.find({
-    status: NOTIFICATION_STATUS.PENDING,
+    status: { $in: [NOTIFICATION_STATUS.PENDING, NOTIFICATION_STATUS.DEFERRED] },
     scheduledFor: { $lte: new Date() },
   })
     .sort({ priority: -1, scheduledFor: 1 })
@@ -127,7 +141,6 @@ NotificationSchema.statics.getPendingForBatch = function(limit = 100) {
     .lean();
 };
 
-// Static method to mark as delivered
 NotificationSchema.statics.markDelivered = function(notificationId) {
   return this.findByIdAndUpdate(
     notificationId,
@@ -139,7 +152,6 @@ NotificationSchema.statics.markDelivered = function(notificationId) {
   );
 };
 
-// Static method to mark as seen/read
 NotificationSchema.statics.markSeen = function(notificationId, userId) {
   return this.findOneAndUpdate(
     { _id: notificationId, userId },
@@ -151,7 +163,6 @@ NotificationSchema.statics.markSeen = function(notificationId, userId) {
   );
 };
 
-// Static method to mark multiple as seen
 NotificationSchema.statics.markMultipleSeen = function(userId, notificationIds) {
   return this.updateMany(
     { _id: { $in: notificationIds }, userId },
@@ -162,7 +173,6 @@ NotificationSchema.statics.markMultipleSeen = function(userId, notificationIds) 
   );
 };
 
-// Instance method to mark as failed
 NotificationSchema.methods.markFailed = async function(errorMessage) {
   this.status = NOTIFICATION_STATUS.FAILED;
   this.error = errorMessage;

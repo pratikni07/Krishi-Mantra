@@ -9,18 +9,15 @@ const connect = async () => {
   try {
     connection = await amqp.connect(config.rabbitmq.url);
     channel = await connection.createChannel();
-    
-    // Ensure queues exist
-    await channel.assertQueue(config.rabbitmq.queues.notification, { 
-      durable: true 
-    });
-    
-    await channel.assertQueue(config.rabbitmq.queues.batch, { 
-      durable: true 
-    });
-    
+
+    await channel.assertQueue(config.rabbitmq.queues.notification, { durable: true });
+    await channel.assertQueue(config.rabbitmq.queues.batch, { durable: true });
+    await channel.assertQueue(config.rabbitmq.queues.event, { durable: true });
+
+    await channel.assertExchange(config.rabbitmq.exchange, 'topic', { durable: true });
+    await channel.bindQueue(config.rabbitmq.queues.event, config.rabbitmq.exchange, 'notification.event.*');
+
     logger.info('RabbitMQ connected successfully');
-    
     return { connection, channel };
   } catch (error) {
     logger.error('RabbitMQ connection error:', error);
@@ -42,5 +39,5 @@ const disconnect = async () => {
 module.exports = {
   connect,
   getChannel,
-  disconnect
-}; 
+  disconnect,
+};
