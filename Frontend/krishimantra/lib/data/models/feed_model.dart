@@ -59,6 +59,17 @@ class FeedModel {
   }
 
   factory FeedModel.fromJson(Map<String, dynamic> json) {
+    final rawLike = json['like'];
+    final likeData = rawLike is Map<String, dynamic>
+        ? Map<String, dynamic>.from(rawLike)
+        : <String, dynamic>{'count': 0, 'users': []};
+    final normalizedCount = likeData['count'];
+    likeData['count'] = normalizedCount is int ? normalizedCount : 0;
+    final likedFromLikeMap = likeData['isLiked'] == true;
+    final likedFromRoot = json['isLiked'] == true;
+    final resolvedIsLiked = likedFromRoot || likedFromLikeMap;
+    likeData['isLiked'] = resolvedIsLiked;
+
     return FeedModel(
       id: json['_id'],
       userId: json['userId'],
@@ -70,17 +81,18 @@ class FeedModel {
       mediaUrls: json['mediaUrls'] != null
           ? List<String>.from(json['mediaUrls'])
           : const [],
-      like: json['like'] ?? {'count': 0, 'users': []},
+      like: likeData,
       comment: json['comment'] ?? {'count': 0},
       location: json['location'],
       date: DateTime.parse(json['date']),
       recentComments: json['recentComments'] ?? [],
-      isLiked: json['isLiked'] ?? false,
+      isLiked: resolvedIsLiked,
     );
   }
 
   void toggleLike() {
     isLiked = !isLiked;
+    like['isLiked'] = isLiked;
     if (isLiked) {
       like['count'] = (like['count'] as int) + 1;
     } else {

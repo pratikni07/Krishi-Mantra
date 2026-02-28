@@ -40,6 +40,8 @@ class FeedController extends BaseController {
 
   // Track viewed feeds to avoid duplicate tracking
   final Set<String> _viewedFeedIds = {};
+  final Set<String> _likedFeedIds = <String>{};
+  bool _likedFeedIdsLoaded = false;
 
   FeedController(this._feedRepository, this._userService);
 
@@ -228,6 +230,11 @@ class FeedController extends BaseController {
       // Track engagement
       final trackedFeed = _findFeedInAllLists(feedId);
       if (trackedFeed != null) {
+        if (trackedFeed.isLiked) {
+          _likedFeedIds.add(feedId);
+        } else {
+          _likedFeedIds.remove(feedId);
+        }
         _engagementService.trackFeedLike(feedId, isLike: trackedFeed.isLiked);
       }
     } catch (e) {
@@ -338,6 +345,8 @@ class FeedController extends BaseController {
 
       await handleAsync<void>(
         () async {
+          await _ensureLikedFeedIdsLoaded(forceRefresh: refresh);
+
           // Get user data and check if it exists
           final userData = await _userService.getUser();
           if (userData == null) {
@@ -362,6 +371,7 @@ class FeedController extends BaseController {
           final feedsList = result['feeds'];
           if (feedsList != null) {
             final newFeeds = (feedsList as List<FeedModel>);
+            _applyLikedState(newFeeds);
             recommendedFeeds.addAll(newFeeds);
             print(
                 'FeedController: Added ${newFeeds.length} feeds, total: ${recommendedFeeds.length}');
@@ -396,10 +406,10 @@ class FeedController extends BaseController {
       isLoadingTopFeeds.value = true;
       await handleAsync<void>(
         () async {
-          final userData = await _userService.getUser();
-          if (userData == null) throw Exception('User not found');
+          await _ensureLikedFeedIdsLoaded();
 
           final result = await _feedRepository.getTopFeeds();
+          _applyLikedState(result);
           topFeeds.value = result;
           update(); // Notify GetBuilder listeners
         },
@@ -441,6 +451,7 @@ class FeedController extends BaseController {
       if (!hasMoreRecommendedFeeds.value) return;
       isRecommendedLoading.value = true;
       selectedTag.value = tagName;
+      await _ensureLikedFeedIdsLoaded(forceRefresh: refresh);
 
       final result = await _feedRepository.getFeedsByTag(
         tagName,
@@ -452,16 +463,7 @@ class FeedController extends BaseController {
       final feedsList = result['feeds'];
       if (feedsList != null) {
         final newFeeds = (feedsList as List<FeedModel>);
-
-        // Get current user ID to check if posts are liked
-        final userData = await _userService.getUser();
-        if (userData != null) {
-          for (var feed in newFeeds) {
-            // Instead of trying to access like['users'] which might not exist,
-            // just use the isLiked property already provided or default to false
-            // No need to set isLiked based on like['users'] because it's not reliable in this API
-          }
-        }
+        _applyLikedState(newFeeds);
 
         recommendedFeeds.addAll(newFeeds);
 
@@ -558,8 +560,33 @@ class FeedController extends BaseController {
   }
 
   /// Clear viewed feeds tracking (call on logout or session reset)
+
+  Future<void> _ensureLikedFeedIdsLoaded({bool forceRefresh = false}) async {
+    if (_likedFeedIdsLoaded && !forceRefresh) return;
+
+    final userData = await _userService.getUser();
+    if (userData == null) return;
+
+    final likedIds = await _feedRepository.getUserLikedFeedIds(userData.id);
+    _likedFeedIds
+      ..clear()
+      ..addAll(likedIds);
+    _likedFeedIdsLoaded = true;
+  }
+
+  void _applyLikedState(List<FeedModel> feedList) {
+    for (final feed in feedList) {
+      final isLiked = _likedFeedIds.contains(feed.id) ||
+          feed.isLiked ||
+          feed.like['isLiked'] == true;
+      feed.isLiked = isLiked;
+      feed.like['isLiked'] = isLiked;
+    }
+  }
   void clearViewTracking() {
     _viewedFeedIds.clear();
+    _likedFeedIds.clear();
+    _likedFeedIdsLoaded = false;
   }
 
   /// Sync user's initial interests from profile/onboarding

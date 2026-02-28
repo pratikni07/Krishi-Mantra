@@ -234,6 +234,8 @@ class _FeedCardState extends State<FeedCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isLiked = widget.feed.isLiked || widget.feed.like['isLiked'] == true;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 3,
@@ -329,10 +331,8 @@ class _FeedCardState extends State<FeedCard> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _buildActionButton(
-                  icon: widget.feed.isLiked
-                      ? Icons.favorite
-                      : Icons.favorite_border,
-                  color: widget.feed.isLiked ? Colors.red : Colors.grey,
+                  icon: isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: isLiked ? Colors.red : Colors.grey,
                   count: widget.feed.like['count'] ?? 0,
                   onTap: widget.onLike,
                 ),

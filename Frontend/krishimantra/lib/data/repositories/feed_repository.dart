@@ -325,6 +325,59 @@ class FeedRepository {
     }
   }
 
+  /// Fetch all feed IDs liked by a user.
+  /// Used to restore `isLiked` UI state on app restart.
+  Future<Set<String>> getUserLikedFeedIds(String userId) async {
+    try {
+      final likedFeedIds = <String>{};
+      var page = 1;
+      var hasNextPage = true;
+
+      while (hasNextPage) {
+        final response = await _apiService.get(
+          '/api/feed/likes/user/$userId',
+          queryParameters: {
+            'page': page,
+            'limit': 100,
+          },
+        );
+
+        final data = ApiHelper.handleResponse(response);
+        final docs = data['docs'];
+
+        if (docs is! List || docs.isEmpty) {
+          break;
+        }
+
+        for (final item in docs) {
+          if (item is! Map) continue;
+
+          final feedField = item['feed'];
+          if (feedField is String && feedField.isNotEmpty) {
+            likedFeedIds.add(feedField);
+            continue;
+          }
+
+          if (feedField is Map) {
+            final feedId = feedField['_id'] ?? feedField['id'];
+            if (feedId != null) {
+              likedFeedIds.add(feedId.toString());
+            }
+          }
+        }
+
+        hasNextPage = data['hasNextPage'] == true;
+        page++;
+      }
+
+      return likedFeedIds;
+    } catch (e) {
+      // Silent fail: don't block feed loading if liked-feeds sync fails.
+      print('Error fetching user liked feed IDs: $e');
+      return <String>{};
+    }
+  }
+
   Future<Map<String, dynamic>> getFeedsByTag(String tagName,
       {int page = 1, int limit = 10}) async {
     try {
