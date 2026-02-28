@@ -19,12 +19,12 @@ const envSchema = Joi.object({
   REDIS_PASSWORD: Joi.string().allow('').default(''),
   FEED_SERVICE_URL: Joi.string().uri().default('http://localhost:3003'),
   REEL_SERVICE_URL: Joi.string().uri().default('http://localhost:3005'),
-  MAIL_HOST: Joi.string(),
-  MAIL_USER: Joi.string().email(),
-  MAIL_PASS: Joi.string(),
-  CLOUDINARY_CLOUD_NAME: Joi.string(),
-  CLOUDINARY_API_KEY: Joi.string(),
-  CLOUDINARY_API_SECRET: Joi.string(),
+  MAIL_HOST: Joi.string().allow('').default(''),
+  MAIL_USER: Joi.string().email().allow('').default(''),
+  MAIL_PASS: Joi.string().allow('').default(''),
+  CLOUDINARY_CLOUD_NAME: Joi.string().allow('').default(''),
+  CLOUDINARY_API_KEY: Joi.string().allow('').default(''),
+  CLOUDINARY_API_SECRET: Joi.string().allow('').default(''),
 }).unknown(true);
 
 /**

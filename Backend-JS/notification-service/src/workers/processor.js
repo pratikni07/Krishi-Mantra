@@ -7,15 +7,21 @@ const redisClient = require('../config/redis');
 const logger = require('../utils/logger');
 const { NOTIFICATION_STATUS } = require('../utils/constants');
 
-const emailTransporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.example.com',
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER || 'user@example.com',
-    pass: process.env.SMTP_PASS || 'password',
-  },
-});
+let emailTransporter;
+try {
+  emailTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.example.com',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER || 'user@example.com',
+      pass: process.env.SMTP_PASS || 'password',
+    },
+  });
+} catch (error) {
+  logger.warn('Failed to create email transporter:', error.message);
+  emailTransporter = null;
+}
 
 class NotificationProcessor {
   async processNotification(notification) {

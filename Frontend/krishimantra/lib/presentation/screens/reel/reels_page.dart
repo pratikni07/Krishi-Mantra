@@ -19,6 +19,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/rendering.dart';
 import '../../../core/utils/error_handler.dart';
 import '../feed/FeedDetailsScreen.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
+import '../../widgets/empty_state_widget.dart';
+import '../../widgets/tractor_loading_indicator.dart';
 
 class ReelsPage extends StatefulWidget {
   final int? initialIndex;
@@ -154,13 +158,13 @@ class _ReelsPageState extends State<ReelsPage> {
             builder: (controller) {
               // Check loading state from base controller
               if (controller.isLoading) {
-                return const SkeletonFullScreenVideo();
+                return const LoadingStateWidget(
+                  message: 'Loading reels...',
+                );
               } else if (controller.hasError) {
-                // Use our error handler to show an appropriate error screen
-                return ErrorHandler.getErrorWidget(
-                  errorType: controller.errorType ?? ErrorType.unknown,
-                  onRetry: () => controller.fetchReels(refresh: true),
-                  showRetry: true,
+                return const ErrorStateWidget(
+                  title: 'Unable to Load Reels',
+                  subtitle: 'The tractor hit a bump while fetching reels. Please try again! 🎬',
                 );
               }
 
@@ -168,31 +172,9 @@ class _ReelsPageState extends State<ReelsPage> {
               final reelsList = List<ReelModel>.from(controller.reels);
 
               if (reelsList.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.videocam_off,
-                          size: AppSizes.iconXL, color: Colors.grey[400]),
-                      SizedBox(height: AppSizes.paddingL),
-                      Text(
-                        'No reels available',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: AppSizes.fontM,
-                        ),
-                      ),
-                      SizedBox(height: AppSizes.paddingXL),
-                      ElevatedButton(
-                        onPressed: () =>
-                            controller.fetchReels(refresh: true),
-                        child: Text(
-                          'Refresh',
-                          style: TextStyle(fontSize: AppSizes.fontM),
-                        ),
-                      ),
-                    ],
-                  ),
+                return const EmptyStateWidget(
+                  title: 'No Reels Available',
+                  subtitle: 'The tractor is out filming new reels for you — check back soon! 🎥',
                 );
               }
 
@@ -645,7 +627,7 @@ class _ReelAdCardState extends State<ReelAdCard> {
                       ),
                     )
                   : const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
+                      child: TractorLoadingIndicator(size: 100),
                     ),
         ),
 
@@ -1532,7 +1514,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
                 ),
             ] else
               const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+                child: TractorLoadingIndicator(size: 100),
               ),
 
             // Video Controls and Info Overlay

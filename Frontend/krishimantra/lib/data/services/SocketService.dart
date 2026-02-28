@@ -585,17 +585,22 @@ class SocketService with WidgetsBindingObserver {
 
       final completer = Completer<Map<String, dynamic>>();
 
-      socket?.emitWithAck('chat:create:direct', chatData, ack: (data) {
-        if (data != null) {
-          completer.complete(Map<String, dynamic>.from(data));
-        } else {
-          completer.completeError('Failed to create chat');
+      // Listen for the response event (server uses emit, not ack callback)
+      void onResponse(dynamic data) {
+        if (!completer.isCompleted && data != null) {
+          completer.complete(Map<String, dynamic>.from(data as Map));
         }
-      });
+      }
+
+      socket?.once('chat:create:response', onResponse);
+      socket?.emit('chat:create:direct', chatData);
 
       return await completer.future.timeout(
         const Duration(seconds: 10),
-        onTimeout: () => throw Exception('Chat creation timeout'),
+        onTimeout: () {
+          socket?.off('chat:create:response', onResponse);
+          throw Exception('Chat creation timeout');
+        },
       );
     } catch (e) {
       _errorController.add('Failed to create chat: $e');
@@ -784,19 +789,14 @@ class SocketService with WidgetsBindingObserver {
     socket?.dispose();
     socket = null;
 
-    // Close all stream controllers
-    _messageController.close();
-    _typingController.close();
-    _onlineStatusController.close();
-    _connectionStateController.close();
-    _groupController.close();
-    _errorController.close();
-    _deliveryStatusController.close();
-    _readReceiptController.close();
-    _aiMessageController.close();
-    _aiTypingController.close();
-    _aiAnalyzingController.close();
-    _messageLimitController.close();
-    _notificationController.close();
+    // Do NOT close broadcast StreamControllers in a singleton.
+    // Closing them permanently breaks the singleton since
+    // StreamControllers cannot be reopened after close().
+  }
+
+  /// Reset the service for re-initialization (e.g., after logout + re-login)
+  void reset() {
+    _isDisposed = false;
+    _reconnectionAttempts = 0;
   }
 }

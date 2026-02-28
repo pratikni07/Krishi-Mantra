@@ -18,21 +18,44 @@ class NotificationRepository {
       );
 
       final responseData = response.data;
+      final data =
+          responseData is Map<String, dynamic> ? responseData['data'] : null;
 
-      // Handle both possible API response formats
-      final notificationsList = responseData['data']?['notifications'] ??
-                                responseData['data'] ??
-                                responseData['notifications'] ??
-                                [];
+      // Handle response shapes:
+      // 1) { data: [..], pagination: {...} }  (current backend)
+      // 2) { data: { notifications: [..], pagination: {...} } }
+      // 3) { notifications: [..], pagination: {...} }
+      List<dynamic> notificationsList = [];
+      if (data is List) {
+        notificationsList = data;
+      } else if (data is Map<String, dynamic> &&
+          data['notifications'] is List) {
+        notificationsList = data['notifications'] as List<dynamic>;
+      } else if (responseData is Map<String, dynamic> &&
+          responseData['notifications'] is List) {
+        notificationsList = responseData['notifications'] as List<dynamic>;
+      }
 
-      final notifications = (notificationsList as List)
-          .map((json) => NotificationModel.fromJson(json))
+      final notifications = notificationsList
+          .whereType<Map>()
+          .map(
+            (json) => NotificationModel.fromJson(
+              Map<String, dynamic>.from(json),
+            ),
+          )
           .toList();
 
-      // Handle both pagination formats
-      final pagination = responseData['data']?['pagination'] ??
-                         responseData['pagination'] ??
-                         {'page': page, 'limit': limit, 'total': notifications.length, 'pages': 1};
+      final pagination = (responseData is Map<String, dynamic> &&
+              responseData['pagination'] is Map)
+          ? Map<String, dynamic>.from(responseData['pagination'] as Map)
+          : (data is Map<String, dynamic> && data['pagination'] is Map)
+              ? Map<String, dynamic>.from(data['pagination'] as Map)
+              : {
+                  'page': page,
+                  'limit': limit,
+                  'total': notifications.length,
+                  'pages': 1,
+                };
 
       return {
         'notifications': notifications,
@@ -110,6 +133,81 @@ class NotificationRepository {
       );
 
       return NotificationPreferencesModel.fromJson(response.data['data']);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Track user interaction (click, dismiss, etc.)
+  Future<Map<String, dynamic>> trackInteraction(
+    String userId,
+    String notificationId, {
+    String action = 'clicked',
+  }) async {
+    try {
+      final response = await _apiService.patch(
+        '$_baseUrl/users/$userId/notifications/$notificationId/interaction',
+        data: {'action': action},
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Mute notification sources for a user
+  Future<Map<String, dynamic>> muteSources(
+    String userId, {
+    List<String> entityIds = const [],
+    List<String> categories = const [],
+  }) async {
+    try {
+      final response = await _apiService.patch(
+        '$_baseUrl/users/$userId/preferences/mute',
+        data: {
+          if (entityIds.isNotEmpty) 'entityIds': entityIds,
+          if (categories.isNotEmpty) 'categories': categories,
+        },
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Unmute notification sources for a user
+  Future<Map<String, dynamic>> unmuteSources(
+    String userId, {
+    List<String> entityIds = const [],
+    List<String> categories = const [],
+  }) async {
+    try {
+      final response = await _apiService.patch(
+        '$_baseUrl/users/$userId/preferences/unmute',
+        data: {
+          if (entityIds.isNotEmpty) 'entityIds': entityIds,
+          if (categories.isNotEmpty) 'categories': categories,
+        },
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Trigger a test notification for current user
+  Future<NotificationModel> sendTestNotification(
+    String userId, {
+    Map<String, dynamic> payload = const {},
+  }) async {
+    try {
+      final response = await _apiService.post(
+        '$_baseUrl/users/$userId/notifications/test',
+        data: payload,
+      );
+      return NotificationModel.fromJson(
+        Map<String, dynamic>.from(response.data['data'] as Map),
+      );
     } catch (e) {
       rethrow;
     }

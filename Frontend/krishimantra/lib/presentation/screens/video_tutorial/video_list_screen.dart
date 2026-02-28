@@ -15,6 +15,10 @@ import 'package:video_player/video_player.dart';
 import '../../../data/services/language_service.dart';
 import 'package:krishimantra/core/utils/error_handler.dart';
 import '../../../presentation/widgets/translated_text.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
+import '../../widgets/empty_state_widget.dart';
+import '../../widgets/tractor_loading_indicator.dart';
 
 class VideoListScreen extends StatefulWidget {
   const VideoListScreen({Key? key}) : super(key: key);
@@ -100,26 +104,22 @@ class _VideoListScreenState extends State<VideoListScreen> {
       body: Obx(
         () {
           if (controller.hasError.value) {
-            return ErrorHandler.getErrorWidget(
-              errorType: ErrorType.unknown,
-              onRetry: () => controller.fetchVideos(refresh: true),
-              showRetry: true,
+            return const ErrorStateWidget(
+              title: 'Unable to Load Videos',
+              subtitle: 'The tractor had trouble fetching videos. Please try again! 🎥',
             );
           }
 
           if (controller.isLoading.value && controller.videos.isEmpty) {
-            return ListView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: 4,
-              itemBuilder: (context, index) {
-                return const SkeletonVideoCard();
-              },
+            return const LoadingStateWidget(
+              message: 'Loading videos...',
             );
           }
 
           if (controller.videos.isEmpty) {
-            return Center(
-              child: Text(_noVideosText, style: TextStyle(fontSize: AppSizes.fontM)),
+            return const EmptyStateWidget(
+              title: 'No Videos Found',
+              subtitle: 'The tractor is recording new videos for you! 🎬',
             );
           }
 
@@ -413,7 +413,7 @@ class _VideoThumbnailState extends State<VideoThumbnail> {
       return Container(
         color: Colors.grey[300],
         child: const Center(
-          child: CircularProgressIndicator(),
+          child: TractorLoadingIndicator(size: 60),
         ),
       );
     }

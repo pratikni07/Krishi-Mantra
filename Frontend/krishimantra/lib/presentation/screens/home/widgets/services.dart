@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/home_localizations.dart';
+import '../../../../core/utils/translation_manager.dart';
 import '../../../../data/services/language_service.dart';
 
 class Services extends StatefulWidget {
@@ -11,70 +13,51 @@ class Services extends StatefulWidget {
 }
 
 class _ServicesState extends State<Services> {
-  late LanguageService _languageService;
-
-  // Translatable service names
-  String consultationText = 'Consultation';
-  String cropCalendarText = 'Crop Calendar';
-  String companiesText = 'Companies';
-  String fertilizersText = 'Fertilizers';
-  String krishiAIText = 'Krishi AI';
-  String krishiVideosText = 'Krishi Videos';
-  String marketplaceText = 'Marketplace';
-  String schemesText = 'Schemes';
+  String _languageCode = '';
 
   List<ServiceItem> get serviceItems => [
-        ServiceItem('assets/Images/serviceImg/test1.png', consultationText,
-            '/consultation'),
-        ServiceItem('assets/Images/serviceImg/test2.png', cropCalendarText,
+        ServiceItem('assets/Images/serviceImg/test2.png', _t('crop_calendar'),
             '/crop-calendar'),
-        ServiceItem(
-            'assets/Images/serviceImg/test3.png', companiesText, '/companies'),
-        ServiceItem('assets/Images/serviceImg/test4.png', fertilizersText,
+        ServiceItem('assets/Images/serviceImg/test3.png', _t('companies'),
+            '/companies'),
+        ServiceItem('assets/Images/serviceImg/test4.png', _t('fertilizers'),
             '/fertilizers'),
-        ServiceItem(
-            'assets/Images/serviceImg/test5.png', krishiAIText, '/krishi-ai'),
-        ServiceItem('assets/Images/serviceImg/test6.png', krishiVideosText,
+        ServiceItem('assets/Images/serviceImg/test5.png', _t('krishi_ai'),
+            '/krishi-ai'),
+        ServiceItem('assets/Images/serviceImg/test6.png', _t('krishi_videos'),
             '/krishi-videos'),
-        ServiceItem('assets/Images/serviceImg/tractor.jpg', marketplaceText,
+        ServiceItem('assets/Images/serviceImg/tractor.jpg', _t('marketplace'),
             '/marketplace'),
-        ServiceItem(
-            'assets/Images/serviceImg/test8.png', schemesText, '/schemes'),
+        ServiceItem('assets/Images/serviceImg/test8.png', _t('schemes'),
+            '/schemes'),
+        ServiceItem(null, _t('measure_farm'),
+            '/farm-measurement'),
       ];
 
   @override
   void initState() {
     super.initState();
-    _initializeLanguage();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
   }
 
-  Future<void> _initializeLanguage() async {
-    _languageService = await LanguageService.getInstance();
-    await _updateTranslations();
-  }
-
-  Future<void> _updateTranslations() async {
-    final translations = await Future.wait([
-      _languageService.translate('Consultation'),
-      _languageService.translate('Crop Calendar'),
-      _languageService.translate('Companies'),
-      _languageService.translate('Fertilizers'),
-      _languageService.translate('Krishi AI'),
-      _languageService.translate('Krishi Videos'),
-      _languageService.translate('Marketplace'),
-      _languageService.translate('Schemes'),
-    ]);
-
+  Future<void> _syncLanguageCode() async {
+    final languageService = await LanguageService.getInstance();
+    if (!mounted) return;
     setState(() {
-      consultationText = translations[0];
-      cropCalendarText = translations[1];
-      companiesText = translations[2];
-      fertilizersText = translations[3];
-      krishiAIText = translations[4];
-      krishiVideosText = translations[5];
-      marketplaceText = translations[6];
-      schemesText = translations[7];
+      _languageCode = languageService.getLanguageCode();
     });
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
+  }
+
+  String _t(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
   }
 
   @override
@@ -180,20 +163,29 @@ class _ServicesState extends State<Services> {
               ),
             ),
             child: ClipOval(
-              child: Image.asset(
-                item.imagePath,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.grey[300],
-                    child: Icon(
-                      Icons.image,
-                      size: errorIconSize,
-                      color: Colors.grey[600],
+              child: item.imagePath != null
+                  ? Image.asset(
+                      item.imagePath!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: Icon(
+                            Icons.image,
+                            size: errorIconSize,
+                            color: Colors.grey[600],
+                          ),
+                        );
+                      },
+                    )
+                  : Container(
+                      color: AppColors.green.withOpacity(0.1),
+                      child: Icon(
+                        Icons.satellite_alt,
+                        size: errorIconSize,
+                        color: AppColors.green,
+                      ),
                     ),
-                  );
-                },
-              ),
             ),
           ),
           SizedBox(height: spacing),
@@ -214,10 +206,17 @@ class _ServicesState extends State<Services> {
       ),
     );
   }
+
+  @override
+  void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
+    super.dispose();
+  }
 }
 
 class ServiceItem {
-  final String imagePath;
+  final String? imagePath;
   final String label;
   final String route;
 

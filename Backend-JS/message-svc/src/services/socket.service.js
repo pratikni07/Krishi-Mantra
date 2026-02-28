@@ -384,7 +384,7 @@ class SocketService {
       });
 
       await chat.save();
-      group.memberCount += participants.length;
+      group.memberCount = (group.memberCount || 0) + participants.length;
       await group.save();
 
       this.io.to(chat._id.toString()).emit("group:participants_updated", {

@@ -43,6 +43,9 @@ class MessageService {
     }
     if (chat.type === "group") {
       const group = await Group.findOne({ chatId });
+      if (!group) {
+        throw new Error("Group not found for this chat");
+      }
       if (group.onlyAdminCanMessage && !group.admin.includes(sender)) {
         throw new Error("Only admins can send messages");
       }
@@ -212,10 +215,16 @@ class MessageService {
     });
     await message.save();
 
-    // Update unread count in chat
-    await Chat.findByIdAndUpdate(message.chatId, {
-      $inc: { [`unreadCount.${userId}`]: -1 },
-    });
+    // Update unread count in chat (prevent going below 0)
+    const currentChat = await Chat.findById(message.chatId);
+    if (currentChat) {
+      const currentCount = currentChat.unreadCount?.get?.(userId) || currentChat.unreadCount?.[userId] || 0;
+      if (currentCount > 0) {
+        await Chat.findByIdAndUpdate(message.chatId, {
+          $inc: { [`unreadCount.${userId}`]: -1 },
+        });
+      }
+    }
 
     return message;
   }
@@ -320,10 +329,11 @@ class MessageService {
     // Get user info for read receipts
     const userInfo = chat.participants.find((p) => p.userId === userId);
 
-    // Mark messages as read (only messages from others that user hasn't read)
+    // Only mark the FETCHED messages as read (not the entire chat history)
+    const messageIds = messages.map(m => m._id);
     const result = await Message.updateMany(
       {
-        chatId,
+        _id: { $in: messageIds },
         "readBy.userId": { $ne: userId },
         sender: { $ne: userId },
       },
@@ -339,9 +349,8 @@ class MessageService {
       }
     );
 
-    // Always reset unread count for this user since they're viewing the chat
-    // This ensures the unread indicator clears even if no messages were marked as read
-    // (e.g., when the user only has their own sent messages)
+    // Reset unread count for this user since they're viewing the chat
+    // Use $max to prevent going below 0 from concurrent operations
     await Chat.findByIdAndUpdate(chatId, {
       [`unreadCount.${userId}`]: 0,
     });

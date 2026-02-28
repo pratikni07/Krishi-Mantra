@@ -2,22 +2,239 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/language_helper.dart';
+import '../../../core/utils/translation_manager.dart';
 import '../../../data/models/subscription_model.dart';
+import '../../../routes/app_routes.dart';
 import '../../controllers/subscription_controller.dart';
+import '../../widgets/translated_text.dart';
 
-class SubscriptionPlansScreen extends StatelessWidget {
+class SubscriptionPlansScreen extends StatefulWidget {
   const SubscriptionPlansScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final controller = Get.find<SubscriptionController>();
+  State<SubscriptionPlansScreen> createState() =>
+      _SubscriptionPlansScreenState();
+}
 
+class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen>
+    with TranslationMixin {
+  static const String _keySubscriptionPlans = 'subscription_plans_title';
+  static const String _keyRetry = 'subscription_retry';
+  static const String _keyCurrentPlan = 'subscription_current_plan';
+  static const String _keyFallbackFreePlan = 'subscription_fallback_free_plan';
+  static const String _keyEndsOn = 'subscription_ends_on';
+  static const String _keyRenewsOn = 'subscription_renews_on';
+  static const String _keyMonthly = 'subscription_monthly';
+  static const String _keyYearly = 'subscription_yearly';
+  static const String _keyYear = 'subscription_year';
+  static const String _keyMonth = 'subscription_month';
+  static const String _keyDay = 'subscription_day';
+  static const String _keySave16 = 'subscription_save_16';
+  static const String _keyFree = 'subscription_free';
+  static const String _keyYes = 'subscription_yes';
+  static const String _keySubscribeNow = 'subscription_subscribe_now';
+  static const String _keyFreeForever = 'subscription_free_forever';
+  static const String _keyMostPopular = 'subscription_most_popular';
+  static const String _keyCurrent = 'subscription_current';
+  static const String _keyUsageToday = 'subscription_usage_today';
+  static const String _keyAiMessages = 'subscription_ai_messages';
+  static const String _keyImageAnalysis = 'subscription_image_analysis';
+  static const String _keyConsultantChats = 'subscription_consultant_chats';
+  static const String _keyViewPaymentHistory =
+      'subscription_view_payment_history';
+  static const String _keySubscribeTo = 'subscription_subscribe_to';
+  static const String _keyPlanBillingMsg = 'subscription_plan_billing_msg';
+  static const String _keyProceedPayment = 'subscription_proceed_payment';
+  static const String _keyCancel = 'subscription_cancel';
+  static const String _keySubscribe = 'subscription_subscribe';
+  static const String _keyAiCropDoctor = 'subscription_ai_crop_doctor';
+  static const String _keyVideoConsultations =
+      'subscription_video_consultations';
+  static const String _keyCreatePosts = 'subscription_create_posts';
+  static const String _keyMarketplaceListings =
+      'subscription_marketplace_listings';
+  static const String _keyAdFree = 'subscription_ad_free';
+  static const String _keyPrioritySupport = 'subscription_priority_support';
+  static const String _keyUnlimited = 'subscription_unlimited';
+  static const String _keyIotAddons = 'subscription_iot_addons';
+  static const String _keySmartFarming = 'subscription_iot_subtitle';
+  static const String _keyActive = 'subscription_active';
+  static const String _keyComingSoon = 'subscription_iot_coming_soon';
+  static const String _keyYourActiveAddons = 'subscription_iot_active_addons';
+  static const String _keyAvailableAddons = 'subscription_iot_available_addons';
+  static const String _keyEnds = 'subscription_ends';
+  static const String _keySubscribed = 'subscription_subscribed';
+  static const String _keyAdd = 'subscription_add';
+  static const String _keySaveAmount = 'subscription_save_amount';
+  static const String _keyWaterPumpControl = 'subscription_water_pump_control';
+  static const String _keyDevices = 'subscription_devices';
+  static const String _keyCropSensors = 'subscription_crop_sensors';
+  static const String _keySensors = 'subscription_sensors';
+  static const String _keyAiRecommendations = 'subscription_ai_recommendations';
+  static const String _keyIncluded = 'subscription_included';
+  static const String _keyWeatherAlerts = 'subscription_weather_alerts';
+  static const String _keyDayForecast = 'subscription_day_forecast';
+  static const String _keyAddAddon = 'subscription_add_addon';
+  static const String _keyAddonBillingMsg = 'subscription_addon_billing_msg';
+  static const String _keyAddonSeparateBilling =
+      'subscription_addon_separate_billing';
+  static const String _keyAddNow = 'subscription_add_now';
+  static const String _keyCancelAddon = 'subscription_cancel_addon';
+  static const String _keyCancelHow = 'subscription_cancel_how';
+  static const String _keyCancelAtEnd = 'subscription_cancel_at_end';
+  static const String _keyCancelImmediate = 'subscription_cancel_immediate';
+  static const String _keyBack = 'subscription_back';
+  static const String _keyAtPeriodEnd = 'subscription_at_period_end';
+  static const String _keyCancelNow = 'subscription_cancel_now';
+  static const String _keyRemaining = 'subscription_remaining';
+
+  late final SubscriptionController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = Get.find<SubscriptionController>();
+    _registerTranslations();
+    updateTranslations();
+    TranslationManager.instance.addLanguageChangeListener(
+      _handleLanguageChange,
+    );
+  }
+
+  void _handleLanguageChange() {
+    updateTranslations();
+  }
+
+  void _registerTranslations() {
+    registerTranslation(_keySubscriptionPlans, 'Subscription Plans');
+    registerTranslation(_keyRetry, 'Retry');
+    registerTranslation(_keyCurrentPlan, 'Current Plan');
+    registerTranslation(_keyFallbackFreePlan, 'Kisan (Free)');
+    registerTranslation(_keyEndsOn, 'Ends on {date}');
+    registerTranslation(_keyRenewsOn, 'Renews on {date}');
+    registerTranslation(_keyMonthly, 'Monthly');
+    registerTranslation(_keyYearly, 'Yearly');
+    registerTranslation(_keyYear, 'year');
+    registerTranslation(_keyMonth, 'month');
+    registerTranslation(_keyDay, 'day');
+    registerTranslation(_keySave16, 'Save 16%');
+    registerTranslation(_keyFree, 'Free');
+    registerTranslation(_keyYes, 'Yes');
+    registerTranslation(_keySubscribeNow, 'Subscribe Now');
+    registerTranslation(_keyFreeForever, 'Free Forever');
+    registerTranslation(_keyMostPopular, '⭐ Most Popular');
+    registerTranslation(_keyCurrent, '✓ Current');
+    registerTranslation(_keyUsageToday, 'Today\'s Usage');
+    registerTranslation(_keyAiMessages, 'AI Messages');
+    registerTranslation(_keyImageAnalysis, 'Image Analysis');
+    registerTranslation(_keyConsultantChats, 'Consultant Chats');
+    registerTranslation(_keyViewPaymentHistory, 'View Payment History');
+    registerTranslation(_keySubscribeTo, 'Subscribe to {plan}');
+    registerTranslation(
+      _keyPlanBillingMsg,
+      'You will be charged {price} for the {cycle} subscription.',
+    );
+    registerTranslation(_keyProceedPayment, 'Proceed with payment?');
+    registerTranslation(_keyCancel, 'Cancel');
+    registerTranslation(_keySubscribe, 'Subscribe');
+    registerTranslation(_keyAiCropDoctor, 'AI Crop Doctor');
+    registerTranslation(_keyVideoConsultations, 'Video Consultations');
+    registerTranslation(_keyCreatePosts, 'Create Posts');
+    registerTranslation(_keyMarketplaceListings, 'Marketplace Listings');
+    registerTranslation(_keyAdFree, 'Ad-Free Experience');
+    registerTranslation(_keyPrioritySupport, 'Priority Support');
+    registerTranslation(_keyUnlimited, 'Unlimited');
+    registerTranslation(_keyIotAddons, 'IoT Add-ons');
+    registerTranslation(_keySmartFarming, 'Smart farming devices & sensors');
+    registerTranslation(_keyActive, 'Active');
+    registerTranslation(
+        _keyComingSoon, 'Coming Soon: Connect IoT devices for smart farming!');
+    registerTranslation(_keyYourActiveAddons, 'Your Active Add-ons');
+    registerTranslation(_keyAvailableAddons, 'Available Add-ons');
+    registerTranslation(_keyEnds, 'Ends: {date}');
+    registerTranslation(_keySubscribed, 'Subscribed');
+    registerTranslation(_keyAdd, 'Add');
+    registerTranslation(_keySaveAmount, 'Save {amount}');
+    registerTranslation(_keyWaterPumpControl, 'Water Pump Control');
+    registerTranslation(_keyDevices, '{count} devices');
+    registerTranslation(_keyCropSensors, 'Crop Sensors');
+    registerTranslation(_keySensors, '{count} sensors');
+    registerTranslation(_keyAiRecommendations, 'AI Recommendations');
+    registerTranslation(_keyIncluded, 'Included');
+    registerTranslation(_keyWeatherAlerts, 'Weather Alerts');
+    registerTranslation(_keyDayForecast, '{count} day forecast');
+    registerTranslation(_keyAddAddon, 'Add {addon}');
+    registerTranslation(
+      _keyAddonBillingMsg,
+      'You will be charged {price} for the {cycle} add-on.',
+    );
+    registerTranslation(
+      _keyAddonSeparateBilling,
+      'This will be billed separately from your subscription.',
+    );
+    registerTranslation(_keyAddNow, 'Add Now');
+    registerTranslation(_keyCancelAddon, 'Cancel {addon}');
+    registerTranslation(_keyCancelHow, 'How would you like to cancel?');
+    registerTranslation(
+      _keyCancelAtEnd,
+      '• Cancel at end of billing period: Continue using until current period ends',
+    );
+    registerTranslation(
+      _keyCancelImmediate,
+      '• Cancel immediately: Lose access right away',
+    );
+    registerTranslation(_keyBack, 'Back');
+    registerTranslation(_keyAtPeriodEnd, 'At Period End');
+    registerTranslation(_keyCancelNow, 'Cancel Now');
+    registerTranslation(_keyRemaining, 'remaining');
+  }
+
+  String _t(String key, [Map<String, String>? args]) {
+    var value = getTranslation(key);
+    if (args != null) {
+      args.forEach((k, v) {
+        value = value.replaceAll('{$k}', v);
+      });
+    }
+    return value;
+  }
+
+  String _billingCycleLabel(String cycle) {
+    return cycle == 'yearly' ? _t(_keyYearly) : _t(_keyMonthly);
+  }
+
+  String _localizedUsageDisplay(UsageInfo usage) {
+    if (usage.isUnlimited) return _t(_keyUnlimited);
+    return usage.displayString.replaceAll('remaining', _t(_keyRemaining));
+  }
+
+  String _localizedValue(String value) {
+    var localized = value;
+    if (localized.toLowerCase() == 'unlimited') localized = _t(_keyUnlimited);
+    if (localized.toLowerCase() == 'yes') localized = _t(_keyYes);
+    localized = localized.replaceAll('/day', '/${_t(_keyDay)}');
+    localized = localized.replaceAll('/month', '/${_t(_keyMonth)}');
+    localized = localized.replaceAll('/year', '/${_t(_keyYear)}');
+    return localized;
+  }
+
+  @override
+  void dispose() {
+    TranslationManager.instance.removeLanguageChangeListener(
+      _handleLanguageChange,
+    );
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text(
-          'Subscription Plans',
-          style: TextStyle(
+        title: Text(
+          _t(_keySubscriptionPlans),
+          style: const TextStyle(
             color: AppColors.white,
             fontWeight: FontWeight.bold,
           ),
@@ -43,7 +260,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: controller.loadPlans,
-                  child: const Text('Retry'),
+                  child: Text(_t(_keyRetry)),
                 ),
               ],
             ),
@@ -129,14 +346,14 @@ class SubscriptionPlansScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Current Plan',
+                        _t(_keyCurrentPlan),
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.8),
                           fontSize: 12,
                         ),
                       ),
                       Text(
-                        plan?.displayName ?? 'Kisan (Free)',
+                        plan?.displayName ?? _t(_keyFallbackFreePlan),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
@@ -156,7 +373,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(
+                    child: TranslatedText(
                       subscription.statusDisplay,
                       style: const TextStyle(
                         color: Colors.white,
@@ -171,8 +388,13 @@ class SubscriptionPlansScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 subscription.isCancelledButActive
-                    ? 'Ends on ${_formatDate(subscription.endDate)}'
-                    : 'Renews on ${_formatDate(subscription.nextPaymentDate ?? subscription.endDate)}',
+                    ? _t(_keyEndsOn, {
+                        'date': _formatDate(subscription.endDate),
+                      })
+                    : _t(_keyRenewsOn, {
+                        'date': _formatDate(subscription.nextPaymentDate ??
+                            subscription.endDate),
+                      }),
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.8),
                   fontSize: 13,
@@ -208,11 +430,12 @@ class SubscriptionPlansScreen extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      'Monthly',
+                      _t(_keyMonthly),
                       style: TextStyle(
-                        color: controller.selectedBillingCycle.value == 'monthly'
-                            ? Colors.white
-                            : Colors.black87,
+                        color:
+                            controller.selectedBillingCycle.value == 'monthly'
+                                ? Colors.white
+                                : Colors.black87,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -235,11 +458,12 @@ class SubscriptionPlansScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Yearly',
+                        _t(_keyYearly),
                         style: TextStyle(
-                          color: controller.selectedBillingCycle.value == 'yearly'
-                              ? Colors.white
-                              : Colors.black87,
+                          color:
+                              controller.selectedBillingCycle.value == 'yearly'
+                                  ? Colors.white
+                                  : Colors.black87,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -253,8 +477,8 @@ class SubscriptionPlansScreen extends StatelessWidget {
                           color: Colors.orange,
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
-                          'Save 16%',
+                        child: Text(
+                          _t(_keySave16),
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -342,7 +566,9 @@ class SubscriptionPlansScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          price == 0 ? 'Free' : '₹${price.toStringAsFixed(0)}',
+                          price == 0
+                              ? _t(_keyFree)
+                              : '₹${price.toStringAsFixed(0)}',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -351,7 +577,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
                         ),
                         if (price > 0)
                           Text(
-                            '/${billingCycle == 'yearly' ? 'year' : 'month'}',
+                            '/${billingCycle == 'yearly' ? _t(_keyYear) : _t(_keyMonth)}',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey.shade600,
@@ -364,7 +590,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 // Description
-                Text(
+                TranslatedText(
                   plan.description,
                   style: TextStyle(
                     color: Colors.grey.shade700,
@@ -376,50 +602,51 @@ class SubscriptionPlansScreen extends StatelessWidget {
                 // Features
                 _buildFeatureItem(
                   Icons.chat_bubble_outline,
-                  'AI Crop Doctor',
+                  _t(_keyAiCropDoctor),
                   plan.features.getFeatureDisplay('aiMessagesPerDay'),
                 ),
                 _buildFeatureItem(
                   Icons.image_outlined,
-                  'Image Analysis',
+                  _t(_keyImageAnalysis),
                   plan.features.getFeatureDisplay('imageAnalysisPerDay'),
                 ),
                 _buildFeatureItem(
                   Icons.support_agent,
-                  'Consultant Chats',
+                  _t(_keyConsultantChats),
                   plan.features.getFeatureDisplay('consultantChatsPerDay'),
                 ),
                 if (plan.features.videoConsultationsPerMonth != 0)
                   _buildFeatureItem(
                     Icons.video_call_outlined,
-                    'Video Consultations',
-                    plan.features.getFeatureDisplay('videoConsultationsPerMonth'),
+                    _t(_keyVideoConsultations),
+                    plan.features
+                        .getFeatureDisplay('videoConsultationsPerMonth'),
                   ),
                 if (plan.features.canCreatePosts)
                   _buildFeatureItem(
                     Icons.post_add,
-                    'Create Posts',
-                    'Yes',
+                    _t(_keyCreatePosts),
+                    _t(_keyYes),
                     isEnabled: true,
                   ),
                 if (plan.features.marketplaceListings != 0)
                   _buildFeatureItem(
                     Icons.storefront_outlined,
-                    'Marketplace Listings',
+                    _t(_keyMarketplaceListings),
                     plan.features.getFeatureDisplay('marketplaceListings'),
                   ),
                 if (plan.features.adFree)
                   _buildFeatureItem(
                     Icons.block,
-                    'Ad-Free Experience',
-                    'Yes',
+                    _t(_keyAdFree),
+                    _t(_keyYes),
                     isEnabled: true,
                   ),
                 if (plan.features.prioritySupport)
                   _buildFeatureItem(
                     Icons.support,
-                    'Priority Support',
-                    'Yes',
+                    _t(_keyPrioritySupport),
+                    _t(_keyYes),
                     isEnabled: true,
                   ),
 
@@ -429,10 +656,10 @@ class SubscriptionPlansScreen extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: isCurrentPlan ||
-                            controller.isProcessingPayment.value
-                        ? null
-                        : () => _handleSubscribe(context, plan, controller),
+                    onPressed:
+                        isCurrentPlan || controller.isProcessingPayment.value
+                            ? null
+                            : () => _handleSubscribe(context, plan, controller),
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
                           isCurrentPlan ? Colors.grey : AppColors.green,
@@ -453,10 +680,10 @@ class SubscriptionPlansScreen extends StatelessWidget {
                           )
                         : Text(
                             isCurrentPlan
-                                ? 'Current Plan'
+                                ? _t(_keyCurrentPlan)
                                 : plan.isFree
-                                    ? 'Free Forever'
-                                    : 'Subscribe Now',
+                                    ? _t(_keyFreeForever)
+                                    : _t(_keySubscribeNow),
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -482,8 +709,8 @@ class SubscriptionPlansScreen extends StatelessWidget {
                   color: Colors.orange,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  '⭐ Most Popular',
+                child: Text(
+                  _t(_keyMostPopular),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -507,8 +734,8 @@ class SubscriptionPlansScreen extends StatelessWidget {
                   color: AppColors.green,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  '✓ Current',
+                child: Text(
+                  _t(_keyCurrent),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -539,7 +766,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
+            child: TranslatedText(
               feature,
               style: TextStyle(
                 color: Colors.grey.shade700,
@@ -547,11 +774,11 @@ class SubscriptionPlansScreen extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            value,
+          TranslatedText(
+            _localizedValue(value),
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              color: value == 'Unlimited' || isEnabled
+              color: value.toLowerCase() == 'unlimited' || isEnabled
                   ? AppColors.green
                   : Colors.black87,
             ),
@@ -579,7 +806,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          const TranslatedText(
             'Today\'s Usage',
             style: TextStyle(
               fontSize: 16,
@@ -604,15 +831,15 @@ class SubscriptionPlansScreen extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
+            TranslatedText(
               label,
               style: TextStyle(
                 color: Colors.grey.shade700,
                 fontSize: 14,
               ),
             ),
-            Text(
-              usage.displayString,
+            TranslatedText(
+              _localizedUsageDisplay(usage),
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: usage.isUnlimited
@@ -641,8 +868,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
   Widget _buildPaymentHistoryLink(BuildContext context) {
     return InkWell(
       onTap: () {
-        // Navigate to payment history
-        Get.toNamed('/payment-history');
+        Get.toNamed(AppRoutes.PAYMENT_HISTORY);
       },
       child: Container(
         width: double.infinity,
@@ -657,7 +883,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
             Icon(Icons.receipt_long, color: Colors.grey.shade600),
             const SizedBox(width: 12),
             const Expanded(
-              child: Text(
+              child: TranslatedText(
                 'View Payment History',
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
@@ -682,21 +908,25 @@ class SubscriptionPlansScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Subscribe to ${plan.displayName}'),
+        title: Text(_t(_keySubscribeTo, {'plan': plan.displayName})),
         content: Text(
-          'You will be charged ${controller.getPriceForPlan(plan)} for the ${controller.selectedBillingCycle.value} subscription.\n\nProceed with payment?',
+          '${_t(_keyPlanBillingMsg, {
+                'price': controller.getPriceForPlan(plan),
+                'cycle':
+                    _billingCycleLabel(controller.selectedBillingCycle.value),
+              })}\n\n${_t(_keyProceedPayment)}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(_t(_keyCancel)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.green,
             ),
-            child: const Text('Subscribe'),
+            child: Text(_t(_keySubscribe)),
           ),
         ],
       ),
@@ -754,15 +984,15 @@ class SubscriptionPlansScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'IoT Add-ons',
+                    Text(
+                      _t(_keyIotAddons),
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
-                      'Smart farming devices & sensors',
+                      _t(_keySmartFarming),
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade600,
@@ -791,7 +1021,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Active',
+                        _t(_keyActive),
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.green,
@@ -824,7 +1054,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Coming Soon: Connect IoT devices for smart farming!',
+                    _t(_keyComingSoon),
                     style: TextStyle(
                       color: Colors.amber.shade900,
                       fontSize: 13,
@@ -837,8 +1067,8 @@ class SubscriptionPlansScreen extends StatelessWidget {
 
           // User's Active IoT Addons
           if (controller.userIotAddons.isNotEmpty) ...[
-            const Text(
-              'Your Active Add-ons',
+            Text(
+              _t(_keyYourActiveAddons),
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -854,8 +1084,8 @@ class SubscriptionPlansScreen extends StatelessWidget {
           ],
 
           // Available IoT Addons
-          const Text(
-            'Available Add-ons',
+          Text(
+            _t(_keyAvailableAddons),
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -911,7 +1141,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Ends: ${_formatDate(userAddon.endDate)}',
+                  _t(_keyEnds, {'date': _formatDate(userAddon.endDate)}),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade600,
@@ -921,9 +1151,10 @@ class SubscriptionPlansScreen extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: () => _handleCancelIotAddon(context, userAddon, controller),
+            onPressed: () =>
+                _handleCancelIotAddon(context, userAddon, controller),
             child: Text(
-              'Cancel',
+              _t(_keyCancel),
               style: TextStyle(
                 color: Colors.red.shade400,
                 fontSize: 12,
@@ -941,9 +1172,10 @@ class SubscriptionPlansScreen extends StatelessWidget {
     SubscriptionController controller,
   ) {
     final isSubscribed = controller.userIotAddons.any(
-      (a) => (a.addonName == addon.name ||
-             (a.addonName == 'IOT_BUNDLE' && addon.name != 'IOT_BUNDLE')) &&
-             a.isActive,
+      (a) =>
+          (a.addonName == addon.name ||
+              (a.addonName == 'IOT_BUNDLE' && addon.name != 'IOT_BUNDLE')) &&
+          a.isActive,
     );
     final isBundle = addon.isBundle;
 
@@ -979,14 +1211,14 @@ class SubscriptionPlansScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isBundle
-                        ? Colors.blue.shade50
-                        : Colors.grey.shade100,
+                    color:
+                        isBundle ? Colors.blue.shade50 : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     _getAddonIcon(addon.name),
-                    color: isBundle ? Colors.blue.shade700 : Colors.grey.shade700,
+                    color:
+                        isBundle ? Colors.blue.shade700 : Colors.grey.shade700,
                     size: 24,
                   ),
                 ),
@@ -1017,7 +1249,10 @@ class SubscriptionPlansScreen extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                'Save ${addon.formattedSavings}',
+                                _t(
+                                  _keySaveAmount,
+                                  {'amount': addon.formattedSavings},
+                                ),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
@@ -1042,7 +1277,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // Description
-            Text(
+            TranslatedText(
               addon.description,
               style: TextStyle(
                 color: Colors.grey.shade700,
@@ -1055,28 +1290,35 @@ class SubscriptionPlansScreen extends StatelessWidget {
             if (addon.hasWaterPump)
               _buildAddonFeatureItem(
                 Icons.water_drop_outlined,
-                'Water Pump Control',
-                '${addon.features.waterPump.maxDevices} devices',
+                _t(_keyWaterPumpControl),
+                _t(_keyDevices, {
+                  'count': addon.features.waterPump.maxDevices.toString(),
+                }),
               ),
             if (addon.hasCropMonitoring) ...[
               _buildAddonFeatureItem(
                 Icons.grass_outlined,
-                'Crop Sensors',
-                '${addon.features.cropMonitoring.maxSensors} sensors',
+                _t(_keyCropSensors),
+                _t(_keySensors, {
+                  'count': addon.features.cropMonitoring.maxSensors.toString(),
+                }),
               ),
               if (addon.features.cropMonitoring.aiRecommendations)
                 _buildAddonFeatureItem(
                   Icons.psychology_outlined,
-                  'AI Recommendations',
-                  'Included',
+                  _t(_keyAiRecommendations),
+                  _t(_keyIncluded),
                   isEnabled: true,
                 ),
             ],
             if (addon.features.weatherStation.enabled)
               _buildAddonFeatureItem(
                 Icons.cloud_outlined,
-                'Weather Alerts',
-                '${addon.features.weatherStation.forecastDays} day forecast',
+                _t(_keyWeatherAlerts),
+                _t(_keyDayForecast, {
+                  'count':
+                      addon.features.weatherStation.forecastDays.toString(),
+                }),
               ),
 
             const SizedBox(height: 12),
@@ -1093,11 +1335,12 @@ class SubscriptionPlansScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: isBundle ? Colors.blue.shade700 : AppColors.green,
+                        color:
+                            isBundle ? Colors.blue.shade700 : AppColors.green,
                       ),
                     ),
                     Text(
-                      '/${billingCycle == 'yearly' ? 'year' : 'month'}',
+                      '/${billingCycle == 'yearly' ? _t(_keyYear) : _t(_keyMonth)}',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.grey.shade600,
@@ -1106,9 +1349,11 @@ class SubscriptionPlansScreen extends StatelessWidget {
                   ],
                 ),
                 ElevatedButton(
-                  onPressed: isSubscribed || controller.isProcessingPayment.value
+                  onPressed: isSubscribed ||
+                          controller.isProcessingPayment.value
                       ? null
-                      : () => _handleSubscribeIotAddon(context, addon, controller),
+                      : () =>
+                          _handleSubscribeIotAddon(context, addon, controller),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isSubscribed
                         ? Colors.grey
@@ -1134,7 +1379,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
                           ),
                         )
                       : Text(
-                          isSubscribed ? 'Subscribed' : 'Add',
+                          isSubscribed ? _t(_keySubscribed) : _t(_keyAdd),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                           ),
@@ -1165,7 +1410,7 @@ class SubscriptionPlansScreen extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
+            child: TranslatedText(
               feature,
               style: TextStyle(
                 color: Colors.grey.shade700,
@@ -1173,8 +1418,8 @@ class SubscriptionPlansScreen extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            value,
+          TranslatedText(
+            _localizedValue(value),
             style: TextStyle(
               fontWeight: FontWeight.w500,
               fontSize: 12,
@@ -1208,21 +1453,25 @@ class SubscriptionPlansScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Add ${addon.displayName}'),
+        title: Text(_t(_keyAddAddon, {'addon': addon.displayName})),
         content: Text(
-          'You will be charged ${controller.getPriceForIotAddon(addon)} for the ${controller.selectedBillingCycle.value} add-on.\n\nThis will be billed separately from your subscription.\n\nProceed with payment?',
+          '${_t(_keyAddonBillingMsg, {
+                'price': controller.getPriceForIotAddon(addon),
+                'cycle':
+                    _billingCycleLabel(controller.selectedBillingCycle.value),
+              })}\n\n${_t(_keyAddonSeparateBilling)}\n\n${_t(_keyProceedPayment)}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(_t(_keyCancel)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: addon.isBundle ? Colors.blue : AppColors.green,
             ),
-            child: const Text('Add Now'),
+            child: Text(_t(_keyAddNow)),
           ),
         ],
       ),
@@ -1241,23 +1490,23 @@ class SubscriptionPlansScreen extends StatelessWidget {
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Cancel ${userAddon.displayName}'),
-        content: const Text(
-          'How would you like to cancel?\n\n• Cancel at end of billing period: Continue using until current period ends\n• Cancel immediately: Lose access right away',
+        title: Text(_t(_keyCancelAddon, {'addon': userAddon.displayName})),
+        content: Text(
+          '${_t(_keyCancelHow)}\n\n${_t(_keyCancelAtEnd)}\n${_t(_keyCancelImmediate)}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Back'),
+            child: Text(_t(_keyBack)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'end'),
-            child: const Text('At Period End'),
+            child: Text(_t(_keyAtPeriodEnd)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'now'),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Cancel Now'),
+            child: Text(_t(_keyCancelNow)),
           ),
         ],
       ),

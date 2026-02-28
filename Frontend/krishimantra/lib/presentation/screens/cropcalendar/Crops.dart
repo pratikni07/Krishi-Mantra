@@ -6,7 +6,10 @@ import '../../../core/constants/api_constants.dart';
 import '../../../data/models/crop_model.dart';
 import '../../controllers/crop_controller.dart';
 import '../../widgets/cached_image.dart';
-import '../../widgets/skeleton/skeleton_widgets.dart';
+import '../../widgets/tractor_loading_indicator.dart';
+import '../../widgets/empty_state_widget.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
 
 class CropsScreen extends StatelessWidget {
   const CropsScreen({super.key});
@@ -41,7 +44,10 @@ class CropsScreen extends StatelessWidget {
                 child: Obx(
                   () => cropController.isLoading.value
                       ? _buildLoadingIndicator()
-                      : cropController.error.value.isNotEmpty
+                      : cropController.error.value.isNotEmpty &&
+                                !cropController.error.value
+                                    .toLowerCase()
+                                    .contains('no crops')
                           ? _buildErrorWidget(cropController)
                           : cropController.searchResults.isNotEmpty
                               ? _buildCropGrid(cropController.searchResults, context)
@@ -60,9 +66,7 @@ class CropsScreen extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
+                        TractorLoadingIndicator(size: 100),
                         SizedBox(height: 16),
                         Text(
                           'Loading crop calendar...',
@@ -218,100 +222,22 @@ class CropsScreen extends StatelessWidget {
   }
 
   Widget _buildLoadingIndicator() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        shrinkWrap: true,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          childAspectRatio: 0.8,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemCount: 9,
-        itemBuilder: (context, index) {
-          return const SkeletonCropCard();
-        },
-      ),
+    return const LoadingStateWidget(
+      message: 'Loading crops...',
     );
   }
 
   Widget _buildErrorWidget(CropController controller) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, color: AppColors.orange, size: 70),
-            const SizedBox(height: 16),
-            Text(
-              'Error: ${controller.error.value}',
-              style: const TextStyle(
-                color: AppColors.textGrey,
-                fontSize: 16,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.green,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 3,
-              ),
-              onPressed: () => controller.retryLastOperation(),
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              label: const Text(
-                'Retry',
-                style: TextStyle(color: AppColors.white, fontSize: 16),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return const ErrorStateWidget(
+      title: 'Unable to Load Crops',
+      subtitle: 'The tractor ran into some trouble on the farm. Please check your connection and try again! 🌿',
     );
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              'assets/images/empty_crops.png', 
-              height: 150,
-              errorBuilder: (context, error, stackTrace) => 
-                Icon(Icons.eco_outlined, color: AppColors.textGrey, size: 80),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'No crops found',
-              style: TextStyle(
-                color: AppColors.textGrey,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Try searching for a different crop or check again later',
-              style: TextStyle(
-                color: AppColors.textGrey.withOpacity(0.7),
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return EmptyStateWidget(
+      title: 'No Crops Found',
+      subtitle: 'The tractor is busy sowing seeds — crop data will sprout soon! 🌿',
     );
   }
 

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/home_localizations.dart';
 import '../../../../core/utils/responsive_utils.dart';
 import '../../../../core/utils/language_helper.dart';
+import '../../../../core/utils/translation_manager.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../../data/services/language_service.dart';
 import '../../../controllers/reel_controller.dart';
 import '../../../widgets/skeleton/skeleton_widgets.dart';
 import '../../reel/reels_page.dart';
@@ -19,6 +22,7 @@ class TrendingReelsSection extends StatefulWidget {
 class _TrendingReelsSectionState extends State<TrendingReelsSection>
     with TranslationMixin {
   final ReelController _reelController = Get.find<ReelController>();
+  String _languageCode = '';
 
   // Translation keys
   static const String KEY_TRENDING_VIDEOS = 'trending_videos';
@@ -29,6 +33,25 @@ class _TrendingReelsSectionState extends State<TrendingReelsSection>
   void initState() {
     super.initState();
     _registerTranslations();
+    _initializeTranslations();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
+  }
+
+  Future<void> _initializeTranslations() async {
+    if (!mounted) return;
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
+  }
+
+  Future<void> _syncLanguageCode() async {
+    final languageService = await LanguageService.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _languageCode = languageService.getLanguageCode();
+    });
   }
 
   void _registerTranslations() {
@@ -89,7 +112,7 @@ class _TrendingReelsSectionState extends State<TrendingReelsSection>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    getTranslation(KEY_TRENDING_VIDEOS),
+                    _tr(KEY_TRENDING_VIDEOS),
                     style: TextStyle(
                       fontSize: AppSizes.fontXL,
                       fontWeight: FontWeight.bold,
@@ -99,12 +122,13 @@ class _TrendingReelsSectionState extends State<TrendingReelsSection>
                   GestureDetector(
                     onTap: () {
                       // Navigate to reels page - pass a non-reactive copy
-                      Get.to(() => ReelsPage(reels: List.from(controller.reels)));
+                      Get.to(
+                          () => ReelsPage(reels: List.from(controller.reels)));
                     },
                     child: Row(
                       children: [
                         Text(
-                          getTranslation(KEY_VIEW_ALL),
+                          _tr(KEY_VIEW_ALL),
                           style: TextStyle(
                             fontSize: AppSizes.fontM,
                             color: AppColors.green,
@@ -153,7 +177,7 @@ class _TrendingReelsSectionState extends State<TrendingReelsSection>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                getTranslation(KEY_TRENDING_VIDEOS),
+                _tr(KEY_TRENDING_VIDEOS),
                 style: TextStyle(
                   fontSize: AppSizes.fontXL,
                   fontWeight: FontWeight.bold,
@@ -191,9 +215,9 @@ class _TrendingReelsSectionState extends State<TrendingReelsSection>
       onTap: () {
         // Navigate to reels page starting from this reel - pass a non-reactive copy
         Get.to(() => ReelsPage(
-          reels: List.from(_reelController.reels),
-          initialIndex: index,
-        ));
+              reels: List.from(_reelController.reels),
+              initialIndex: index,
+            ));
       },
       child: Container(
         width: ResponsiveUtils.responsive(mobile: 130.0, tablet: 160.0),
@@ -327,5 +351,19 @@ class _TrendingReelsSectionState extends State<TrendingReelsSection>
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
+    super.dispose();
+  }
+
+  String _tr(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
   }
 }

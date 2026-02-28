@@ -5,6 +5,9 @@ import '../../../core/constants/colors.dart';
 import '../../../data/models/crop_calendar_model.dart';
 import '../../../data/services/language_service.dart';
 import '../../controllers/crop_controller.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
+import '../../widgets/empty_state_widget.dart';
 
 class CropDetailScreen extends StatelessWidget {
   const CropDetailScreen({super.key});
@@ -57,35 +60,24 @@ class CropDetailScreen extends StatelessWidget {
       ),
       body: Obx(() {
         if (controller.isLoadingCalendar.value) {
-          return const Center(
-              child: CircularProgressIndicator(color: AppColors.green));
+          return const LoadingStateWidget(
+            message: 'Loading crop details...',
+          );
         }
 
         if (controller.calendarError.value.isNotEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(controller.calendarError.value),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                    } else {
-                      Get.back();
-                    }
-                  },
-                  child: const Text('Go Back'),
-                ),
-              ],
-            ),
+          return const ErrorStateWidget(
+            title: 'Unable to Load Crop Details',
+            subtitle: 'The tractor had trouble fetching crop details. Please go back and try again! 🌿',
           );
         }
 
         final calendar = controller.cropCalendar.value;
         if (calendar == null) {
-          return const Center(child: Text('No data available'));
+          return const EmptyStateWidget(
+            title: 'No Crop Data',
+            subtitle: 'The tractor is searching the fields for this crop\'s data! 🌾',
+          );
         }
 
         return SingleChildScrollView(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
@@ -7,6 +8,7 @@ import '../../data/repositories/subscription_repository.dart';
 
 class SubscriptionController extends GetxController {
   final SubscriptionRepository _repository;
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   SubscriptionController(this._repository);
 
@@ -61,9 +63,16 @@ class SubscriptionController extends GetxController {
     }
   }
 
+  Future<bool> _isAuthenticated() async {
+    final token = await _storage.read(key: 'auth_token');
+    return token != null;
+  }
+
   /// Load current user's subscription
   Future<void> loadCurrentSubscription() async {
     try {
+      if (!await _isAuthenticated()) return;
+
       final result = await _repository.getCurrentSubscription();
 
       currentSubscription.value = result['subscription'];
@@ -80,6 +89,8 @@ class SubscriptionController extends GetxController {
   /// Load usage stats
   Future<void> loadUsageStats() async {
     try {
+      if (!await _isAuthenticated()) return;
+
       final stats = await _repository.getUsageStats();
       usageStats.value = stats;
     } catch (e) {
@@ -350,6 +361,8 @@ class SubscriptionController extends GetxController {
   /// Load all IoT add-ons
   Future<void> loadIotAddons() async {
     try {
+      if (!await _isAuthenticated()) return;
+
       isLoadingIotAddons.value = true;
       final addons = await _repository.getIotAddons();
       iotAddons.assignAll(addons);
@@ -365,6 +378,8 @@ class SubscriptionController extends GetxController {
   /// Load user's active IoT add-ons
   Future<void> loadUserIotAddons() async {
     try {
+      if (!await _isAuthenticated()) return;
+
       final addons = await _repository.getUserIotAddons();
       userIotAddons.assignAll(addons);
     } catch (e) {

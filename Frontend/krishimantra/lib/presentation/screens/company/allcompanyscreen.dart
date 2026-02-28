@@ -8,6 +8,9 @@ import '../../widgets/skeleton/skeleton_widgets.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/responsive_utils.dart';
 import '../../../core/utils/language_helper.dart';
+import '../../widgets/empty_state_widget.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
 
 class CompanyListScreen extends StatefulWidget {
   const CompanyListScreen({Key? key}) : super(key: key);
@@ -72,54 +75,22 @@ class _CompanyListScreenState extends State<CompanyListScreen> with TranslationM
       ),
       body: Obx(() {
         if (controller.isLoading.value) {
-          return Padding(
-            padding: RPadding.all(8),
-            child: GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: ResponsiveUtils.gridCrossAxisCount,
-                childAspectRatio: 0.8,
-                crossAxisSpacing: AppSizes.paddingM,
-                mainAxisSpacing: AppSizes.paddingM,
-              ),
-              itemCount: 6,
-              itemBuilder: (context, index) {
-                return const SkeletonCompanyCard();
-              },
-            ),
+          return const LoadingStateWidget(
+            message: 'Loading fertilizer companies...',
           );
         }
 
         if (controller.error.isNotEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  controller.error.value,
-                  style: TextStyle(
-                    color: AppColors.textGrey,
-                    fontSize: AppSizes.fontM,
-                  ),
-                ),
-                SizedBox(height: AppSizes.paddingL),
-                ElevatedButton(
-                  onPressed: () => controller.fetchAllCompanies(refresh: true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.green,
-                    foregroundColor: AppColors.white,
-                    padding: RPadding.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
-                    ),
-                  ),
-                  child: Text(
-                    getTranslation(KEY_RETRY),
-                    style: TextStyle(fontSize: AppSizes.fontM),
-                  ),
-                ),
-              ],
-            ),
+          return const ErrorStateWidget(
+            title: 'Unable to Load Companies',
+            subtitle: 'The tractor is having trouble reaching the companies. Please try again! 🚜',
+          );
+        }
+
+        if (controller.companies.isEmpty) {
+          return EmptyStateWidget(
+            title: 'No Companies Found',
+            subtitle: 'The tractor is on its way to bring you the best fertilizer companies! 🚜',
           );
         }
 

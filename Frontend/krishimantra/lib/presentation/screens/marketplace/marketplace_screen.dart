@@ -13,6 +13,9 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import 'add_product_screen.dart';
 import 'marketplace_product_detail_screen.dart';
+import '../../widgets/empty_state_widget.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({Key? key}) : super(key: key);
@@ -366,35 +369,24 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     return Expanded(
       child: Obx(() {
         if (_controller.isLoading) {
-          return GridView.builder(
-            padding: RPadding.all(16),
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: ResponsiveUtils.gridCrossAxisCount,
-              childAspectRatio: 0.7,
-              crossAxisSpacing: AppSizes.paddingM,
-              mainAxisSpacing: AppSizes.paddingM,
-            ),
-            itemCount: 6,
-            itemBuilder: (context, index) {
-              return const SkeletonMarketplaceCard();
-            },
+          return const LoadingStateWidget(
+            message: 'Loading marketplace products...',
           );
         }
 
         if (_controller.errorMessage.isNotEmpty) {
-          return ErrorWidgets.genericError(
-            onRetry: _loadMarketplaceData,
-            message: getTranslation(KEY_ERROR),
+          return const ErrorStateWidget(
+            title: 'Unable to Load Products',
+            subtitle: 'The tractor is stuck on the way to the marketplace. Please check your connection! 🛒',
           );
         }
 
         final products = _controller.marketplaceProducts;
 
         if (products.isEmpty) {
-          return ErrorWidgets.emptyState(
-            message: getTranslation(KEY_NO_PRODUCTS),
-            icon: Icons.search_off,
+          return EmptyStateWidget(
+            title: 'No Products in the Market',
+            subtitle: 'The tractor is heading to the market to bring fresh products for you! 🛒',
           );
         }
 

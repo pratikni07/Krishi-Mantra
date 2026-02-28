@@ -54,6 +54,10 @@ class AuthRepository {
       print('💾 Storing auth token');
       await _storage.write(key: 'auth_token', value: token);
 
+      if (responseData['refreshToken'] != null) {
+        await _storage.write(key: 'refresh_token', value: responseData['refreshToken'] as String);
+      }
+
       print('💾 Storing user data');
       await _storage.write(key: 'user_data', value: json.encode(userData));
 

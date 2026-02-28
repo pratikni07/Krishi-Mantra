@@ -7,6 +7,9 @@ import '../../controllers/product_controller.dart';
 import '../../widgets/skeleton/skeleton_widgets.dart';
 import 'product_detail_screen.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../widgets/empty_state_widget.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
 
 class ProductListScreen extends GetView<ProductController> {
   const ProductListScreen({Key? key}) : super(key: key);
@@ -28,27 +31,22 @@ class ProductListScreen extends GetView<ProductController> {
       ),
       body: Obx(() {
         if (controller.isLoading.value) {
-          return GridView.builder(
-            padding: RPadding.all(16),
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: ResponsiveUtils.gridCrossAxisCount,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: AppSizes.paddingL,
-              mainAxisSpacing: AppSizes.paddingL,
-            ),
-            itemCount: 6,
-            itemBuilder: (context, index) {
-              return const SkeletonProductGridItem();
-            },
+          return const LoadingStateWidget(
+            message: 'Loading agricultural products...',
           );
         }
 
         if (controller.error.isNotEmpty) {
-          return ErrorHandler.getErrorWidget(
-            errorType: ErrorType.unknown,
-            onRetry: () => controller.fetchAllProducts(),
-            showRetry: true,
+          return const ErrorStateWidget(
+            title: 'Unable to Load Products',
+            subtitle: 'Our fields are a bit dry right now. Please check your connection and try again! 🌱',
+          );
+        }
+
+        if (controller.products.isEmpty) {
+          return EmptyStateWidget(
+            title: 'No Products Yet',
+            subtitle: 'Our fields are being prepared — fresh agricultural products are coming soon! 🌱',
           );
         }
 

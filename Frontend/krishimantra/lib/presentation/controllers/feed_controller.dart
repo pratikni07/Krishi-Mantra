@@ -102,10 +102,11 @@ class FeedController extends BaseController {
       }
 
       if (!hasMoreComments.value) return;
-      
+
       isLoadingComments.value = true;
-      print('⭐️ Starting to fetch comments for feed: $feedId, page: ${commentCurrentPage.value}');
-      
+      print(
+          '⭐️ Starting to fetch comments for feed: $feedId, page: ${commentCurrentPage.value}');
+
       await handleAsync<void>(
         () async {
           try {
@@ -114,14 +115,14 @@ class FeedController extends BaseController {
               page: commentCurrentPage.value,
               limit: limit,
             );
-            
+
             print('📄 Received comment response: $result');
-            
+
             // Clear any previous errors since we got a successful response
             if (hasError) {
               setLoaded();
             }
-            
+
             // Parse the comments from the result
             if (result.containsKey('comments') && result['comments'] is List) {
               final newComments = result['comments'] as List<CommentModel>;
@@ -130,12 +131,13 @@ class FeedController extends BaseController {
             } else {
               print('⚠️ No comments found in result or invalid format');
             }
-            
+
             totalComments.value = result['totalDocs'] as int? ?? 0;
             hasMoreComments.value = result['hasNextPage'] as bool? ?? false;
-            
-            print('📊 Total comments: ${totalComments.value}, hasMore: ${hasMoreComments.value}');
-            
+
+            print(
+                '📊 Total comments: ${totalComments.value}, hasMore: ${hasMoreComments.value}');
+
             if (hasMoreComments.value) {
               commentCurrentPage.value++;
             }
@@ -184,7 +186,8 @@ class FeedController extends BaseController {
           commentData['parentCommentId'] = parentCommentId;
         }
 
-        print('FeedController: Adding comment to feed $feedId with parentCommentId: $parentCommentId');
+        print(
+            'FeedController: Adding comment to feed $feedId with parentCommentId: $parentCommentId');
         await _feedRepository.addComment(feedId, commentData);
 
         // Track engagement
@@ -202,14 +205,12 @@ class FeedController extends BaseController {
       final userData = await _userService.getUser();
       if (userData == null) throw Exception('User not found');
 
-      final index = recommendedFeeds.indexWhere((feed) => feed.id == feedId);
-      if (index == -1) return;
-
-      final feed = recommendedFeeds[index];
-
-      // Optimistically update UI
-      feed.toggleLike();
-      recommendedFeeds[index] = feed.copyWith();
+      final previousLikeStates = <String, bool>{};
+      final touchedAnyList = _toggleLikeInAllFeedLists(
+        feedId,
+        previousLikeStates,
+      );
+      if (!touchedAnyList) return;
 
       final likeData = {
         'userId': userData.id,
@@ -220,19 +221,85 @@ class FeedController extends BaseController {
       final success = await _feedRepository.addLike(feedId, likeData);
 
       if (!success) {
-        // Revert if the API call failed
-        feed.toggleLike();
-        recommendedFeeds[index] = feed.copyWith();
+        _revertLikeInAllFeedLists(feedId, previousLikeStates);
         throw Exception('Failed to like post');
       }
 
       // Track engagement
-      _engagementService.trackFeedLike(feedId, isLike: feed.isLiked);
+      final trackedFeed = _findFeedInAllLists(feedId);
+      if (trackedFeed != null) {
+        _engagementService.trackFeedLike(feedId, isLike: trackedFeed.isLiked);
+      }
     } catch (e) {
       // Silent fail for likes, don't show error screen
       // Just log the error or show a minimal indicator
       setError(e);
     }
+  }
+
+  FeedModel? _findFeedInAllLists(String feedId) {
+    final fromTop = topFeeds.firstWhereOrNull((feed) => feed.id == feedId);
+    if (fromTop != null) return fromTop;
+
+    final fromRecommended =
+        recommendedFeeds.firstWhereOrNull((feed) => feed.id == feedId);
+    if (fromRecommended != null) return fromRecommended;
+
+    final fromFeeds = feeds.firstWhereOrNull((feed) => feed.id == feedId);
+    if (fromFeeds != null) return fromFeeds;
+
+    return randomFeeds.firstWhereOrNull((feed) => feed.id == feedId);
+  }
+
+  bool _toggleLikeInAllFeedLists(
+    String feedId,
+    Map<String, bool> previousLikeStates,
+  ) {
+    var touched = false;
+
+    void toggleInList(RxList<FeedModel> list, String listKey) {
+      final index = list.indexWhere((feed) => feed.id == feedId);
+      if (index == -1) return;
+
+      final feed = list[index];
+      previousLikeStates[listKey] = feed.isLiked;
+      feed.toggleLike();
+      list[index] = feed.copyWith();
+      touched = true;
+    }
+
+    toggleInList(topFeeds, 'topFeeds');
+    toggleInList(recommendedFeeds, 'recommendedFeeds');
+    toggleInList(feeds, 'feeds');
+    toggleInList(randomFeeds, 'randomFeeds');
+
+    update(); // Needed for GetBuilder screens like Home
+    return touched;
+  }
+
+  void _revertLikeInAllFeedLists(
+    String feedId,
+    Map<String, bool> previousLikeStates,
+  ) {
+    void revertInList(RxList<FeedModel> list, String listKey) {
+      final index = list.indexWhere((feed) => feed.id == feedId);
+      if (index == -1) return;
+      if (!previousLikeStates.containsKey(listKey)) return;
+
+      final shouldBeLiked = previousLikeStates[listKey]!;
+      final feed = list[index];
+      if (feed.isLiked != shouldBeLiked) {
+        feed.toggleLike();
+        list[index] = feed.copyWith();
+      }
+    }
+
+    revertInList(topFeeds, 'topFeeds');
+    revertInList(recommendedFeeds, 'recommendedFeeds');
+    revertInList(feeds, 'feeds');
+    revertInList(randomFeeds, 'randomFeeds');
+
+    update();
   }
 
   Future<void> createFeed(String description, String content,
@@ -274,11 +341,13 @@ class FeedController extends BaseController {
           // Get user data and check if it exists
           final userData = await _userService.getUser();
           if (userData == null) {
-            print('FeedController: User not found, cannot fetch recommended feeds');
+            print(
+                'FeedController: User not found, cannot fetch recommended feeds');
             throw Exception('User not found');
           }
 
-          print('FeedController: Fetching recommended feeds for user: ${userData.id}');
+          print(
+              'FeedController: Fetching recommended feeds for user: ${userData.id}');
 
           final result = await _feedRepository.getRecommendedFeeds(
             userData.id,
@@ -286,14 +355,16 @@ class FeedController extends BaseController {
             limit: limit,
           );
 
-          print('FeedController: Got result with ${result['feeds']?.length ?? 0} feeds');
+          print(
+              'FeedController: Got result with ${result['feeds']?.length ?? 0} feeds');
 
           // Safely handle the feeds list which might be null
           final feedsList = result['feeds'];
           if (feedsList != null) {
             final newFeeds = (feedsList as List<FeedModel>);
             recommendedFeeds.addAll(newFeeds);
-            print('FeedController: Added ${newFeeds.length} feeds, total: ${recommendedFeeds.length}');
+            print(
+                'FeedController: Added ${newFeeds.length} feeds, total: ${recommendedFeeds.length}');
           }
 
           // Update pagination

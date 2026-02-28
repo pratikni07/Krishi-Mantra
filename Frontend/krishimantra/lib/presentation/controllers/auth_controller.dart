@@ -131,6 +131,11 @@ class AuthController extends GetxController {
 
         // Save token
         await _storage.write(key: 'auth_token', value: token);
+
+        // Save refresh token if provided
+        if (response['refreshToken'] != null) {
+          await _storage.write(key: 'refresh_token', value: response['refreshToken'] as String);
+        }
       }
 
       return result;
@@ -181,6 +186,12 @@ class AuthController extends GetxController {
       user.value = userModel;
       await _userService.saveUser(userModel);
       await _storage.write(key: 'auth_token', value: token);
+
+      // Save refresh token if provided
+      if (response['refreshToken'] != null) {
+        await _storage.write(key: 'refresh_token', value: response['refreshToken'] as String);
+      }
+
       return true;
     } catch (e) {
       Get.snackbar(

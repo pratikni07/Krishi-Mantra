@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/home_localizations.dart';
 import '../../../../core/utils/responsive_utils.dart';
 import '../../../../core/utils/language_helper.dart';
+import '../../../../core/utils/translation_manager.dart';
+import '../../../../data/services/language_service.dart';
 import '../../../../routes/app_routes.dart';
 
 class FeatureHighlights extends StatefulWidget {
@@ -14,6 +17,7 @@ class FeatureHighlights extends StatefulWidget {
 
 class _FeatureHighlightsState extends State<FeatureHighlights>
     with TranslationMixin {
+  String _languageCode = '';
   // Translation keys
   static const String KEY_QUICK_ACCESS = 'quick_access';
   static const String KEY_EXPERT_CHAT = 'expert_chat';
@@ -29,6 +33,25 @@ class _FeatureHighlightsState extends State<FeatureHighlights>
   void initState() {
     super.initState();
     _registerTranslations();
+    _initializeTranslations();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
+  }
+
+  Future<void> _initializeTranslations() async {
+    if (!mounted) return;
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
+  }
+
+  Future<void> _syncLanguageCode() async {
+    final languageService = await LanguageService.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _languageCode = languageService.getLanguageCode();
+    });
   }
 
   void _registerTranslations() {
@@ -50,30 +73,30 @@ class _FeatureHighlightsState extends State<FeatureHighlights>
     final features = [
       _FeatureItem(
         icon: Icons.support_agent_outlined,
-        title: getTranslation(KEY_EXPERT_CHAT),
-        subtitle: getTranslation(KEY_EXPERT_SUBTITLE),
+        title: _tr(KEY_EXPERT_CHAT),
+        subtitle: _tr(KEY_EXPERT_SUBTITLE),
         color: AppColors.green,
         route: AppRoutes.CONSULTATION,
       ),
       _FeatureItem(
         icon: Icons.play_circle_outline,
-        title: getTranslation(KEY_LEARN_VIDEOS),
-        subtitle: getTranslation(KEY_VIDEOS_SUBTITLE),
+        title: _tr(KEY_LEARN_VIDEOS),
+        subtitle: _tr(KEY_VIDEOS_SUBTITLE),
         color: AppColors.orange,
         route: AppRoutes.KRISHI_VIDEOS,
       ),
       _FeatureItem(
         icon: Icons.wb_sunny_outlined,
-        title: getTranslation(KEY_WEATHER),
-        subtitle: getTranslation(KEY_WEATHER_SUBTITLE),
+        title: _tr(KEY_WEATHER),
+        subtitle: _tr(KEY_WEATHER_SUBTITLE),
         color: AppColors.info,
         route: AppRoutes.MAIN,
         arguments: {'tab': 2},
       ),
       _FeatureItem(
         icon: Icons.settings_outlined,
-        title: getTranslation(KEY_SETTINGS),
-        subtitle: getTranslation(KEY_SETTINGS_SUBTITLE),
+        title: _tr(KEY_SETTINGS),
+        subtitle: _tr(KEY_SETTINGS_SUBTITLE),
         color: AppColors.success,
         route: AppRoutes.SETTINGS,
       ),
@@ -89,7 +112,7 @@ class _FeatureHighlightsState extends State<FeatureHighlights>
             bottom: 5,
           ),
           child: Text(
-            getTranslation(KEY_QUICK_ACCESS),
+            _tr(KEY_QUICK_ACCESS),
             style: TextStyle(
               fontSize: AppSizes.fontXL,
               fontWeight: FontWeight.bold,
@@ -99,19 +122,19 @@ class _FeatureHighlightsState extends State<FeatureHighlights>
         ),
         GridView.builder(
           padding: EdgeInsets.symmetric(horizontal: AppSizes.paddingL),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: AppSizes.paddingM,
-              mainAxisSpacing: AppSizes.paddingM,
-              childAspectRatio: 1.4,
-            ),
-            itemCount: features.length,
-            itemBuilder: (context, index) {
-              return _buildFeatureCard(features[index]);
-            },
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: AppSizes.paddingM,
+            mainAxisSpacing: AppSizes.paddingM,
+            childAspectRatio: 1.4,
           ),
+          itemCount: features.length,
+          itemBuilder: (context, index) {
+            return _buildFeatureCard(features[index]);
+          },
+        ),
       ],
     );
   }
@@ -179,6 +202,20 @@ class _FeatureHighlightsState extends State<FeatureHighlights>
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
+    super.dispose();
+  }
+
+  String _tr(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
   }
 }
 

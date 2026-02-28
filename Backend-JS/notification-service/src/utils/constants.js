@@ -123,6 +123,10 @@ const NOTIFICATION_CATEGORIES = {
   MARKETPLACE: 'marketplace',
   CONSULTANT_SERVICE: 'consultant_service',
   MESSAGE: 'message',
+  NEW_POST: 'new_post',
+  NEW_REEL: 'new_reel',
+  FARM_VIDEOS: 'farm_videos',
+  CROP_CARE_AI: 'crop_care_ai',
 };
 
 const NOTIFICATION_EVENTS = {

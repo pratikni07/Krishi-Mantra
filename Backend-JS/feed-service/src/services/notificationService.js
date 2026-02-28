@@ -5,8 +5,8 @@ const rabbitmq = require('../config/rabbitmq');
  */
 const NOTIFICATION_CATEGORIES = {
   NEW_POST: 'new_post',
-  LIKE: 'new_post',
-  COMMENT: 'new_post',
+  LIKE: 'post_engagement',
+  COMMENT: 'post_engagement',
   FOLLOW: 'system',
   SYSTEM: 'system',
 };

@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/models/notification_model.dart';
 import '../../controllers/notification_controller.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
+import '../../widgets/empty_state_widget.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -67,17 +70,23 @@ class _NotificationScreenState extends State<NotificationScreen> {
       ),
       body: Obx(() {
         if (_controller.isLoading && _controller.notifications.isEmpty) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.green),
+          return const LoadingStateWidget(
+            message: 'Loading notifications...',
           );
         }
 
         if (_controller.hasError && _controller.notifications.isEmpty) {
-          return _buildErrorWidget();
+          return const ErrorStateWidget(
+            title: 'Unable to Load Notifications',
+            subtitle: 'The tractor encountered an issue fetching your notifications. Please try again!',
+          );
         }
 
         if (_controller.notifications.isEmpty) {
-          return _buildEmptyWidget();
+          return const EmptyStateWidget(
+            title: 'No Notifications Yet',
+            subtitle: 'The tractor is waiting to deliver your notifications — check back soon! 🔔',
+          );
         }
 
         return RefreshIndicator(

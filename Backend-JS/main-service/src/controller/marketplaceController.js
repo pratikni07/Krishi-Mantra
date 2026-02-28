@@ -1,5 +1,8 @@
+const mongoose = require("mongoose");
 const MarketplaceProduct = require("../model/MarketplaceProduct");
 const User = require("../model/User");
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 // Get all marketplace products (simplified version)
 exports.getAllProducts = async (req, res) => {
@@ -7,7 +10,7 @@ exports.getAllProducts = async (req, res) => {
     const products = await MarketplaceProduct.find()
       .select('title shortDescription priceRange media.url media.type sellerInfo.userName rating tags')
       .sort({ createdAt: -1 });
-    
+
     // Filter to only include images, not videos
     const simplifiedProducts = products.map(product => {
       const imageMedia = product.media.filter(m => m.type === 'image');
@@ -22,7 +25,7 @@ exports.getAllProducts = async (req, res) => {
         tags: product.tags
       };
     });
-    
+
     res.status(200).json({
       success: true,
       count: simplifiedProducts.length,
@@ -39,9 +42,16 @@ exports.getAllProducts = async (req, res) => {
 // Get a single marketplace product by ID (without comments)
 exports.getProductById = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID",
+      });
+    }
+
     const product = await MarketplaceProduct.findById(req.params.id)
       .select('-comments'); // Exclude comments from the response
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -49,10 +59,9 @@ exports.getProductById = async (req, res) => {
       });
     }
 
-    // Increment view count
-    product.views += 1;
-    await product.save();
-    
+    // Increment view count atomically to avoid race conditions
+    await MarketplaceProduct.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
+
     res.status(200).json({
       success: true,
       data: product,
@@ -70,28 +79,28 @@ exports.getProductComments = async (req, res) => {
   try {
     const { id } = req.params;
     const { page = 1, limit = 10 } = req.query;
-    
+
     const product = await MarketplaceProduct.findById(id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
-    
+
     // Calculate pagination
     const startIndex = (parseInt(page) - 1) * parseInt(limit);
     const endIndex = startIndex + parseInt(limit);
-    
+
     // Get total comments count
     const totalComments = product.comments.length;
-    
+
     // Get paginated comments
     const paginatedComments = product.comments
       .sort((a, b) => b.createdAt - a.createdAt) // Sort by most recent
       .slice(startIndex, endIndex);
-    
+
     // Prepare pagination info
     const pagination = {
       total: totalComments,
@@ -100,7 +109,7 @@ exports.getProductComments = async (req, res) => {
       hasPrevPage: parseInt(page) > 1,
       hasNextPage: endIndex < totalComments,
     };
-    
+
     res.status(200).json({
       success: true,
       pagination,
@@ -117,12 +126,12 @@ exports.getProductComments = async (req, res) => {
 // Create a new marketplace product
 exports.createProduct = async (req, res) => {
   try {
-    // if (req.user.accountType !== "marketplace" && req.user.accountType !== "admin") {
-    //   return res.status(403).json({
-    //     success: false,
-    //     message: "You are not authorized to add marketplace products",
-    //   });
-    // }
+    if (req.user.accountType !== "marketplace" && req.user.accountType !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to add marketplace products",
+      });
+    }
 
     // Get user information
     const user = await User.findById(req.body.userId);
@@ -150,7 +159,7 @@ exports.createProduct = async (req, res) => {
 
     const product = new MarketplaceProduct(productData);
     await product.save();
-    
+
     res.status(201).json({
       success: true,
       data: product,
@@ -167,29 +176,29 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const product = await MarketplaceProduct.findById(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
-    
+
     // Check if the user is the seller or an admin
-    // if (product.sellerInfo.userId.toString() !== req.user._id.toString() && 
-    //     req.user.accountType !== "admin") {
-    //   return res.status(403).json({
-    //     success: false,
-    //     message: "You are not authorized to update this product",
-    //   });
-    // }
-    
+    if (product.sellerInfo.userId.toString() !== req.user._id.toString() &&
+      req.user.accountType !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update this product",
+      });
+    }
+
     const updatedProduct = await MarketplaceProduct.findByIdAndUpdate(
       req.params.id,
       req.body,
       { new: true, runValidators: true }
     );
-    
+
     res.status(200).json({
       success: true,
       data: updatedProduct,
@@ -206,25 +215,24 @@ exports.updateProduct = async (req, res) => {
 exports.deleteProduct = async (req, res) => {
   try {
     const product = await MarketplaceProduct.findById(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
-    
+
     // Check if the user is the seller or an admin
-    // if (product.sellerInfo.userId.toString() !== req.user._id.toString() && 
-    //     req.user.accountType !== "admin") {
-    //   return res.status(403).json({
-    //     success: false,
-    //     message: "You are not authorized to delete this product",
-    //   });
-    // }
-    
+    if (product.sellerInfo.userId.toString() !== req.user._id.toString() && req.user.accountType !== "marketplace" || req.user.accountType !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to delete this product",
+      });
+    }
+
     await MarketplaceProduct.findByIdAndDelete(req.params.id);
-    
+
     res.status(200).json({
       success: true,
       message: "Product deleted successfully",
@@ -241,23 +249,23 @@ exports.deleteProduct = async (req, res) => {
 exports.addComment = async (req, res) => {
   try {
     const { text } = req.body;
-    
+
     if (!text) {
       return res.status(400).json({
         success: false,
         message: "Comment text is required",
       });
     }
-    
+
     const product = await MarketplaceProduct.findById(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
-    
+
     // Get user information
     const user = await User.findById(req.body.userId);
     if (!user) {
@@ -266,7 +274,7 @@ exports.addComment = async (req, res) => {
         message: "User not found",
       });
     }
-    
+
     const newComment = {
       user: user._id,
       userName: user.name || `${user.firstName} ${user.lastName}`.trim(),
@@ -274,10 +282,10 @@ exports.addComment = async (req, res) => {
       text,
       replies: []
     };
-    
+
     product.comments.push(newComment);
     await product.save();
-    
+
     res.status(201).json({
       success: true,
       data: newComment,
@@ -295,33 +303,33 @@ exports.addReplyToComment = async (req, res) => {
   try {
     const { productId, commentId } = req.params;
     const { text } = req.body;
-    
+
     if (!text) {
       return res.status(400).json({
         success: false,
         message: "Reply text is required",
       });
     }
-    
+
     const product = await MarketplaceProduct.findById(productId);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
-    
+
     // Find the parent comment
     const parentComment = product.comments.id(commentId);
-    
+
     if (!parentComment) {
       return res.status(404).json({
         success: false,
         message: "Comment not found",
       });
     }
-    
+
     // Get user information
     const user = await User.findById(req.body.userId);
     if (!user) {
@@ -330,18 +338,18 @@ exports.addReplyToComment = async (req, res) => {
         message: "User not found",
       });
     }
-    
+
     const newReply = {
       user: user._id,
       userName: user.name || `${user.firstName} ${user.lastName}`.trim(),
       userProfilePhoto: user.image || "",
       text
     };
-    
+
     // Add reply to the parent comment
     parentComment.replies.push(newReply);
     await product.save();
-    
+
     res.status(201).json({
       success: true,
       data: newReply,
@@ -358,9 +366,9 @@ exports.addReplyToComment = async (req, res) => {
 exports.searchProducts = async (req, res) => {
   try {
     const { keyword, category, minPrice, maxPrice, condition, tags } = req.query;
-    
+
     const query = {};
-    
+
     if (keyword) {
       query.$or = [
         { title: { $regex: keyword, $options: 'i' } },
@@ -368,32 +376,32 @@ exports.searchProducts = async (req, res) => {
         { detailedDescription: { $regex: keyword, $options: 'i' } }
       ];
     }
-    
+
     if (category) {
       query.category = category;
     }
-    
+
     if (minPrice) {
       query['priceRange.min'] = { $gte: parseInt(minPrice) };
     }
-    
+
     if (maxPrice) {
       query['priceRange.max'] = { $lte: parseInt(maxPrice) };
     }
-    
+
     if (condition) {
       query.condition = condition;
     }
-    
+
     if (tags) {
       const tagArray = tags.split(',');
       query.tags = { $in: tagArray };
     }
-    
+
     const products = await MarketplaceProduct.find(query)
       .select('title shortDescription priceRange media.url media.type sellerInfo.userName rating tags')
       .sort({ createdAt: -1 });
-    
+
     // Filter to only include images, not videos
     const simplifiedProducts = products.map(product => {
       const imageMedia = product.media.filter(m => m.type === 'image');
@@ -408,7 +416,7 @@ exports.searchProducts = async (req, res) => {
         tags: product.tags
       };
     });
-    
+
     res.status(200).json({
       success: true,
       count: simplifiedProducts.length,
@@ -428,17 +436,17 @@ exports.getTrendingTags = async (req, res) => {
     // Aggregate to count products by tag
     const tagCounts = await MarketplaceProduct.aggregate([
       { $unwind: "$tags" },
-      { 
-        $group: { 
-          _id: "$tags", 
+      {
+        $group: {
+          _id: "$tags",
           count: { $sum: 1 },
           products: { $push: { id: "$_id", title: "$title" } }
-        } 
+        }
       },
       { $sort: { count: -1 } },
       { $limit: 10 }
     ]);
-    
+
     res.status(200).json({
       success: true,
       count: tagCounts.length,
@@ -460,26 +468,26 @@ exports.getTrendingTags = async (req, res) => {
 exports.updateRating = async (req, res) => {
   try {
     const { rating } = req.body;
-    
+
     if (!rating || rating < 1 || rating > 5) {
       return res.status(400).json({
         success: false,
         message: "Rating must be between 1 and 5",
       });
     }
-    
+
     const product = await MarketplaceProduct.findById(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
-    
+
     product.rating = rating;
     await product.save();
-    
+
     res.status(200).json({
       success: true,
       data: {

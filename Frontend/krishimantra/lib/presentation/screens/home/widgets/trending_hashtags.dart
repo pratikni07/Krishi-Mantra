@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/home_localizations.dart';
 import '../../../../core/utils/responsive_utils.dart';
 import '../../../../core/utils/language_helper.dart';
+import '../../../../core/utils/translation_manager.dart';
+import '../../../../data/services/language_service.dart';
 import '../../../controllers/feed_controller.dart';
 import '../../../widgets/skeleton/skeleton_widgets.dart';
 
@@ -16,6 +19,7 @@ class TrendingHashtags extends StatefulWidget {
 class _TrendingHashtagsState extends State<TrendingHashtags>
     with TranslationMixin {
   final FeedController _feedController = Get.find<FeedController>();
+  String _languageCode = '';
 
   // Translation keys
   static const String KEY_TRENDING_TOPICS = 'trending_topics';
@@ -34,7 +38,26 @@ class _TrendingHashtagsState extends State<TrendingHashtags>
   void initState() {
     super.initState();
     _registerTranslations();
+    _initializeTranslations();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
     _fetchHashtags();
+  }
+
+  Future<void> _initializeTranslations() async {
+    if (!mounted) return;
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
+  }
+
+  Future<void> _syncLanguageCode() async {
+    final languageService = await LanguageService.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _languageCode = languageService.getLanguageCode();
+    });
   }
 
   void _registerTranslations() {
@@ -56,7 +79,8 @@ class _TrendingHashtagsState extends State<TrendingHashtags>
       init: _feedController,
       builder: (controller) {
         // Create a non-reactive copy to avoid RxList issues
-        final hashtags = List<Map<String, dynamic>>.from(controller.trendingHashtags);
+        final hashtags =
+            List<Map<String, dynamic>>.from(controller.trendingHashtags);
 
         if (hashtags.isEmpty && !controller.isLoadingHashtags.value) {
           return const SizedBox.shrink();
@@ -77,7 +101,7 @@ class _TrendingHashtagsState extends State<TrendingHashtags>
                 bottom: AppSizes.paddingS,
               ),
               child: Text(
-                getTranslation(KEY_TRENDING_TOPICS),
+                _tr(KEY_TRENDING_TOPICS),
                 style: TextStyle(
                   fontSize: AppSizes.fontXL,
                   fontWeight: FontWeight.bold,
@@ -120,7 +144,7 @@ class _TrendingHashtagsState extends State<TrendingHashtags>
             bottom: AppSizes.paddingS,
           ),
           child: Text(
-            getTranslation(KEY_TRENDING_TOPICS),
+            _tr(KEY_TRENDING_TOPICS),
             style: TextStyle(
               fontSize: AppSizes.fontXL,
               fontWeight: FontWeight.bold,
@@ -195,5 +219,19 @@ class _TrendingHashtagsState extends State<TrendingHashtags>
       return '${(count / 1000).toStringAsFixed(1)}K';
     }
     return count.toString();
+  }
+
+  @override
+  void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
+    super.dispose();
+  }
+
+  String _tr(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
   }
 }

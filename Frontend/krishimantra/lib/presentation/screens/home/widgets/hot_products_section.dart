@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/home_localizations.dart';
 import '../../../../core/utils/responsive_utils.dart';
 import '../../../../core/utils/language_helper.dart';
+import '../../../../core/utils/translation_manager.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../../data/services/language_service.dart';
 import '../../../../data/repositories/product_repository.dart';
 import '../../../../data/models/product_model.dart';
 import '../../../../routes/app_routes.dart';
@@ -23,6 +26,7 @@ class _HotProductsSectionState extends State<HotProductsSection>
     with TranslationMixin {
   List<ProductModel> _products = [];
   bool _isLoading = true;
+  String _languageCode = '';
 
   // Translation keys
   static const String KEY_HOT_PRODUCTS = 'hot_products';
@@ -33,7 +37,26 @@ class _HotProductsSectionState extends State<HotProductsSection>
   void initState() {
     super.initState();
     _registerTranslations();
+    _initializeTranslations();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
     _fetchProducts();
+  }
+
+  Future<void> _initializeTranslations() async {
+    if (!mounted) return;
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
+  }
+
+  Future<void> _syncLanguageCode() async {
+    final languageService = await LanguageService.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _languageCode = languageService.getLanguageCode();
+    });
   }
 
   void _registerTranslations() {
@@ -86,7 +109,7 @@ class _HotProductsSectionState extends State<HotProductsSection>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                getTranslation(KEY_HOT_PRODUCTS),
+                _tr(KEY_HOT_PRODUCTS),
                 style: TextStyle(
                   fontSize: AppSizes.fontXL,
                   fontWeight: FontWeight.bold,
@@ -98,7 +121,7 @@ class _HotProductsSectionState extends State<HotProductsSection>
                 child: Row(
                   children: [
                     Text(
-                      getTranslation(KEY_VIEW_ALL),
+                      _tr(KEY_VIEW_ALL),
                       style: TextStyle(
                         fontSize: AppSizes.fontM,
                         color: AppColors.green,
@@ -146,7 +169,7 @@ class _HotProductsSectionState extends State<HotProductsSection>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                getTranslation(KEY_HOT_PRODUCTS),
+                _tr(KEY_HOT_PRODUCTS),
                 style: TextStyle(
                   fontSize: AppSizes.fontXL,
                   fontWeight: FontWeight.bold,
@@ -184,7 +207,8 @@ class _HotProductsSectionState extends State<HotProductsSection>
     final String imageUrl = product.image;
     final isNew = index < 2; // Mark first 2 as new
     final cardWidth = ResponsiveUtils.responsive(mobile: 140.0, tablet: 170.0);
-    final imageHeight = ResponsiveUtils.responsive(mobile: 120.0, tablet: 150.0);
+    final imageHeight =
+        ResponsiveUtils.responsive(mobile: 120.0, tablet: 150.0);
 
     return GestureDetector(
       onTap: () {
@@ -252,7 +276,7 @@ class _HotProductsSectionState extends State<HotProductsSection>
                           borderRadius: BorderRadius.circular(AppSizes.radiusS),
                         ),
                         child: Text(
-                          getTranslation(KEY_NEW),
+                          _tr(KEY_NEW),
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: AppSizes.fontXS,
@@ -298,5 +322,19 @@ class _HotProductsSectionState extends State<HotProductsSection>
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
+    super.dispose();
+  }
+
+  String _tr(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
   }
 }

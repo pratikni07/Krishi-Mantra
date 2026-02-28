@@ -13,7 +13,10 @@ const notificationService = require("../services/notificationService");
 const FEED_CACHE_KEY = "feed:";
 const COMMENTS_CACHE_KEY = "comments:";
 const TAG_CACHE_KEY = "tag:";
-const CACHE_DURATION = 3600;
+const CACHE_DURATION = {
+  SHORT: 60, // 1 minute
+  LONG: 3600, // 1 hour
+};
 const RANDOM_FEEDS_CACHE_KEY = "random-feeds:";
 const RECOMMENDED_FEEDS_CACHE_KEY = "recommended-feeds:";
 const USER_INTEREST_CACHE_KEY = "user-interest:";
@@ -118,6 +121,7 @@ class FeedController {
     this.getAllFeedsForAdmin = this.getAllFeedsForAdmin.bind(this);
     this.getUserStats = this.getUserStats.bind(this);
     this.syncInitialInterests = this.syncInitialInterests.bind(this);
+    this.getFallbackFeeds = this.getFallbackFeeds.bind(this);
   }
 
   /**
@@ -753,7 +757,7 @@ class FeedController {
       };
 
       try {
-        await redis.setex(cacheKey, CACHE_DURATION, JSON.stringify(result));
+        await redis.setex(cacheKey, CACHE_DURATION.LONG, JSON.stringify(result));
         await this.manageRandomFeedCache(page);
       } catch (cacheError) {
         console.error("Cache save error:", cacheError);
@@ -881,7 +885,7 @@ class FeedController {
       try {
         await redis.setex(
           `${FEED_CACHE_KEY}${feed._id}`,
-          CACHE_DURATION,
+          CACHE_DURATION.LONG,
           JSON.stringify(feed)
         );
       } catch (redisErr) {
@@ -942,7 +946,7 @@ class FeedController {
         // Cache the feed
         await redis.setex(
           `${FEED_CACHE_KEY}${feedId}`,
-          CACHE_DURATION,
+          CACHE_DURATION.LONG,
           JSON.stringify(feed)
         );
       }
@@ -965,7 +969,7 @@ class FeedController {
           });
 
         // Cache the comments
-        await redis.setex(cacheKey, CACHE_DURATION, JSON.stringify(comments));
+        await redis.setex(cacheKey, CACHE_DURATION.LONG, JSON.stringify(comments));
       }
 
       const totalComments = await Comment.countDocuments({
@@ -1208,7 +1212,7 @@ class FeedController {
       };
 
       // Cache the result
-      await redis.setex(cacheKey, CACHE_DURATION, JSON.stringify(result));
+      await redis.setex(cacheKey, CACHE_DURATION.LONG, JSON.stringify(result));
 
       res.json(result);
     } catch (error) {
@@ -1575,6 +1579,16 @@ class FeedController {
             recommendationStrategy.push("trending-discovery");
           }
 
+          // Fallback: if all feeds have been viewed, show engaging feeds again
+          if (feeds.length === 0) {
+            const { fallbackFeeds, fallbackTotal } =
+              await this.getFallbackFeeds(page, limit, skip);
+            feeds = fallbackFeeds;
+            totalFeeds = fallbackTotal;
+            recommendationType = "revisit";
+            recommendationStrategy.push("fallback-engagement");
+          }
+
           if (shuffle && feeds.length > limit) {
             feeds = this.shuffleAndTrimFeeds(feeds, limit);
           }
@@ -1841,6 +1855,57 @@ class FeedController {
     ]);
 
     return { discoveryFeeds: feeds, discoveryTotal: total };
+  }
+
+  async getFallbackFeeds(page, limit, skip) {
+    const pipeline = [
+      {
+        $addFields: {
+          popularityScore: {
+            $add: [
+              { $ifNull: ["$views.count", 0] },
+              { $multiply: [{ $ifNull: ["$like.count", 0] }, 3] },
+              { $multiply: [{ $ifNull: ["$comment.count", 0] }, 5] },
+            ],
+          },
+          recencyScore: {
+            $divide: [
+              1,
+              {
+                $add: [
+                  1,
+                  { $divide: [{ $subtract: [new Date(), "$date"] }, 86400000] },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          fallbackScore: {
+            $add: [
+              { $multiply: ["$popularityScore", 0.4] },
+              { $multiply: ["$recencyScore", 100 * 0.4] },
+              { $multiply: [{ $rand: {} }, 20 * 0.2] },
+            ],
+          },
+        },
+      },
+      { $sort: { fallbackScore: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const [feeds, total] = await Promise.all([
+      Feed.aggregate([
+        ...pipeline,
+        ...this.getCommonAggregationPipeline(),
+      ]).allowDiskUse(true),
+      Feed.countDocuments({}),
+    ]);
+
+    return { fallbackFeeds: feeds, fallbackTotal: total };
   }
 
   determineRecommendationType(totalFeeds, discoveryFeedsCount, isNewUser) {

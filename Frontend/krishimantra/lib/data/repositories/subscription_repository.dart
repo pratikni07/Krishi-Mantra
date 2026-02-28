@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart' as dio;
 import '../models/subscription_model.dart';
 import '../services/api_service.dart';
 
@@ -18,6 +19,9 @@ class SubscriptionRepository {
 
       return [];
     } catch (e) {
+      if (_isAuthError(e)) {
+        return [];
+      }
       print('Error fetching subscription plans: $e');
       rethrow;
     }
@@ -40,12 +44,11 @@ class SubscriptionRepository {
         };
       }
 
-      return {
-        'subscription': null,
-        'currentPlan': null,
-        'isFreePlan': true,
-      };
+      return _defaultSubscriptionState;
     } catch (e) {
+      if (_isAuthError(e)) {
+        return _defaultSubscriptionState;
+      }
       print('Error fetching current subscription: $e');
       rethrow;
     }
@@ -83,6 +86,29 @@ class SubscriptionRepository {
         'planName': 'KISAN',
       });
     } catch (e) {
+      if (_isAuthError(e)) {
+        return UsageStats.fromJson({
+          'usage': {
+            'aiMessagesUsed': 0,
+            'imageAnalysisUsed': 0,
+            'consultantChatsUsed': 0,
+            'videoConsultationsUsed': 0,
+          },
+          'limits': {
+            'aiMessagesPerDay': 5,
+            'imageAnalysisPerDay': 2,
+            'consultantChatsPerDay': 10,
+            'videoConsultationsPerMonth': 0,
+          },
+          'remaining': {
+            'aiMessages': 5,
+            'imageAnalysis': 2,
+            'consultantChats': 10,
+            'videoConsultations': 0,
+          },
+          'planName': 'KISAN',
+        });
+      }
       print('Error fetching usage stats: $e');
       rethrow;
     }
@@ -273,6 +299,9 @@ class SubscriptionRepository {
 
       return [];
     } catch (e) {
+      if (_isAuthError(e)) {
+        return [];
+      }
       print('Error fetching IoT add-ons: $e');
       rethrow;
     }
@@ -290,6 +319,9 @@ class SubscriptionRepository {
 
       return [];
     } catch (e) {
+      if (_isAuthError(e)) {
+        return [];
+      }
       print('Error fetching user IoT add-ons: $e');
       rethrow;
     }
@@ -426,6 +458,16 @@ class SubscriptionRepository {
       rethrow;
     }
   }
+
+  bool _isAuthError(Object e) {
+    return e is dio.DioException && e.response?.statusCode == 401;
+  }
+
+  Map<String, dynamic> get _defaultSubscriptionState => {
+        'subscription': null,
+        'currentPlan': null,
+        'isFreePlan': true,
+      };
 
   /// Unlink IoT device
   Future<UserIotAddon> unlinkIotDevice({

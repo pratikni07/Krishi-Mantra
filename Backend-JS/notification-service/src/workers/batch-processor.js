@@ -40,7 +40,9 @@ class BatchProcessor {
           channel.ack(msg);
         } catch (error) {
           logger.error('Error processing notification from queue:', error);
-          channel.nack(msg, false, true);
+          // Drop poison messages (e.g., schema validation) to avoid infinite requeue loops.
+          const isValidationError = error?.name === 'ValidationError';
+          channel.nack(msg, false, !isValidationError);
         }
       });
 

@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/responsive_utils.dart';
+import '../../../core/utils/home_localizations.dart';
+import '../../../core/utils/translation_manager.dart';
 import 'widgets/weather_section.dart';
 import '../../widgets/app_header.dart';
 import 'widgets/location_dialog.dart';
@@ -22,6 +24,7 @@ import '../../../core/utils/language_helper.dart';
 
 import '../../controllers/ads_controller.dart';
 import 'widgets/services.dart';
+import 'widgets/farm_measure_banner.dart'; // ConsultationBanner
 import 'widgets/feature_highlights.dart';
 import 'widgets/trending_reels_section.dart';
 import 'widgets/hot_products_section.dart';
@@ -46,7 +49,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   final ScrollController _scrollController = ScrollController();
   bool _showWeather = true;
-  String _location = "Fetching location...";
+  String _location = "";
   String _username = "User";
   double _temperature = 0;
   int _humidity = 0;
@@ -55,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   bool _hasLocationPermission = false;
   bool _isLoadingAds = true;
   bool _isLoadingSlider = true;
+  String _languageCode = '';
   final AdsController _adsController = Get.find<AdsController>();
   List<dynamic> _homeScreenAds = [];
   List<dynamic> _splashAds = [];
@@ -65,7 +69,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   int _currentPage = 0;
   Timer? _timer;
   final FeedController _feedController = Get.find<FeedController>();
-  final SubscriptionController _subscriptionController = Get.find<SubscriptionController>();
+  final SubscriptionController _subscriptionController =
+      Get.find<SubscriptionController>();
   final WeatherService _weatherService = WeatherService();
   Position? _currentPosition;
   List<Map<String, String>> _testimonials = [];
@@ -84,7 +89,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   static const String KEY_TESTIMONIALS = 'testimonials';
   static const String KEY_SHARE_APP = 'share_app';
   static const String KEY_FETCHING_LOCATION = 'fetching_location';
-  static const String KEY_WEATHER_REQUIRES_LOCATION = 'weather_requires_location';
+  static const String KEY_WEATHER_REQUIRES_LOCATION =
+      'weather_requires_location';
   static const String KEY_ALLOW_LOCATION_BTN = 'allow_location_btn';
   static const String KEY_FAILED_TO_LOAD_IMAGE = 'failed_to_load_image';
   static const String KEY_ADVERTISEMENT = 'advertisement';
@@ -93,13 +99,51 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _loadUserData();
     _registerTranslations();
+    _initializeTranslations();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
+    _loadUserData();
     _checkLocationPermission();
     _initializeAds();
     _initializeSlider();
     _feedController.fetchTopFeeds();
     _initializeTestimonials();
+  }
+
+  Future<void> _initializeTranslations() async {
+    if (!mounted) return;
+    setState(() {
+      if (_location.isEmpty) {
+        _location = _tr(KEY_FETCHING_LOCATION);
+      }
+    });
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
+    await _translateTestimonials();
+    if (!mounted) return;
+    setState(() {
+      if (_location.isEmpty || _location == "Fetching location...") {
+        _location = _tr(KEY_FETCHING_LOCATION);
+      }
+    });
+  }
+
+  Future<void> _syncLanguageCode() async {
+    final languageService = await LanguageService.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _languageCode = languageService.getLanguageCode();
+    });
+  }
+
+  String _tr(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
   }
 
   void _registerTranslations() {
@@ -120,7 +164,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
     registerTranslation(KEY_SHARE_APP,
         "Share KrishiMantra with more farmers and enjoy our free services. Let's grow with technology together!");
     registerTranslation(KEY_FETCHING_LOCATION, "Fetching location...");
-    registerTranslation(KEY_WEATHER_REQUIRES_LOCATION, 'Weather data requires location');
+    registerTranslation(
+        KEY_WEATHER_REQUIRES_LOCATION, 'Weather data requires location');
     registerTranslation(KEY_ALLOW_LOCATION_BTN, 'Allow Location');
     registerTranslation(KEY_FAILED_TO_LOAD_IMAGE, 'Failed to load image');
     registerTranslation(KEY_ADVERTISEMENT, 'Advertisement');
@@ -144,8 +189,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   }
 
   Future<void> _initializeTestimonials() async {
-    // Example testimonials - in a real app, these might come from an API
-    _testimonials = [
+    final sourceTestimonials = [
       {
         'name': 'Rajesh Kumar',
         'location': 'Maharashtra',
@@ -166,7 +210,10 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       }
     ];
 
-    // Translate testimonial content
+    // Assign translated testimonials in one update to avoid language flicker
+    _testimonials = sourceTestimonials
+        .map((item) => Map<String, String>.from(item))
+        .toList();
     await _translateTestimonials();
   }
 
@@ -216,8 +263,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) {
-          _showLocationDialog(getTranslation(KEY_LOCATION_DISABLED),
-              getTranslation(KEY_ENABLE_LOCATION));
+          _showLocationDialog(
+              _tr(KEY_LOCATION_DISABLED), _tr(KEY_ENABLE_LOCATION));
         }
         return;
       }
@@ -227,8 +274,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           if (mounted) {
-            _showLocationDialog(getTranslation(KEY_PERMISSION_DENIED),
-                getTranslation(KEY_ALLOW_LOCATION));
+            _showLocationDialog(
+                _tr(KEY_PERMISSION_DENIED), _tr(KEY_ALLOW_LOCATION));
           }
           return;
         }
@@ -236,8 +283,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
 
       if (permission == LocationPermission.deniedForever) {
         if (mounted) {
-          _showLocationDialog(getTranslation(KEY_PERMISSION_DENIED_FOREVER),
-              getTranslation(KEY_GO_TO_SETTINGS));
+          _showLocationDialog(
+              _tr(KEY_PERMISSION_DENIED_FOREVER), _tr(KEY_GO_TO_SETTINGS));
         }
         return;
       }
@@ -247,15 +294,15 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       _fetchLocation();
     } catch (e) {
       if (mounted) {
-        _showLocationDialog(
-            getTranslation(KEY_ERROR_FETCHING_LOCATION), e.toString());
+        _showLocationDialog(_tr(KEY_ERROR_FETCHING_LOCATION), e.toString());
       }
     }
   }
 
   Future<void> _fetchLocation() async {
     if (!_hasLocationPermission) {
-      logger.d('Location permission not granted, skipping fetch', tag: 'HomeScreen');
+      logger.d('Location permission not granted, skipping fetch',
+          tag: 'HomeScreen');
       return;
     }
 
@@ -264,7 +311,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
 
-      logger.d('Got position: ${position.latitude}, ${position.longitude}', tag: 'HomeScreen');
+      logger.d('Got position: ${position.latitude}, ${position.longitude}',
+          tag: 'HomeScreen');
 
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
@@ -300,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       logger.e('Error fetching location', tag: 'HomeScreen', error: e);
       if (mounted) {
         setState(() {
-          _location = getTranslation(KEY_ERROR_FETCHING_LOCATION);
+          _location = _tr(KEY_ERROR_FETCHING_LOCATION);
         });
       }
     }
@@ -308,7 +356,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
 
   Future<void> _fetchWeatherData() async {
     if (_currentPosition == null) {
-      logger.d('_currentPosition is null, skipping weather fetch', tag: 'HomeScreen');
+      logger.d('_currentPosition is null, skipping weather fetch',
+          tag: 'HomeScreen');
       return;
     }
 
@@ -327,7 +376,9 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       final humidity = weatherData['humidity'] ?? 0;
       final cloudiness = weatherData['cloudiness'] ?? 0;
 
-      logger.d('Weather data received: temp=$temp, humidity=$humidity, cloudiness=$cloudiness', tag: 'HomeScreen');
+      logger.d(
+          'Weather data received: temp=$temp, humidity=$humidity, cloudiness=$cloudiness',
+          tag: 'HomeScreen');
 
       setState(() {
         _temperature = temp;
@@ -439,11 +490,13 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                             maxHeight: ResponsiveUtils.hp(70),
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                            borderRadius:
+                                BorderRadius.circular(AppSizes.radiusL),
                             child: Image.network(
                               imageUrl,
                               fit: BoxFit.contain,
-                              loadingBuilder: (context, child, loadingProgress) {
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
                                 if (loadingProgress == null) {
                                   return child;
                                 }
@@ -451,11 +504,14 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                                   height: ResponsiveUtils.hp(25),
                                   child: Center(
                                     child: CircularProgressIndicator(
-                                      value: loadingProgress.expectedTotalBytes !=
-                                              null
-                                          ? loadingProgress.cumulativeBytesLoaded /
-                                              loadingProgress.expectedTotalBytes!
-                                          : null,
+                                      value:
+                                          loadingProgress.expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                              : null,
                                     ),
                                   ),
                                 );
@@ -468,9 +524,10 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(Icons.error,
-                                          size: AppSizes.iconXL, color: AppColors.error),
+                                          size: AppSizes.iconXL,
+                                          color: AppColors.error),
                                       SizedBox(height: AppSizes.paddingS),
-                                      Text(getTranslation(KEY_FAILED_TO_LOAD_IMAGE),
+                                      Text(_tr(KEY_FAILED_TO_LOAD_IMAGE),
                                           style: TextStyle(
                                             color: AppColors.error,
                                             fontSize: AppSizes.fontM,
@@ -527,8 +584,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       builder: (context) => LocationDialog(
         title: title,
         message: message,
-        showSettingsButton:
-            title == getTranslation(KEY_PERMISSION_DENIED_FOREVER),
+        showSettingsButton: title == _tr(KEY_PERMISSION_DENIED_FOREVER),
       ),
     );
   }
@@ -599,6 +655,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
 
   @override
   void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
     _scrollController.dispose();
     _timer?.cancel();
     _pageController.dispose();
@@ -652,10 +710,11 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.location_on, color: Colors.white, size: AppSizes.iconM),
+              Icon(Icons.location_on,
+                  color: Colors.white, size: AppSizes.iconM),
               SizedBox(width: AppSizes.paddingS),
               Text(
-                getTranslation(KEY_WEATHER_REQUIRES_LOCATION),
+                _tr(KEY_WEATHER_REQUIRES_LOCATION),
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: AppSizes.fontL,
@@ -675,7 +734,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
               ),
             ),
             child: Text(
-              getTranslation(KEY_ALLOW_LOCATION_BTN),
+              _tr(KEY_ALLOW_LOCATION_BTN),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: AppSizes.fontM,
@@ -694,10 +753,13 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
 
     // Dynamic sizes using ResponsiveUtils
     final cardPadding = AppSizes.paddingL;
-    final sectionSpacing = ResponsiveUtils.responsive(mobile: 16.0, tablet: 24.0);
+    final sectionSpacing =
+        ResponsiveUtils.responsive(mobile: 16.0, tablet: 24.0);
     final titleFontSize = AppSizes.fontXL;
-    final appBarExpandedHeight = ResponsiveUtils.responsive(mobile: 200.0, tablet: 240.0);
-    final appBarCollapsedHeight = ResponsiveUtils.responsive(mobile: 100.0, tablet: 120.0);
+    final appBarExpandedHeight =
+        ResponsiveUtils.responsive(mobile: 200.0, tablet: 240.0);
+    final appBarCollapsedHeight =
+        ResponsiveUtils.responsive(mobile: 100.0, tablet: 120.0);
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -709,7 +771,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
-              expandedHeight: _showWeather ? appBarExpandedHeight : appBarCollapsedHeight,
+              expandedHeight:
+                  _showWeather ? appBarExpandedHeight : appBarCollapsedHeight,
               floating: false,
               pinned: true,
               backgroundColor: AppColors.green,
@@ -755,14 +818,24 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
               ),
             ),
 
+            // Consultation Banner
+            SliverToBoxAdapter(
+              child: Container(
+                margin: EdgeInsets.only(top: sectionSpacing * 0.5),
+                child: const ConsultationBanner(),
+              ),
+            ),
+
             // Services Section
             SliverToBoxAdapter(
               child: Column(
                 children: [
                   Container(
-                    margin: EdgeInsets.only(top: sectionSpacing * 0.5, bottom: sectionSpacing * 0.25),
+                    margin: EdgeInsets.only(
+                        top: sectionSpacing * 0.5,
+                        bottom: sectionSpacing * 0.25),
                     child: Text(
-                      getTranslation(KEY_SERVICES),
+                      _tr(KEY_SERVICES),
                       style: TextStyle(
                         color: AppColors.green,
                         fontSize: titleFontSize,
@@ -772,7 +845,10 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                     ),
                   ),
                   Container(
-                    margin: EdgeInsets.only(left: cardPadding, right: cardPadding, bottom: sectionSpacing * 0.25),
+                    margin: EdgeInsets.only(
+                        left: cardPadding,
+                        right: cardPadding,
+                        bottom: sectionSpacing * 0.25),
                     child: Services(),
                   ),
                 ],
@@ -830,7 +906,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                             if (loadingProgress == null) return child;
                             return Center(
                               child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
+                                value: loadingProgress.expectedTotalBytes !=
+                                        null
                                     ? loadingProgress.cumulativeBytesLoaded /
                                         loadingProgress.expectedTotalBytes!
                                     : null,
@@ -838,17 +915,20 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                             );
                           },
                           errorBuilder: (context, error, stackTrace) {
-                            logger.e('Error loading home screen ad', tag: 'HomeScreen', error: error);
+                            logger.e('Error loading home screen ad',
+                                tag: 'HomeScreen', error: error);
                             return Container(
                               height: ResponsiveUtils.hp(25),
                               color: AppColors.shimmerBase,
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.error, color: AppColors.error, size: AppSizes.iconM),
+                                  Icon(Icons.error,
+                                      color: AppColors.error,
+                                      size: AppSizes.iconM),
                                   SizedBox(height: AppSizes.paddingS),
                                   Text(
-                                    getTranslation(KEY_ADVERTISEMENT),
+                                    _tr(KEY_ADVERTISEMENT),
                                     style: TextStyle(
                                       color: AppColors.textGrey,
                                       fontSize: AppSizes.fontM,
@@ -876,7 +956,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                       }
 
                       // Create a non-reactive copy to avoid RxList issues
-                      final topFeedsList = List<FeedModel>.from(controller.topFeeds);
+                      final topFeedsList =
+                          List<FeedModel>.from(controller.topFeeds);
 
                       return Column(
                         children: topFeedsList
@@ -906,7 +987,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                     margin: EdgeInsets.only(
                         top: sectionSpacing, bottom: sectionSpacing * 0.5),
                     child: Text(
-                      getTranslation(KEY_TESTIMONIALS),
+                      _tr(KEY_TESTIMONIALS),
                       style: TextStyle(
                         color: AppColors.green,
                         fontSize: titleFontSize,
@@ -916,7 +997,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                     ),
                   ),
                   Container(
-                    height: ResponsiveUtils.responsive(mobile: 160.0, tablet: 200.0),
+                    height: ResponsiveUtils.responsive(
+                        mobile: 160.0, tablet: 200.0),
                     margin: EdgeInsets.only(bottom: sectionSpacing * 0.5),
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
@@ -944,7 +1026,7 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                   border: Border.all(color: AppColors.green, width: 1.0),
                 ),
                 child: Text(
-                  getTranslation(KEY_SHARE_APP),
+                  _tr(KEY_SHARE_APP),
                   style: TextStyle(
                     color: AppColors.green,
                     fontSize: AppSizes.fontL,
@@ -966,7 +1048,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
   }
 
   Widget _buildCarouselSlider() {
-    final carouselHeight = ResponsiveUtils.responsive(mobile: 200.0, tablet: 280.0);
+    final carouselHeight =
+        ResponsiveUtils.responsive(mobile: 200.0, tablet: 280.0);
 
     // Show skeleton while loading
     if (_isLoadingSlider && _homeScreenSlider.isEmpty) {
@@ -1026,7 +1109,8 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
                         color: AppColors.shimmerBase,
-                        child: Icon(Icons.error, color: AppColors.error, size: AppSizes.iconM),
+                        child: Icon(Icons.error,
+                            color: AppColors.error, size: AppSizes.iconM),
                       );
                     },
                   ),

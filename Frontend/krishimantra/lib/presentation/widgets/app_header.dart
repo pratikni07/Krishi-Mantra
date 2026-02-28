@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/constants/colors.dart';
+import '../../core/utils/home_localizations.dart';
+import '../../core/utils/translation_manager.dart';
 import '../../data/services/UserService.dart';
 import '../../data/services/language_service.dart';
 import '../controllers/notification_controller.dart';
@@ -14,32 +16,26 @@ class AppHeader extends StatefulWidget {
 
 class _AppHeaderState extends State<AppHeader> {
   String username = "User"; // Default value
-  String helloText = "Hello";
-  String welcomeText = "Welcome";
-  late LanguageService _languageService;
+  String _languageCode = '';
 
   @override
   void initState() {
     super.initState();
     _loadUsername();
-    _initializeLanguage();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
   }
 
-  Future<void> _initializeLanguage() async {
-    _languageService = await LanguageService.getInstance();
-    await _updateTranslations();
-  }
-
-  Future<void> _updateTranslations() async {
-    final translations = await Future.wait([
-      _languageService.translate('Hello'),
-      _languageService.translate('Welcome'),
-    ]);
-
+  Future<void> _syncLanguageCode() async {
+    final languageService = await LanguageService.getInstance();
+    if (!mounted) return;
     setState(() {
-      helloText = translations[0];
-      welcomeText = translations[1];
+      _languageCode = languageService.getLanguageCode();
     });
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
   }
 
   Future<void> _loadUsername() async {
@@ -49,6 +45,13 @@ class _AppHeaderState extends State<AppHeader> {
         username = fetchedUsername;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
+    super.dispose();
   }
 
   @override
@@ -69,7 +72,7 @@ class _AppHeaderState extends State<AppHeader> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  helloText,
+                  _t('hello'),
                   style: TextStyle(
                     color: AppColors.white,
                     fontSize: 19,
@@ -77,7 +80,7 @@ class _AppHeaderState extends State<AppHeader> {
                   ),
                 ),
                 Text(
-                  '$welcomeText, $username',
+                  _languageCode.isEmpty ? '' : '${_t('welcome')}, $username',
                   style: TextStyle(
                     color: AppColors.white,
                     fontSize: 16,
@@ -92,7 +95,8 @@ class _AppHeaderState extends State<AppHeader> {
           children: [
             GestureDetector(
               onTap: () => Get.toNamed('/chat'),
-              child: Icon(Icons.message_outlined, color: AppColors.white, size: 28),
+              child: Icon(Icons.message_outlined,
+                  color: AppColors.white, size: 28),
             ),
             SizedBox(width: 19),
             GestureDetector(
@@ -147,5 +151,12 @@ class _AppHeaderState extends State<AppHeader> {
         );
       },
     );
+  }
+
+  String _t(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
   }
 }

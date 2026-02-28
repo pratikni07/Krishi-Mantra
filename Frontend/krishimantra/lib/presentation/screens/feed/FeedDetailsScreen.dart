@@ -18,6 +18,8 @@ import '../../controllers/feed_controller.dart';
 import '../../widgets/video_player_widget.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../utils/image_utils.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
 
 class FeedDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> feed;
@@ -253,7 +255,9 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
   Widget _buildCommentsSection() {
     return Obx(() {
       if (_feedController.isLoadingComments.value && _feedController.comments.isEmpty) {
-        return const Center(child: CircularProgressIndicator(color: AppColors.green));
+        return const LoadingStateWidget(
+          message: 'Loading comments...',
+        );
       }
 
       // Only show error screen for actual errors, not for the "no comments" case
@@ -268,15 +272,9 @@ class _FeedDetailsScreenState extends State<FeedDetailsScreen> {
           );
         }
         
-        return ErrorHandler.getErrorWidget(
-          errorType: _feedController.errorType ?? ErrorType.unknown,
-          onRetry: () {
-            final feedId = widget.feed['id'] ?? widget.feed['_id'];
-            if (feedId != null) {
-              _feedController.getComments(feedId, refresh: true);
-            }
-          },
-          showRetry: true,
+        return const ErrorStateWidget(
+          title: 'Unable to Load Comments',
+          subtitle: 'The tractor ran into trouble fetching comments. Please try again!',
         );
       }
 

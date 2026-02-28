@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/home_localizations.dart';
 import '../../../../core/utils/responsive_utils.dart';
 import '../../../../core/utils/language_helper.dart';
+import '../../../../core/utils/translation_manager.dart';
 import '../../../../data/repositories/scheme_repository.dart';
 import '../../../../data/models/scheme_model.dart';
 import '../../../../data/services/language_service.dart';
@@ -20,6 +22,7 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
     with TranslationMixin {
   List<SchemeModel> _schemes = [];
   bool _isLoading = true;
+  String _languageCode = '';
 
   // Translation keys
   static const String KEY_LATEST_SCHEMES = 'latest_schemes';
@@ -36,7 +39,27 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
   void initState() {
     super.initState();
     _registerTranslations();
+    _initializeTranslations();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
     _fetchSchemes();
+  }
+
+  Future<void> _initializeTranslations() async {
+    if (!mounted) return;
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
+    await _fetchSchemes();
+  }
+
+  Future<void> _syncLanguageCode() async {
+    final languageService = await LanguageService.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _languageCode = languageService.getLanguageCode();
+    });
   }
 
   void _registerTranslations() {
@@ -57,7 +80,8 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
       final schemes = await schemeRepository.getAllSchemes();
 
       // Translate schemes
-      final translatedSchemes = await _translateSchemes(schemes.take(4).toList());
+      final translatedSchemes =
+          await _translateSchemes(schemes.take(4).toList());
 
       if (mounted) {
         setState(() {
@@ -87,20 +111,19 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
     for (final scheme in schemes) {
       try {
         final translatedTitle = await languageService.translate(scheme.title);
-        final translatedCategory = await languageService.translate(scheme.category);
-        final translatedDescription = await languageService.translate(scheme.description);
+        final translatedCategory =
+            await languageService.translate(scheme.category);
+        final translatedDescription =
+            await languageService.translate(scheme.description);
         final translatedStatus = await languageService.translate(scheme.status);
 
         // Translate lists
         final translatedEligibility = await Future.wait(
-          scheme.eligibility.map((e) => languageService.translate(e))
-        );
+            scheme.eligibility.map((e) => languageService.translate(e)));
         final translatedBenefits = await Future.wait(
-          scheme.benefits.map((b) => languageService.translate(b))
-        );
+            scheme.benefits.map((b) => languageService.translate(b)));
         final translatedDocuments = await Future.wait(
-          scheme.documentRequired.map((d) => languageService.translate(d))
-        );
+            scheme.documentRequired.map((d) => languageService.translate(d)));
 
         translated.add(SchemeModel(
           id: scheme.id,
@@ -147,7 +170,7 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                getTranslation(KEY_LATEST_SCHEMES),
+                _tr(KEY_LATEST_SCHEMES),
                 style: TextStyle(
                   fontSize: AppSizes.fontXL,
                   fontWeight: FontWeight.bold,
@@ -159,7 +182,7 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
                 child: Row(
                   children: [
                     Text(
-                      getTranslation(KEY_VIEW_ALL),
+                      _tr(KEY_VIEW_ALL),
                       style: TextStyle(
                         fontSize: AppSizes.fontM,
                         color: AppColors.green,
@@ -205,7 +228,7 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                getTranslation(KEY_LATEST_SCHEMES),
+                _tr(KEY_LATEST_SCHEMES),
                 style: TextStyle(
                   fontSize: AppSizes.fontXL,
                   fontWeight: FontWeight.bold,
@@ -234,6 +257,13 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
+    super.dispose();
   }
 
   Widget _buildSchemeCard(SchemeModel scheme) {
@@ -307,7 +337,7 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
                         ),
                         SizedBox(width: 4),
                         Text(
-                          getTranslation(KEY_ACTIVE),
+                          _tr(KEY_ACTIVE),
                           style: TextStyle(
                             fontSize: AppSizes.fontXS,
                             color: AppColors.success,
@@ -347,7 +377,7 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  getTranslation(KEY_LEARN_MORE),
+                  _tr(KEY_LEARN_MORE),
                   style: TextStyle(
                     fontSize: AppSizes.fontS,
                     color: AppColors.green,
@@ -427,22 +457,23 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
                       ),
                     ),
                     SizedBox(height: AppSizes.paddingL),
-                    _buildDetailSection(getTranslation(KEY_DESCRIPTION), scheme.description),
+                    _buildDetailSection(
+                        _tr(KEY_DESCRIPTION), scheme.description),
                     if (scheme.eligibility.isNotEmpty)
                       _buildDetailSection(
-                        getTranslation(KEY_ELIGIBILITY),
+                        _tr(KEY_ELIGIBILITY),
                         '',
                         bulletPoints: scheme.eligibility,
                       ),
                     if (scheme.benefits.isNotEmpty)
                       _buildDetailSection(
-                        getTranslation(KEY_BENEFITS),
+                        _tr(KEY_BENEFITS),
                         '',
                         bulletPoints: scheme.benefits,
                       ),
                     if (scheme.documentRequired.isNotEmpty)
                       _buildDetailSection(
-                        getTranslation(KEY_DOCUMENTS),
+                        _tr(KEY_DOCUMENTS),
                         '',
                         bulletPoints: scheme.documentRequired,
                       ),
@@ -453,13 +484,15 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
                         onPressed: () => Get.back(),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.green,
-                          padding: EdgeInsets.symmetric(vertical: AppSizes.paddingM),
+                          padding:
+                              EdgeInsets.symmetric(vertical: AppSizes.paddingM),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppSizes.radiusM),
+                            borderRadius:
+                                BorderRadius.circular(AppSizes.radiusM),
                           ),
                         ),
                         child: Text(
-                          getTranslation(KEY_CLOSE),
+                          _tr(KEY_CLOSE),
                           style: TextStyle(
                             color: AppColors.white,
                             fontSize: AppSizes.fontM,
@@ -533,5 +566,12 @@ class _LatestSchemesSectionState extends State<LatestSchemesSection>
         SizedBox(height: AppSizes.paddingM),
       ],
     );
+  }
+
+  String _tr(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
   }
 }

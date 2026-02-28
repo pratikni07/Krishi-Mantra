@@ -44,7 +44,8 @@ class NotificationController extends BaseController {
   /// Setup listener for real-time notifications from WebSocket
   void _setupNotificationListener() {
     // Listen to the socket notification stream
-    _notificationSubscription = _socketService.notificationStream.listen((data) {
+    _notificationSubscription =
+        _socketService.notificationStream.listen((data) {
       _handleNewNotification(data);
     });
   }
@@ -101,7 +102,8 @@ class NotificationController extends BaseController {
         limit: limit,
       );
 
-      final newNotifications = result['notifications'] as List<NotificationModel>;
+      final newNotifications =
+          result['notifications'] as List<NotificationModel>;
       notifications.addAll(newNotifications);
 
       final pagination = result['pagination'] as Map<String, dynamic>;
@@ -220,15 +222,20 @@ class NotificationController extends BaseController {
 
   /// Handle notification tap
   void _onNotificationTap(NotificationModel notification) {
+    final notificationId = notification.id;
+
     // Mark as read first
-    if (notification.id != null) {
-      markAsRead(notification.id!);
+    if (notificationId != null) {
+      markAsRead(notificationId);
 
       // Track notification click engagement
       _engagementService.trackNotificationClick(
-        notification.id!,
+        notificationId,
         notification.type,
       );
+
+      // Track click interaction in notification-service
+      _trackInteraction(notificationId, action: 'clicked');
     }
 
     // Navigate based on notification data
@@ -249,6 +256,22 @@ class NotificationController extends BaseController {
   /// Navigate to the appropriate screen based on notification
   void navigateToNotification(NotificationModel notification) {
     _onNotificationTap(notification);
+  }
+
+  Future<void> _trackInteraction(String notificationId,
+      {String action = 'clicked'}) async {
+    try {
+      final userData = await _userService.getUser();
+      if (userData == null) return;
+
+      await _notificationRepository.trackInteraction(
+        userData.id,
+        notificationId,
+        action: action,
+      );
+    } catch (_) {
+      // Interaction tracking should never block the user flow.
+    }
   }
 
   /// Update unread count

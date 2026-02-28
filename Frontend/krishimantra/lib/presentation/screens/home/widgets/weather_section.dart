@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/home_localizations.dart';
+import '../../../../core/utils/translation_manager.dart';
 import '../../weather/WeatherScreen.dart';
 import 'weather_item.dart';
 import 'package:get/get.dart';
 import '../../../../data/services/language_service.dart';
-import 'package:geolocator/geolocator.dart';
-import '../widgets/location_dialog.dart';
 
 class WeatherSection extends StatefulWidget {
   final double statusBarHeight;
@@ -32,38 +32,26 @@ class WeatherSection extends StatefulWidget {
 }
 
 class _WeatherSectionState extends State<WeatherSection> {
-  // Translatable text
-  String temperatureText = "Temperature";
-  String humidityText = "Humidity";
-  String cloudsText = "Clouds";
-  String allowLocationText = "Allow Location";
-  bool _initialized = false;
+  String _languageCode = '';
 
   @override
   void initState() {
     super.initState();
-    _initializeTranslations();
+    _syncLanguageCode();
+    TranslationManager.instance.addLanguageChangeListener(_onLanguageChanged);
   }
 
-  Future<void> _initializeTranslations() async {
+  Future<void> _syncLanguageCode() async {
     final languageService = await LanguageService.getInstance();
-    
-    final translations = await Future.wait([
-      languageService.translate('Temperature'),
-      languageService.translate('Humidity'),
-      languageService.translate('Clouds'),
-      languageService.translate('Allow Location'),
-    ]);
-    
     if (mounted) {
       setState(() {
-        temperatureText = translations[0];
-        humidityText = translations[1];
-        cloudsText = translations[2];
-        allowLocationText = translations[3];
-        _initialized = true;
+        _languageCode = languageService.getLanguageCode();
       });
     }
+  }
+
+  Future<void> _onLanguageChanged() async {
+    await _syncLanguageCode();
   }
 
   @override
@@ -84,7 +72,7 @@ class _WeatherSectionState extends State<WeatherSection> {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'Weather data requires location',
+                  _t('weather_requires_location'),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -98,13 +86,14 @@ class _WeatherSectionState extends State<WeatherSection> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: AppColors.green,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
               child: Text(
-                allowLocationText,
+                _t('allow_location'),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -112,7 +101,7 @@ class _WeatherSectionState extends State<WeatherSection> {
         ),
       );
     }
-    
+
     return Container(
       padding: EdgeInsets.only(top: widget.statusBarHeight + 60),
       child: Row(
@@ -122,19 +111,19 @@ class _WeatherSectionState extends State<WeatherSection> {
             context,
             Icons.thermostat,
             '${widget.temperature}°C',
-            temperatureText,
+            _t('temperature'),
           ),
           _buildWeatherItem(
             context,
             Icons.water_drop,
             '${widget.humidity}%',
-            humidityText,
+            _t('humidity'),
           ),
           _buildWeatherItem(
             context,
             Icons.cloud,
             '${widget.cloudiness}%',
-            cloudsText,
+            _t('clouds'),
           ),
         ],
       ),
@@ -149,7 +138,7 @@ class _WeatherSectionState extends State<WeatherSection> {
   ) {
     // Format temperature to show only whole number
     String displayValue = value;
-    if (label == temperatureText) {
+    if (label == _t('temperature')) {
       double temp = double.tryParse(value.replaceAll('°C', '')) ?? 0;
       displayValue = '${temp.round()}°C';
     }
@@ -185,5 +174,19 @@ class _WeatherSectionState extends State<WeatherSection> {
         ),
       ),
     );
+  }
+
+  String _t(String key) {
+    if (_languageCode.isEmpty) {
+      return '';
+    }
+    return HomeLocalizations.text(key, _languageCode);
+  }
+
+  @override
+  void dispose() {
+    TranslationManager.instance
+        .removeLanguageChangeListener(_onLanguageChanged);
+    super.dispose();
   }
 }

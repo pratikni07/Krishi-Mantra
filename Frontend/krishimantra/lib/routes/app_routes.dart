@@ -25,7 +25,9 @@ import '../presentation/screens/marketplace/marketplace_screen.dart';
 import '../presentation/screens/marketplace/add_product_screen.dart';
 import '../presentation/screens/notification/notification_screen.dart';
 import '../presentation/screens/subscription/subscription_plans_screen.dart';
+import '../presentation/screens/subscription/payment_history_screen.dart';
 import '../presentation/screens/iot/device_registration_screen.dart';
+import '../presentation/screens/farm_measurement/farm_measurement_screen.dart';
 
 class AppRoutes {
   static const String SPLASH = '/splash';
@@ -65,6 +67,9 @@ class AppRoutes {
 
   // IoT Device Registration routes
   static const String DEVICE_REGISTRATION = '/device-registration';
+
+  // Farm Measurement route
+  static const String FARM_MEASUREMENT = '/farm-measurement';
 
   static final routes = [
     GetPage(name: SPLASH, page: () => SplashScreen()),
@@ -114,5 +119,11 @@ class AppRoutes {
     // Subscription routes
     GetPage(
         name: SUBSCRIPTION_PLANS, page: () => const SubscriptionPlansScreen()),
+    GetPage(
+        name: PAYMENT_HISTORY, page: () => const PaymentHistoryScreen()),
+
+    // Farm Measurement route
+    GetPage(
+        name: FARM_MEASUREMENT, page: () => const FarmMeasurementScreen()),
   ];
 }

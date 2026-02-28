@@ -269,14 +269,10 @@ exports.markOTPSent = asyncHandler(async (req, res) => {
 exports.verifyOTP = asyncHandler(async (req, res) => {
   const { phoneNo, otp } = req.body;
 
-  // Debug logging
-  console.log('=== VERIFY OTP DEBUG ===');
-  console.log('req.body:', JSON.stringify(req.body));
-  console.log('phoneNo:', phoneNo, 'type:', typeof phoneNo);
-  console.log('otp:', otp, 'type:', typeof otp);
+
 
   if (!phoneNo || !otp) {
-    console.log('Missing phoneNo or otp');
+
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
       message: 'Phone number and OTP are required',
@@ -291,10 +287,10 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
   const recentOtp = await WhatsAppOTP.findOne(query)
     .sort({ createdAt: -1 });
 
-  console.log('Found OTP in DB:', recentOtp ? { otp: recentOtp.otp, isSent: recentOtp.isSent, isVerified: recentOtp.isVerified } : 'null');
+
 
   if (!recentOtp) {
-    console.log('No OTP found for phoneNo:', phoneNo);
+
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
       message: 'No OTP found. Please request a new one.',

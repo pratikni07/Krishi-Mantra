@@ -8,6 +8,9 @@ import '../../../data/services/language_service.dart';
 import '../../controllers/scheme_controller.dart';
 import '../../widgets/skeleton/skeleton_widgets.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../widgets/empty_state_widget.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
 
 class GovSchemesScreen extends StatefulWidget {
   const GovSchemesScreen({Key? key}) : super(key: key);
@@ -137,17 +140,16 @@ class _GovSchemesScreenState extends State<GovSchemesScreen>
       ),
       body: Obx(() {
         if (controller.isLoading.value) {
-          return ListView.builder(
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 5,
-            itemBuilder: (context, index) {
-              return const SkeletonSchemeListItem();
-            },
+          return const LoadingStateWidget(
+            message: 'Loading government schemes...',
           );
         }
 
         if (controller.error.isNotEmpty) {
-          return _buildErrorWidget();
+          return const ErrorStateWidget(
+            title: 'Unable to Load Schemes',
+            subtitle: 'The tractor hit a bump while fetching schemes. Please check your connection and try again! 🌾',
+          );
         }
 
         return Column(
@@ -291,6 +293,13 @@ class _GovSchemesScreenState extends State<GovSchemesScreen>
     final iconSize = isSmallScreen ? 14.0 : 16.0;
     final spacingSmall = isSmallScreen ? 6.0 : 8.0;
     final spacingMedium = isSmallScreen ? 8.0 : 12.0;
+
+    if (schemes.isEmpty) {
+      return EmptyStateWidget(
+        title: 'No Schemes Available',
+        subtitle: 'Our tractor is plowing through the fields to find new government schemes for you! 🌾',
+      );
+    }
 
     return ListView.builder(
       padding: EdgeInsets.all(horizontalPadding),

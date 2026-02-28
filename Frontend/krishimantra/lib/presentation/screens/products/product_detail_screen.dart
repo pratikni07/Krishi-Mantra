@@ -4,6 +4,9 @@ import '../../../core/constants/colors.dart';
 import '../../../core/utils/responsive_utils.dart';
 import '../../controllers/product_controller.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../widgets/loading_state_widget.dart';
+import '../../widgets/error_state_widget.dart';
+import '../../widgets/empty_state_widget.dart';
 
 class ProductDetailScreen extends GetView<ProductController> {
   const ProductDetailScreen({Key? key}) : super(key: key);
@@ -25,30 +28,23 @@ class ProductDetailScreen extends GetView<ProductController> {
       ),
       body: Obx(() {
         if (controller.isLoading.value) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingStateWidget(
+            message: 'Loading product details...',
+          );
         }
 
         if (controller.error.isNotEmpty) {
-          return ErrorHandler.getErrorWidget(
-            errorType: ErrorType.unknown,
-            onRetry: () {
-              if (controller.selectedProduct.value != null) {
-                controller.fetchProductById(controller.selectedProduct.value!.id);
-              } else {
-                Get.back();
-              }
-            },
-            showRetry: true,
+          return const ErrorStateWidget(
+            title: 'Unable to Load Product',
+            subtitle: 'The tractor had trouble fetching this product. Please try again! 🌱',
           );
         }
 
         final product = controller.selectedProduct.value;
         if (product == null) {
-          return Center(
-            child: Text(
-              'No product selected',
-              style: TextStyle(fontSize: AppSizes.fontM),
-            ),
+          return const EmptyStateWidget(
+            title: 'No Product Selected',
+            subtitle: 'The tractor is looking for this product in the fields! 🚜',
           );
         }
 

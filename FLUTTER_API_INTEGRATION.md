@@ -263,7 +263,7 @@ The base URL is configured in `lib/core/config/app_config.dart`:
 
 **Development:**
 ```dart
-'http://10.33.209.39:3001'
+'http://192.168.1.46:3001'
 ```
 
 **Production:**
@@ -275,10 +275,10 @@ The base URL is configured in `lib/core/config/app_config.dart`:
 
 With base URL, the complete endpoints are:
 
-- `http://10.33.209.39:3001/api/engagement/sessions/start`
-- `http://10.33.209.39:3001/api/engagement/sessions/end`
-- `http://10.33.209.39:3001/api/engagement/sessions/heartbeat`
-- `http://10.33.209.39:3001/api/engagement/events/batch`
+- `http://192.168.1.46:3001/api/engagement/sessions/start`
+- `http://192.168.1.46:3001/api/engagement/sessions/end`
+- `http://192.168.1.46:3001/api/engagement/sessions/heartbeat`
+- `http://192.168.1.46:3001/api/engagement/events/batch`
 
 ## API Service Integration
 

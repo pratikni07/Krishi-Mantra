@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../data/services/language_service.dart';
@@ -116,6 +117,8 @@ class LanguageHelper {
 mixin TranslationMixin<T extends StatefulWidget> on State<T> {
   late LanguageService _languageService;
   bool _isTranslating = false;
+  final Completer<void> _languageReadyCompleter = Completer<void>();
+  Completer<void>? _translationCycleCompleter;
 
   // Store all text that needs translation
   final Map<String, String> _translations = {};
@@ -129,6 +132,9 @@ mixin TranslationMixin<T extends StatefulWidget> on State<T> {
   /// Initialize the language service
   Future<void> _initializeLanguage() async {
     _languageService = await LanguageService.getInstance();
+    if (!_languageReadyCompleter.isCompleted) {
+      _languageReadyCompleter.complete();
+    }
     await updateTranslations();
   }
 
@@ -144,8 +150,17 @@ mixin TranslationMixin<T extends StatefulWidget> on State<T> {
 
   /// Update all translations
   Future<void> updateTranslations() async {
-    if (_isTranslating) return;
+    if (!_languageReadyCompleter.isCompleted) {
+      await _languageReadyCompleter.future;
+    }
+
+    if (_isTranslating) {
+      await _translationCycleCompleter?.future;
+      return;
+    }
+
     _isTranslating = true;
+    _translationCycleCompleter = Completer<void>();
 
     try {
       final entries = _translations.entries.toList();
@@ -165,6 +180,8 @@ mixin TranslationMixin<T extends StatefulWidget> on State<T> {
       }
     } finally {
       _isTranslating = false;
+      _translationCycleCompleter?.complete();
+      _translationCycleCompleter = null;
     }
   }
 

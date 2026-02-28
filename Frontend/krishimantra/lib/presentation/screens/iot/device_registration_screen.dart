@@ -57,38 +57,37 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
   }
 
   Future<void> _initializeLanguage() async {
-    final translations = await _languageService.getTranslations([
-      'register_interest',
-      'full_name',
-      'phone_number',
-      'email_optional',
-      'address',
-      'submit',
-      'required_field',
-      'invalid_phone',
-      'invalid_email',
-      'success_message',
-      'error_message',
-      'key_features',
-      'what_farmers_say',
+    final results = await Future.wait([
+      _languageService.translate('Register Your Interest'),
+      _languageService.translate('Full Name'),
+      _languageService.translate('Phone Number'),
+      _languageService.translate('Email (Optional)'),
+      _languageService.translate('Address'),
+      _languageService.translate('Register Interest'),
+      _languageService.translate('This field is required'),
+      _languageService.translate('Please enter a valid 10-digit phone number'),
+      _languageService.translate('Please enter a valid email'),
+      _languageService.translate('Registration submitted successfully!'),
+      _languageService.translate('Failed to submit registration. Please try again.'),
+      _languageService.translate('Key Features'),
+      _languageService.translate('What Farmers Say'),
     ]);
 
     if (mounted) {
       setState(() {
-        registerText = translations['register_interest'] ?? registerText;
-        nameLabel = translations['full_name'] ?? nameLabel;
-        phoneLabel = translations['phone_number'] ?? phoneLabel;
-        emailLabel = translations['email_optional'] ?? emailLabel;
-        addressLabel = translations['address'] ?? addressLabel;
-        submitButtonText = translations['submit'] ?? submitButtonText;
-        requiredFieldText = translations['required_field'] ?? requiredFieldText;
-        invalidPhoneText = translations['invalid_phone'] ?? invalidPhoneText;
-        invalidEmailText = translations['invalid_email'] ?? invalidEmailText;
-        successMessageText =
-            translations['success_message'] ?? successMessageText;
-        errorMessageText = translations['error_message'] ?? errorMessageText;
-        featuresText = translations['key_features'] ?? featuresText;
-        testimonialsText = translations['what_farmers_say'] ?? testimonialsText;
+        registerText = results[0];
+        nameLabel = results[1];
+        phoneLabel = results[2];
+        emailLabel = results[3];
+        addressLabel = results[4];
+        submitButtonText = results[5];
+        requiredFieldText = results[6];
+        invalidPhoneText = results[7];
+        invalidEmailText = results[8];
+        successMessageText = results[9];
+        errorMessageText = results[10];
+        featuresText = results[11];
+        testimonialsText = results[12];
       });
     }
   }
@@ -200,7 +199,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.green,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -232,7 +231,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.secondary],
+          colors: [AppColors.green, AppColors.lightGreen],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -294,9 +293,9 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
       margin: EdgeInsets.all(AppSizes.paddingL),
       padding: EdgeInsets.all(AppSizes.paddingL),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.borderLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,7 +305,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: AppColors.textDark,
             ),
           ),
           const SizedBox(height: 16),
@@ -317,7 +316,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
                   children: [
                     const Icon(
                       Icons.check_circle,
-                      color: AppColors.primary,
+                      color: AppColors.green,
                       size: 20,
                     ),
                     const SizedBox(width: 12),
@@ -326,7 +325,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
                         feature.toString(),
                         style: const TextStyle(
                           fontSize: 15,
-                          color: AppColors.textSecondary,
+                          color: AppColors.textLight,
                           height: 1.4,
                         ),
                       ),
@@ -346,9 +345,9 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
       margin: EdgeInsets.symmetric(horizontal: AppSizes.paddingL),
       padding: EdgeInsets.all(AppSizes.paddingL),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.borderLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,7 +357,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: AppColors.textDark,
             ),
           ),
           const SizedBox(height: 16),
@@ -390,7 +389,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
                     style: const TextStyle(
                       fontSize: 14,
                       fontStyle: FontStyle.italic,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textLight,
                       height: 1.5,
                     ),
                   ),
@@ -400,7 +399,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
+                      color: AppColors.green,
                     ),
                   ),
                 ],
@@ -417,9 +416,9 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
       margin: EdgeInsets.all(AppSizes.paddingL),
       padding: EdgeInsets.all(AppSizes.paddingL),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+        border: Border.all(color: AppColors.green.withOpacity(0.3)),
       ),
       child: Form(
         key: _formKey,
@@ -431,7 +430,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: AppColors.textDark,
               ),
             ),
             const SizedBox(height: 20),
@@ -546,7 +545,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submitRegistration,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: AppColors.green,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

@@ -37,14 +37,18 @@ class ApiConstants {
   static const String FEED_COMMENT = '/api/feed/feeds/:id/comment';
   static const String FEED_COMMENTS = '/api/feed/comments/getComment';
   static const String FEED_RANDOM = '/api/feed/feeds/feeds/random';
-  static const String FEED_RECOMMENDED = '/api/feed/feeds/user/:userId/recommended';
+  static const String FEED_RECOMMENDED =
+      '/api/feed/feeds/user/:userId/recommended';
   static const String FEED_TOP = '/api/feed/feeds/getoptwo';
-  static const String FEED_TRENDING_HASHTAGS = '/api/feed/feeds/trending/hashtags';
+  static const String FEED_TRENDING_HASHTAGS =
+      '/api/feed/feeds/trending/hashtags';
   static const String FEED_BY_TAG = '/api/feed/feeds/tag/:tagName/feeds';
   static const String USER_STATS = '/api/feed/feeds/user/:userId/stats';
   static const String FEED_USER_INTEREST = '/api/feed/feeds/user/interest';
-  static const String FEED_USER_INTERACTION = '/api/feed/feeds/user/interaction';
-  static const String FEED_SYNC_INTERESTS = '/api/feed/feeds/user/sync-interests';
+  static const String FEED_USER_INTERACTION =
+      '/api/feed/feeds/user/interaction';
+  static const String FEED_SYNC_INTERESTS =
+      '/api/feed/feeds/user/sync-interests';
 
   // Company Endpoints
   static const String COMPANIES = '/api/main/companies';
@@ -53,12 +57,14 @@ class ApiConstants {
   // Product Endpoints
   static const String PRODUCTS = '/api/main/products';
   static const String PRODUCT_DETAIL = '/api/main/products/:id';
-  static const String PRODUCTS_BY_CATEGORY = '/api/main/products/category/:category';
+  static const String PRODUCTS_BY_CATEGORY =
+      '/api/main/products/category/:category';
 
   // Marketplace Endpoints
   static const String MARKETPLACE = '/api/main/marketplace';
   static const String MARKETPLACE_PRODUCT = '/api/main/marketplace/:id';
-  static const String MARKETPLACE_COMMENTS = '/api/main/marketplace/:id/comments';
+  static const String MARKETPLACE_COMMENTS =
+      '/api/main/marketplace/:id/comments';
 
   // Reel Endpoints
   static const String REELS = '/api/reels';
@@ -71,7 +77,8 @@ class ApiConstants {
   // Video Tutorial Endpoints
   static const String VIDEO_TUTORIALS = '/api/reels/videos';
   static const String VIDEO_TUTORIAL_DETAIL = '/api/reels/videos/:id';
-  static const String VIDEO_TUTORIAL_COMMENTS = '/api/reels/videos/:id/comments';
+  static const String VIDEO_TUTORIAL_COMMENTS =
+      '/api/reels/videos/:id/comments';
   static const String VIDEO_TUTORIAL_LIKE = '/api/reels/videos/:id/like';
   static const String VIDEO_TUTORIAL_RELATED = '/api/reels/videos/:id/related';
 
@@ -94,13 +101,16 @@ class ApiConstants {
   static const String MESSAGES = '/api/messages/api/message';
   static const String CHATS = '/api/messages/api/chat';
   static const String CHAT_DIRECT = '/api/messages/api/chat/direct';
-  static const String MESSAGES_BY_CHAT = '/api/messages/api/message/chat/:chatId';
+  static const String MESSAGES_BY_CHAT =
+      '/api/messages/api/message/chat/:chatId';
   static const String MESSAGE_READ = '/api/messages/api/message/:id/read';
 
-  // Notification Endpoints
-  static const String NOTIFICATIONS = '/api/main/notifications';
-  static const String NOTIFICATION_READ = '/api/main/notifications/:id/read';
-  static const String NOTIFICATION_PREFERENCES = '/api/main/notifications/preferences';
+  // Notification Endpoints (proxied via API gateway -> notification-service)
+  static const String NOTIFICATIONS = '/api/notification/notifications';
+  static const String NOTIFICATION_READ =
+      '/api/notification/users/:userId/notifications/:id/read';
+  static const String NOTIFICATION_PREFERENCES =
+      '/api/notification/users/:userId/preferences';
 
   // Ads Endpoints
   static const String ADS = '/api/main/ads';
@@ -116,13 +126,18 @@ class ApiConstants {
   static const String CONSULTANT_DETAIL = '/api/main/consultants/:id';
 
   // Engagement/Analytics Endpoints
-  static const String ENGAGEMENT_SESSION_START = '/api/engagement/sessions/start';
+  static const String ENGAGEMENT_SESSION_START =
+      '/api/engagement/sessions/start';
   static const String ENGAGEMENT_SESSION_END = '/api/engagement/sessions/end';
-  static const String ENGAGEMENT_SESSION_HEARTBEAT = '/api/engagement/sessions/heartbeat';
+  static const String ENGAGEMENT_SESSION_HEARTBEAT =
+      '/api/engagement/sessions/heartbeat';
   static const String ENGAGEMENT_EVENTS_BATCH = '/api/engagement/events/batch';
-  static const String ENGAGEMENT_ANALYTICS_DASHBOARD = '/api/engagement/analytics/dashboard';
-  static const String ENGAGEMENT_ANALYTICS_SCREENS = '/api/engagement/analytics/screens';
-  static const String ENGAGEMENT_ANALYTICS_USER = '/api/engagement/analytics/users/:userId';
+  static const String ENGAGEMENT_ANALYTICS_DASHBOARD =
+      '/api/engagement/analytics/dashboard';
+  static const String ENGAGEMENT_ANALYTICS_SCREENS =
+      '/api/engagement/analytics/screens';
+  static const String ENGAGEMENT_ANALYTICS_USER =
+      '/api/engagement/analytics/users/:userId';
 
   // API Headers
   static const Map<String, String> headers = {
@@ -131,8 +146,10 @@ class ApiConstants {
   };
 
   // API Timeout durations (now from AppConfig)
-  static int get connectionTimeout => AppConfig.instance.connectTimeout.inMilliseconds;
-  static int get receiveTimeout => AppConfig.instance.receiveTimeout.inMilliseconds;
+  static int get connectionTimeout =>
+      AppConfig.instance.connectTimeout.inMilliseconds;
+  static int get receiveTimeout =>
+      AppConfig.instance.receiveTimeout.inMilliseconds;
 
   /// Helper method to replace path parameters
   static String replacePathParams(String path, Map<String, String> params) {
