@@ -1,0 +1,26 @@
+# Mosquitto ACL template. Copy to `acl` and edit per your user roster.
+# Reload with `SIGHUP` to the broker (no restart needed).
+#
+# Syntax:
+#   user <name>
+#   topic [read|write|readwrite] <topic>
+
+# Devices publish sensor readings and may subscribe to their own
+# command/response topics. Narrower-still per-device ACLs (e.g. using
+# `%u` to substitute the username into the topic) are recommended.
+user krishi-device
+topic write krishi/sensors/+
+topic write krishi/handshake/request
+topic write krishi/heartbeat/request
+topic read  krishi/handshake/response/%u
+topic read  krishi/heartbeat/response/%u
+topic read  krishi/commands/%u
+
+# Backend consumers read all sensor data and publish commands.
+user krishi-consumer
+topic read  krishi/sensors/#
+topic read  krishi/handshake/request
+topic read  krishi/heartbeat/request
+topic write krishi/handshake/response/+
+topic write krishi/heartbeat/response/+
+topic write krishi/commands/+

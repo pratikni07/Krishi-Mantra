@@ -31,7 +31,11 @@ class _ServicesState extends State<Services> {
         ServiceItem('assets/Images/serviceImg/test8.png', _t('schemes'),
             '/schemes'),
         ServiceItem(null, _t('measure_farm'),
-            '/farm-measurement'),
+            '/farm-measurement', icon: Icons.satellite_alt),
+        ServiceItem(null, _t('dd_title'),
+            '/disease-detection', icon: Icons.health_and_safety_outlined),
+        ServiceItem(null, _t('mandi_title'),
+            '/mandi-price', icon: Icons.currency_rupee),
       ];
 
   @override
@@ -97,7 +101,7 @@ class _ServicesState extends State<Services> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: serviceItems
-                  .sublist(0, 4)
+                  .sublist(0, 5)
                   .map((item) => Expanded(
                         child: SizedBox(
                           height: itemHeight.clamp(90.0, 130.0),
@@ -110,7 +114,7 @@ class _ServicesState extends State<Services> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: serviceItems
-                  .sublist(4)
+                  .sublist(5)
                   .map((item) => Expanded(
                         child: SizedBox(
                           height: itemHeight.clamp(90.0, 130.0),
@@ -181,7 +185,7 @@ class _ServicesState extends State<Services> {
                   : Container(
                       color: AppColors.green.withOpacity(0.1),
                       child: Icon(
-                        Icons.satellite_alt,
+                        item.icon ?? Icons.category_outlined,
                         size: errorIconSize,
                         color: AppColors.green,
                       ),
@@ -219,6 +223,7 @@ class ServiceItem {
   final String? imagePath;
   final String label;
   final String route;
+  final IconData? icon;
 
-  ServiceItem(this.imagePath, this.label, this.route);
+  ServiceItem(this.imagePath, this.label, this.route, {this.icon});
 }

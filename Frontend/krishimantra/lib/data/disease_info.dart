@@ -1,4 +1,4 @@
-import '../models/disease_result.dart';
+import 'models/disease_result.dart';
 
 /// Static database of disease information for all 38 PlantVillage classes.
 /// Each entry maps a label string to a DiseaseResult with treatment info.

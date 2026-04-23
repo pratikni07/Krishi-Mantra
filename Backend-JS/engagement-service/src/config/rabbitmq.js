@@ -5,6 +5,20 @@ const logger = require('../utils/logger');
 let connection = null;
 let channel = null;
 let isConnected = false;
+// Track consumer tags so graceful shutdown can stop pulling new messages
+// *before* the buffer flush and the MongoDB/Redis teardown. Without this,
+// consumers kept running until channel.close, and in-flight handlers raced
+// the database disconnect.
+const consumerTags = [];
+let inFlightMessages = 0;
+
+// Dead-letter topology. A poison message (parse error, schema mismatch, code
+// bug) would previously nack+requeue forever — one bad payload could pin a
+// consumer CPU indefinitely. We cap retries in the consumer below and route
+// exhausted messages to a DLQ for operator inspection.
+const DLX_NAME = 'engagement.dlx';
+const DLQ_EVENTS = `${config.rabbitmq.queues.events}.dlq`;
+const DLQ_BATCH = `${config.rabbitmq.queues.batch}.dlq`;
 
 /**
  * RabbitMQ Connection Manager
@@ -23,12 +37,24 @@ class RabbitMQ {
       // Set prefetch for controlled concurrency
       await channel.prefetch(config.rabbitmq.prefetch);
 
+      // Dead-letter exchange: messages that exceed the retry budget (or expire)
+      // are routed here. DLQs are durable so operators can triage offline.
+      await channel.assertExchange(DLX_NAME, 'direct', { durable: true });
+
+      await channel.assertQueue(DLQ_EVENTS, { durable: true });
+      await channel.bindQueue(DLQ_EVENTS, DLX_NAME, config.rabbitmq.queues.events);
+
+      await channel.assertQueue(DLQ_BATCH, { durable: true });
+      await channel.bindQueue(DLQ_BATCH, DLX_NAME, config.rabbitmq.queues.batch);
+
       // Ensure queues exist with proper configuration
       await channel.assertQueue(config.rabbitmq.queues.events, {
         durable: true,
         arguments: {
           'x-message-ttl': 86400000, // 24 hours
           'x-max-length': 1000000, // Max 1M messages
+          'x-dead-letter-exchange': DLX_NAME,
+          'x-dead-letter-routing-key': config.rabbitmq.queues.events,
         },
       });
 
@@ -37,6 +63,8 @@ class RabbitMQ {
         arguments: {
           'x-message-ttl': 86400000,
           'x-max-length': 100000,
+          'x-dead-letter-exchange': DLX_NAME,
+          'x-dead-letter-routing-key': config.rabbitmq.queues.batch,
         },
       });
 
@@ -171,25 +199,68 @@ class RabbitMQ {
         return false;
       }
 
-      await channel.consume(queue, async (msg) => {
+      const { consumerTag } = await channel.consume(queue, async (msg) => {
         if (!msg) return;
 
+        inFlightMessages += 1;
         try {
           const data = JSON.parse(msg.content.toString());
           await handler(data);
           channel.ack(msg);
         } catch (error) {
-          logger.error('Error processing message:', error.message);
-          // Negative acknowledge and requeue
-          channel.nack(msg, false, true);
+          // Previously: nack with requeue=true → broker puts it straight back
+          // on the queue → same handler pulls it → same crash. A poison
+          // payload pinned a consumer CPU forever. Now: nack without requeue
+          // so the broker routes the message through the DLX to the DLQ for
+          // operator inspection. Transient failures (MongoDB, Redis) are
+          // already retried by their own drivers; at this layer, a failure
+          // almost always means a schema/bug problem that requeueing can't
+          // fix.
+          logger.error(
+            `Message processing failed on ${queue}, routing to DLQ: ${error.message}`
+          );
+          channel.nack(msg, false, false);
+        } finally {
+          inFlightMessages -= 1;
         }
       });
 
-      logger.info(`Started consuming from queue: ${queue}`);
+      consumerTags.push(consumerTag);
+      logger.info(`Started consuming from queue: ${queue} (tag: ${consumerTag})`);
       return true;
     } catch (error) {
       logger.error('Error starting consumer:', error.message);
       return false;
+    }
+  }
+
+  /**
+   * Cancel all registered consumers and wait for in-flight handlers to
+   * finish. Call this BEFORE closing MongoDB/Redis — otherwise a message in
+   * flight would race the database teardown.
+   *
+   * @param {number} drainTimeoutMs - Max time to wait for in-flight messages
+   */
+  static async stopConsumers(drainTimeoutMs = 10000) {
+    if (!channel) return;
+
+    for (const tag of consumerTags.splice(0)) {
+      try {
+        await channel.cancel(tag);
+        logger.info(`Canceled consumer ${tag}`);
+      } catch (err) {
+        logger.warn(`Failed to cancel consumer ${tag}: ${err.message}`);
+      }
+    }
+
+    const start = Date.now();
+    while (inFlightMessages > 0 && Date.now() - start < drainTimeoutMs) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (inFlightMessages > 0) {
+      logger.warn(`Drain timeout with ${inFlightMessages} in-flight messages`);
+    } else {
+      logger.info('All in-flight messages drained');
     }
   }
 }

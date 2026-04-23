@@ -108,7 +108,7 @@ class HomeAdsController {
       const cachedAds = await RedisClient.get("home_ads");
       if (cachedAds) return res.json(JSON.parse(cachedAds));
 
-      const ads = await HomeSlider.find();
+      const ads = await HomeSlider.find().lean();
       await RedisClient.setex("home_ads", 3600, JSON.stringify(ads));
       
       res.json(ads);
@@ -184,7 +184,7 @@ class HomeAdsController {
         return res.json(JSON.parse(cachedDocument));
       }
 
-      const document = await HomeScreenAds.findById(req.params.id);
+      const document = await HomeScreenAds.findById(req.params.id).lean();
       if (!document) {
         return res.status(404).json({ message: "Home Screen Ad not found" });
       }
@@ -250,7 +250,7 @@ class HomeAdsController {
         return res.json(JSON.parse(cachedDocuments));
       }
 
-      const documents = await HomeScreenAds.find();
+      const documents = await HomeScreenAds.find().lean();
 
       await RedisClient.setex(CACHE_KEY, 3600, JSON.stringify(documents));
 
@@ -298,7 +298,7 @@ class HomeAdsController {
         return res.json(JSON.parse(cachedDocument));
       }
 
-      const document = await SplashModal.findById(req.params.id);
+      const document = await SplashModal.findById(req.params.id).lean();
       if (!document) {
         return res.status(404).json({ message: "Splash Modal not found" });
       }
@@ -371,7 +371,7 @@ class HomeAdsController {
         return res.json(JSON.parse(cachedDocuments));
       }
 
-      const documents = await SplashModal.find();
+      const documents = await SplashModal.find().lean();
 
       // Cache in Redis
       await RedisClient.setex(CACHE_KEY, 3600, JSON.stringify(documents));

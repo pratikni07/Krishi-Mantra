@@ -39,6 +39,8 @@ services:
       - APP_TYPE=device
       - DEVICE_ID=device-001
       - MQTT_BROKER_URL=tcp://mosquitto:1883
+      - MQTT_USERNAME=${MQTT_DEVICE_USERNAME:?MQTT_DEVICE_USERNAME must be set in .env}
+      - MQTT_PASSWORD=${MQTT_DEVICE_PASSWORD:?MQTT_DEVICE_PASSWORD must be set in .env}
       - SENSOR_INTERVAL=10
 
   iot-parser:
@@ -53,6 +55,8 @@ services:
       - APP_TYPE=parser
       - MQTT_BROKER_URL=tcp://mosquitto:1883
       - MQTT_CLIENT_ID=krishi-parser
+      - MQTT_USERNAME=${MQTT_CONSUMER_USERNAME:?MQTT_CONSUMER_USERNAME must be set in .env}
+      - MQTT_PASSWORD=${MQTT_CONSUMER_PASSWORD:?MQTT_CONSUMER_PASSWORD must be set in .env}
 
   iot-soil-consumer:
     build:
@@ -67,6 +71,8 @@ services:
       - APP_TYPE=soil
       - MQTT_BROKER_URL=tcp://mosquitto:1883
       - MQTT_CLIENT_ID=krishi-soil-consumer
+      - MQTT_USERNAME=${MQTT_CONSUMER_USERNAME:?MQTT_CONSUMER_USERNAME must be set in .env}
+      - MQTT_PASSWORD=${MQTT_CONSUMER_PASSWORD:?MQTT_CONSUMER_PASSWORD must be set in .env}
       - CLICKHOUSE_ADDR=clickhouse:9000
       - CLICKHOUSE_DB=krishi_mantra
       - CLICKHOUSE_USER=default
@@ -85,6 +91,8 @@ services:
       - APP_TYPE=weather
       - MQTT_BROKER_URL=tcp://mosquitto:1883
       - MQTT_CLIENT_ID=krishi-weather-consumer
+      - MQTT_USERNAME=${MQTT_CONSUMER_USERNAME:?MQTT_CONSUMER_USERNAME must be set in .env}
+      - MQTT_PASSWORD=${MQTT_CONSUMER_PASSWORD:?MQTT_CONSUMER_PASSWORD must be set in .env}
       - CLICKHOUSE_ADDR=clickhouse:9000
       - CLICKHOUSE_DB=krishi_mantra
       - CLICKHOUSE_USER=default

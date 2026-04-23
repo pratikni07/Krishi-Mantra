@@ -70,7 +70,7 @@ const config = {
 
   // Security
   security: {
-    jwtSecret: process.env.JWT_SECRET || 'default-secret',
+    jwtSecret: process.env.JWT_SECRET || undefined,
     allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
   },
 

@@ -1,5 +1,8 @@
 const amqp = require("amqplib");
 
+const DLX_NAME = "message-queue.dlx";
+const MAIN_QUEUES = ["message_delivery", "notification"];
+
 class MessageQueueService {
   constructor() {
     this.connection = null;
@@ -41,9 +44,22 @@ class MessageQueueService {
 
       this.channel = await this.connection.createChannel();
 
-      // Assert queues
-      await this.channel.assertQueue("message_delivery", { durable: true });
-      await this.channel.assertQueue("notification", { durable: true });
+      // Dead-letter topology — failed deliveries go to <queue>.dlq instead of
+      // being requeued on the live queue. Previously a poison payload would
+      // pin processMessageDelivery in a nack/requeue loop.
+      await this.channel.assertExchange(DLX_NAME, "direct", { durable: true });
+      for (const q of MAIN_QUEUES) {
+        const dlq = `${q}.dlq`;
+        await this.channel.assertQueue(dlq, { durable: true });
+        await this.channel.bindQueue(dlq, DLX_NAME, q);
+        await this.channel.assertQueue(q, {
+          durable: true,
+          arguments: {
+            "x-dead-letter-exchange": DLX_NAME,
+            "x-dead-letter-routing-key": q,
+          },
+        });
+      }
 
       console.log("Successfully connected to RabbitMQ");
       this.isConnected = true;
@@ -97,8 +113,9 @@ class MessageQueueService {
         await this.processMessageDelivery(data);
         this.channel.ack(msg);
       } catch (error) {
-        console.error("Error processing message delivery:", error);
-        this.channel.nack(msg);
+        console.error("Error processing message delivery, routing to DLQ:", error);
+        // nack without requeue so the broker routes to the configured DLX.
+        this.channel.nack(msg, false, false);
       }
     });
   }

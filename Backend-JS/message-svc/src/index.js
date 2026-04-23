@@ -11,6 +11,7 @@ const Database = require('./config/database');
 const Redis = require('./config/redis');
 const Rabbitmq = require('./config/rabbitmq');
 const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
+const mongoSanitize = require('./middlewares/mongoSanitize');
 const { RATE_LIMITS, SOCKET_CONFIG, HTTP_STATUS } = require('./utils/constants');
 
 class App {
@@ -37,16 +38,21 @@ class App {
       })
     );
 
-    // CORS configuration
+    // CORS — fail-closed. Without explicit ALLOWED_ORIGINS, reject all
+    // cross-origin browser requests (server-to-server is unaffected).
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+      : [];
+    if (allowedOrigins.length === 0) {
+      console.warn(
+        '[message-svc] ALLOWED_ORIGINS not set — rejecting all cross-origin requests.'
+      );
+    }
     const corsOptions = {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
-        if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(null, true); // Allow all in development
-        }
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error(`Origin ${origin} not allowed by CORS`));
       },
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'],
@@ -58,6 +64,9 @@ class App {
     // Body parsing
     this.app.use(express.json({ limit: '20mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+    // Strip Mongo operator keys ($-prefixed / dotted) from req input.
+    this.app.use(mongoSanitize);
 
     // Compression
     this.app.use(compression());

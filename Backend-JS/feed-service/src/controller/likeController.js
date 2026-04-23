@@ -3,6 +3,37 @@ const Feed = require("../model/FeedModel");
 const { redisCache } = require("../config/redis");
 
 class LikeController {
+  static async _paginateLikeQuery(query, page, limit, populate = []) {
+    const currentPage = Math.max(parseInt(page, 10) || 1, 1);
+    const perPage = Math.max(parseInt(limit, 10) || 10, 1);
+    const skip = (currentPage - 1) * perPage;
+
+    const [totalDocs, docs] = await Promise.all([
+      Like.countDocuments(query),
+      Like.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(perPage)
+        .populate(populate)
+        .lean(),
+    ]);
+
+    const totalPages = Math.max(Math.ceil(totalDocs / perPage), 1);
+
+    return {
+      docs,
+      totalDocs,
+      limit: perPage,
+      page: currentPage,
+      totalPages,
+      pagingCounter: skip + 1,
+      hasPrevPage: currentPage > 1,
+      hasNextPage: currentPage < totalPages,
+      prevPage: currentPage > 1 ? currentPage - 1 : null,
+      nextPage: currentPage < totalPages ? currentPage + 1 : null,
+    };
+  }
+
   // Toggle Like (Like/Unlike)
   static async toggleLike(req, res) {
     try {
@@ -83,21 +114,18 @@ class LikeController {
         return res.json(cachedLikes);
       }
 
-      // Pagination options
-      const options = {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        sort: { createdAt: -1 },
-        populate: [
+      // Find likes for specific feed
+      const likes = await LikeController._paginateLikeQuery(
+        { feed: feedId },
+        page,
+        limit,
+        [
           {
             path: "userId",
             select: "userName profilePhoto",
           },
-        ],
-      };
-
-      // Find likes for specific feed
-      const likes = await Like.paginate({ feed: feedId }, options);
+        ]
+      );
 
       // Cache results
       await redisCache.set(cacheKey, likes, 300); // 5 min cache
@@ -126,21 +154,18 @@ class LikeController {
         return res.json(cachedLikedFeeds);
       }
 
-      // Pagination options
-      const options = {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        sort: { createdAt: -1 },
-        populate: [
+      // Find liked feeds for user
+      const likedFeeds = await LikeController._paginateLikeQuery(
+        { userId },
+        page,
+        limit,
+        [
           {
             path: "feed",
             select: "description content userName",
           },
-        ],
-      };
-
-      // Find liked feeds for user
-      const likedFeeds = await Like.paginate({ userId }, options);
+        ]
+      );
 
       // Cache results
       await redisCache.set(cacheKey, likedFeeds, 300); // 5 min cache

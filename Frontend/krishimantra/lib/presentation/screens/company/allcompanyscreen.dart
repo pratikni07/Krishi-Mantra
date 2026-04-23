@@ -101,7 +101,11 @@ class _CompanyListScreenState extends State<CompanyListScreen> with TranslationM
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: ResponsiveUtils.gridCrossAxisCount,
-                childAspectRatio: 0.8,
+                childAspectRatio: ResponsiveUtils.responsive(
+                  mobile: 0.85,
+                  tablet: 0.9,
+                  desktop: 0.95,
+                ),
                 crossAxisSpacing: AppSizes.paddingM,
                 mainAxisSpacing: AppSizes.paddingM,
               ),

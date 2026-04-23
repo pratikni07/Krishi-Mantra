@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const feedController = require("../controller/feedController");
+const validate = require("../middlewares/validate");
+const requireAdmin = require("../middlewares/requireAdmin");
+const feedSchemas = require("../schemas/feed");
 
 // Debug middleware
 const testingmiddleware = (req, res, next) => {
@@ -12,7 +15,7 @@ const testingmiddleware = (req, res, next) => {
 
 // Static routes MUST come before parameterized routes to avoid conflicts
 // Admin routes
-router.get("/getAllFeedsAdmin", testingmiddleware, feedController.getAllFeedsForAdmin);
+router.get("/getAllFeedsAdmin", requireAdmin, testingmiddleware, feedController.getAllFeedsForAdmin);
 
 // Static routes
 router.get("/getoptwo", feedController.getTopFeeds);
@@ -32,9 +35,21 @@ router.get("/user/:userId/recommended", feedController.getRecommendedFeeds);
 router.get("/tag/:tagName/feeds", feedController.getFeedsByTag);
 
 // Feed CRUD routes (parameterized routes at the end)
-router.post("/", feedController.createFeed);
+router.post(
+  "/",
+  validate({ body: feedSchemas.createFeed }),
+  feedController.createFeed
+);
 router.get("/:feedId", feedController.getFeed);
-router.post("/:feedId/comment", feedController.addComment);
-router.post("/:feedId/like", feedController.toggleLike);
+router.post(
+  "/:feedId/comment",
+  validate({ params: feedSchemas.addCommentParams, body: feedSchemas.addCommentBody }),
+  feedController.addComment
+);
+router.post(
+  "/:feedId/like",
+  validate({ params: feedSchemas.toggleLikeParams, body: feedSchemas.toggleLikeBody }),
+  feedController.toggleLike
+);
 
 module.exports = router;

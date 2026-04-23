@@ -1641,14 +1641,16 @@ const adminGetAllSubscriptions = async (req, res) => {
     if (status) query.status = status;
     if (planName) query.planName = planName;
 
-    // If search query, find matching users first
+    // If search query, find matching users first. Escape regex metachars
+    // so admin-supplied search can't drift into a ReDoS pattern.
     let userIds = null;
-    if (search) {
+    if (search && typeof search === 'string') {
+      const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
       const users = await User.find({
         $or: [
-          { name: { $regex: search, $options: 'i' } },
-          { phone: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } },
+          { name: { $regex: safe, $options: 'i' } },
+          { phone: { $regex: safe, $options: 'i' } },
+          { email: { $regex: safe, $options: 'i' } },
         ],
       }).select('_id');
       userIds = users.map(u => u._id);

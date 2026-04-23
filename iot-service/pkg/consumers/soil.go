@@ -55,9 +55,13 @@ func (s *SoilConsumer) handleMessage(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	// Save to ClickHouse
-	if err := s.db.SaveSoilData(soilData); err != nil {
-		log.Printf("Error saving soil data to ClickHouse: %v", err)
+	// Save to ClickHouse with bounded exponential backoff. Previously a
+	// single failure dropped the reading — farmers lost a whole datapoint
+	// for a transient connection blip. Three tries at 100ms, 500ms, 2s
+	// covers most blips without delaying the consumer beyond MQTT's own
+	// in-flight window.
+	if err := saveWithRetry(func() error { return s.db.SaveSoilData(soilData) }, 3); err != nil {
+		log.Printf("Error saving soil data to ClickHouse after retries, dropping: %v", err)
 		return
 	}
 
@@ -96,14 +100,16 @@ func (s *SoilConsumer) validateAndConvert(data *models.SensorData) (*models.Soil
 	if *data.Data.PH < 0 || *data.Data.PH > 14 {
 		return nil, fmt.Errorf("pH value out of range: %.2f", *data.Data.PH)
 	}
-	if *data.Data.Nitrogen < 0 {
-		return nil, fmt.Errorf("nitrogen value cannot be negative: %.2f", *data.Data.Nitrogen)
+	// NPK upper bounds — realistic soil sensor readings cap well below these.
+	// Rejecting outliers keeps bogus data from poisoning aggregates.
+	if *data.Data.Nitrogen < 0 || *data.Data.Nitrogen > 500 {
+		return nil, fmt.Errorf("nitrogen value out of range: %.2f", *data.Data.Nitrogen)
 	}
-	if *data.Data.Phosphorus < 0 {
-		return nil, fmt.Errorf("phosphorus value cannot be negative: %.2f", *data.Data.Phosphorus)
+	if *data.Data.Phosphorus < 0 || *data.Data.Phosphorus > 500 {
+		return nil, fmt.Errorf("phosphorus value out of range: %.2f", *data.Data.Phosphorus)
 	}
-	if *data.Data.Potassium < 0 {
-		return nil, fmt.Errorf("potassium value cannot be negative: %.2f", *data.Data.Potassium)
+	if *data.Data.Potassium < 0 || *data.Data.Potassium > 2000 {
+		return nil, fmt.Errorf("potassium value out of range: %.2f", *data.Data.Potassium)
 	}
 
 	// Convert to SoilData

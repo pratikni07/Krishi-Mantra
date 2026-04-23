@@ -28,6 +28,8 @@ import '../presentation/screens/subscription/subscription_plans_screen.dart';
 import '../presentation/screens/subscription/payment_history_screen.dart';
 import '../presentation/screens/iot/device_registration_screen.dart';
 import '../presentation/screens/farm_measurement/farm_measurement_screen.dart';
+import '../presentation/screens/disease_detection/disease_detection_screen.dart';
+import '../presentation/screens/mandi/mandi_price_screen.dart';
 
 class AppRoutes {
   static const String SPLASH = '/splash';
@@ -70,6 +72,8 @@ class AppRoutes {
 
   // Farm Measurement route
   static const String FARM_MEASUREMENT = '/farm-measurement';
+  static const String DISEASE_DETECTION = '/disease-detection';
+  static const String MANDI_PRICE = '/mandi-price';
 
   static final routes = [
     GetPage(name: SPLASH, page: () => SplashScreen()),
@@ -125,5 +129,9 @@ class AppRoutes {
     // Farm Measurement route
     GetPage(
         name: FARM_MEASUREMENT, page: () => const FarmMeasurementScreen()),
+    GetPage(
+        name: DISEASE_DETECTION, page: () => const DiseaseDetectionScreen()),
+    GetPage(
+        name: MANDI_PRICE, page: () => const MandiPriceScreen()),
   ];
 }

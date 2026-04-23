@@ -152,7 +152,7 @@ class SocketService with WidgetsBindingObserver {
             .setReconnectionAttempts(_maxReconnectionAttempts)
             .setReconnectionDelay(1000)
             .setReconnectionDelayMax(5000)
-            .setAuth({'userId': user.id})
+            .setAuth({'userId': user.id, 'token': user.token})
             .setTimeout(15000)
             .setExtraHeaders({'Authorization': 'Bearer ${user.token}'})
             .build(),

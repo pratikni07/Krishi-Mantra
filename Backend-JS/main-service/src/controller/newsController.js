@@ -79,7 +79,9 @@ const likeNews = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id || req.user._id;
 
-  const news = await News.findById(id);
+  // Lean — only used for existence and the already-liked check; the actual
+  // mutation uses an atomic findByIdAndUpdate below.
+  const news = await News.findById(id).lean();
   if (!news) {
     return res.status(HTTP_STATUS.NOT_FOUND).json({
       success: false,

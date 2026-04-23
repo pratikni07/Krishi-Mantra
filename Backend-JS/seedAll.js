@@ -33,7 +33,7 @@ const path = require('path');
 const seedScripts = [
   {
     name: 'Main Service',
-    path: './main-service/src/scripts/seedData.js',
+    path: './src/scripts/seedData.js',
     cwd: path.join(__dirname, 'main-service'),
   },
   {

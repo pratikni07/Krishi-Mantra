@@ -87,19 +87,21 @@ const setupMiddleware = () => {
     })
   );
 
-  // Enhanced CORS Configuration
+  // CORS — fail-closed. Wildcard origins combined with credentials:true is
+  // exploitable cross-origin; require an explicit CORS_ORIGIN allowlist.
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean)
+    : [];
+  if (allowedOrigins.length === 0) {
+    console.warn(
+      "[api-service] CORS_ORIGIN not set — rejecting all cross-origin requests."
+    );
+  }
   const corsOptions = {
     origin: (origin, callback) => {
-      const allowedOrigins = (process.env.CORS_ORIGIN || "*").split(",");
-      if (
-        !origin ||
-        allowedOrigins.includes("*") ||
-        allowedOrigins.includes(origin)
-      ) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],

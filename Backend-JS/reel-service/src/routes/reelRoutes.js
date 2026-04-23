@@ -3,6 +3,7 @@ const express = require("express");
 const ReelController = require("../controllers/reelController");
 const VideoUploadController = require("../controllers/videoUploadController");
 const { videoUpload, handleMulterError } = require("../middlewares/uploadMiddleware");
+const { verifyMagicBytes } = require("../middlewares/verifyMagicBytes");
 const router = express.Router();
 
 // ============ Video Upload Routes ============
@@ -12,11 +13,18 @@ router.get("/upload/status", VideoUploadController.checkStatus);
 // Get signed upload URL for direct client upload
 router.get("/upload/signature", VideoUploadController.getUploadSignature);
 
-// Upload new reel video
+// Finalize a direct-to-Cloudinary upload (preferred path). The client
+// uploads bytes to Cloudinary via the signed signature and then POSTs
+// the resulting publicId here — no video bytes flow through this server.
+router.post("/upload/complete", VideoUploadController.completeUpload);
+
+// Legacy proxied upload — bytes stream through the server. Retained for
+// backward compatibility until all clients migrate to /upload/complete.
 router.post(
   "/upload",
   videoUpload.single("video"),
   handleMulterError,
+  verifyMagicBytes({ videos: true }),
   VideoUploadController.uploadReel
 );
 

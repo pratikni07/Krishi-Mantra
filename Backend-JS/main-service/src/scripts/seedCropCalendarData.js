@@ -4,7 +4,11 @@
  * Run with: node src/scripts/seedCropCalendarData.js
  */
 
-require('dotenv').config({ path: '.env.development' });
+const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env.development') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 const mongoose = require('mongoose');
 const Crop = require('../model/CropCalendar/Crop');
 const Activity = require('../model/CropCalendar/Activity');

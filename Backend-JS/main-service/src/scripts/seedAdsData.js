@@ -5,7 +5,11 @@
  * Usage: node src/scripts/seedAdsData.js
  */
 
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env.development') });
+const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env.development') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 const mongoose = require('mongoose');
 
 // UI Models

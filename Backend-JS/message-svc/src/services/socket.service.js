@@ -1,4 +1,5 @@
 const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
 const Redis = require("../config/redis");
 const Chat = require("../models/chat.model");
 const Group = require("../models/group.model");
@@ -6,6 +7,17 @@ const User = require("../models/user.model");
 const MessageService = require("../services/message.service");
 const AISocketService = require("./ai-socket.service");
 const { SOCKET_CONFIG, RATE_LIMITS } = require('../utils/constants');
+const chatRoomCache = require("../utils/chatRoomCache");
+
+const extractHandshakeToken = (handshake) => {
+  if (handshake?.auth?.token) return handshake.auth.token;
+  const authHeader = handshake?.headers?.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    return authHeader.substring(7);
+  }
+  if (handshake?.query?.token) return handshake.query.token;
+  return null;
+};
 
 /**
  * Socket.IO service optimized for 10k concurrent connections
@@ -57,18 +69,50 @@ class SocketService {
   initialize() {
     this.io.use(async (socket, next) => {
       try {
-        const userId = socket.handshake.auth.userId;
-        if (!userId) {
+        const token = extractHandshakeToken(socket.handshake);
+        if (!token) {
           return next(new Error("Authentication required"));
         }
 
-        // Check connection limit per user
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+          console.error("JWT_SECRET not configured in message-svc");
+          return next(new Error("Server auth not configured"));
+        }
+
+        let decoded;
+        try {
+          decoded = jwt.verify(token, secret);
+        } catch (err) {
+          return next(
+            new Error(
+              err.name === "TokenExpiredError"
+                ? "Token expired"
+                : "Invalid token"
+            )
+          );
+        }
+
+        const userId = decoded._id || decoded.id || decoded.userId;
+        if (!userId) {
+          return next(new Error("Token missing user identifier"));
+        }
+
+        // If the client sent an auth.userId, it must match the verified
+        // JWT claim — otherwise reject to surface client bugs loudly
+        // rather than silently trusting the token.
+        const claimed = socket.handshake.auth?.userId;
+        if (claimed && String(claimed) !== String(userId)) {
+          return next(new Error("Token does not match userId"));
+        }
+
         const currentConnections = this.userConnectionCount.get(userId) || 0;
         if (currentConnections >= SOCKET_CONFIG.MAX_CONNECTIONS_PER_USER) {
           return next(new Error("Maximum connections exceeded"));
         }
 
-        socket.userId = userId;
+        socket.userId = String(userId);
+        socket.accountType = decoded.accountType;
         next();
       } catch (error) {
         next(new Error("Authentication failed"));
@@ -132,12 +176,11 @@ class SocketService {
       // Broadcast user online status
       this.broadcastUserStatus(socket.userId, true);
 
-      // Join user's chat rooms efficiently
-      const chats = await Chat.find({
-        "participants.userId": socket.userId,
-      }).select('_id').lean();
-
-      const roomIds = chats.map(chat => chat._id.toString());
+      // Join user's chat rooms. Cached in Redis with a short TTL so a burst
+      // of reconnects (app resume, flaky network) doesn't hit Mongo per
+      // connection. Mutating flows (new chat, group add) invalidate the
+      // cache for the affected users.
+      const roomIds = await chatRoomCache.loadUserChatIds(socket.userId);
       if (roomIds.length > 0) {
         socket.join(roomIds);
       }
@@ -207,6 +250,10 @@ class SocketService {
           },
         ],
       });
+
+      // Drop cached chat-room lists for both sides so their next reconnect
+      // picks up this chat without waiting for the TTL.
+      await chatRoomCache.invalidate([userId, participantId]);
 
       // Notify participants about new chat
       this.emitToUser(participantId, "chat:new", chat);
@@ -349,6 +396,8 @@ class SocketService {
       group.chatId = chat._id;
       await group.save();
 
+      await chatRoomCache.invalidate(participants.map((p) => p.userId));
+
       // Notify all participants
       participants.forEach((participant) => {
         this.emitToUser(participant.userId, "group:new", { group, chat });
@@ -386,6 +435,8 @@ class SocketService {
       await chat.save();
       group.memberCount = (group.memberCount || 0) + participants.length;
       await group.save();
+
+      await chatRoomCache.invalidate(participants.map((p) => p.userId));
 
       this.io.to(chat._id.toString()).emit("group:participants_updated", {
         groupId,

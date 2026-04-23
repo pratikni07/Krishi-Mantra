@@ -53,7 +53,7 @@ exports.getAllServices = async (req, res) => {
             return res.status(200).json(JSON.parse(cachedData));
         }
         
-        const services = await Service.find().sort({ order: 1 });
+        const services = await Service.find().sort({ order: 1 }).lean();
         
         // Cache for 1 hour but don't fail if Redis is down
         try {
@@ -98,15 +98,15 @@ exports.getServiceById = async (req, res) => {
             return res.status(200).json(JSON.parse(cachedData));
         }
         
-        const service = await Service.findById(id);
-        
+        const service = await Service.findById(id).lean();
+
         if (!service) {
             return res.status(404).json({
                 success: false,
                 message: 'Service not found'
             });
         }
-        
+
         // Cache for 1 hour but don't fail if Redis is down
         try {
             await redisClient.setex(

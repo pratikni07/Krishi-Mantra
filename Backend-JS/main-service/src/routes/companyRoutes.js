@@ -13,4 +13,8 @@ router
   .patch(companyController.updateCompany)
   .delete(companyController.deleteCompany);
 
+// Paginated products for a company — prevents the detail endpoint from
+// having to embed thousands of products.
+router.get("/:id/products", companyController.getCompanyProducts);
+
 module.exports = router;

@@ -55,9 +55,10 @@ func (w *WeatherConsumer) handleMessage(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	// Save to ClickHouse
-	if err := w.db.SaveWeatherData(weatherData); err != nil {
-		log.Printf("Error saving weather data to ClickHouse: %v", err)
+	// Retry ClickHouse writes before giving up so a transient blip doesn't
+	// silently drop a reading. See consumers/retry.go for backoff policy.
+	if err := saveWithRetry(func() error { return w.db.SaveWeatherData(weatherData) }, 3); err != nil {
+		log.Printf("Error saving weather data to ClickHouse after retries, dropping: %v", err)
 		return
 	}
 
@@ -96,14 +97,17 @@ func (w *WeatherConsumer) validateAndConvert(data *models.SensorData) (*models.W
 	if *data.Data.Pressure < 900 || *data.Data.Pressure > 1100 {
 		return nil, fmt.Errorf("pressure value out of range: %.2f", *data.Data.Pressure)
 	}
-	if *data.Data.WindSpeed < 0 {
-		return nil, fmt.Errorf("wind speed value cannot be negative: %.2f", *data.Data.WindSpeed)
+	// Upper bounds match physically plausible readings; cyclone-scale winds
+	// (up to ~120 m/s ~= 430 km/h) and monsoon cloudbursts (up to ~500 mm/h)
+	// set the ceiling. Anything above is almost certainly a sensor fault.
+	if *data.Data.WindSpeed < 0 || *data.Data.WindSpeed > 120 {
+		return nil, fmt.Errorf("wind speed value out of range: %.2f", *data.Data.WindSpeed)
 	}
-	if *data.Data.Rainfall < 0 {
-		return nil, fmt.Errorf("rainfall value cannot be negative: %.2f", *data.Data.Rainfall)
+	if *data.Data.Rainfall < 0 || *data.Data.Rainfall > 500 {
+		return nil, fmt.Errorf("rainfall value out of range: %.2f", *data.Data.Rainfall)
 	}
-	if *data.Data.LightLevel < 0 {
-		return nil, fmt.Errorf("light level value cannot be negative: %.2f", *data.Data.LightLevel)
+	if *data.Data.LightLevel < 0 || *data.Data.LightLevel > 200000 {
+		return nil, fmt.Errorf("light level value out of range: %.2f", *data.Data.LightLevel)
 	}
 
 	// Convert to WeatherData

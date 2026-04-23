@@ -11,6 +11,11 @@ const RABBITMQ_CONFIG = {
   },
 };
 
+// Dead-letter exchange: failed messages get routed here instead of infinitely
+// requeued. Each main queue has a sibling DLQ bound with its own name as the
+// routing key.
+const DLX_NAME = 'message-svc.dlx';
+
 /**
  * Connect to RabbitMQ
  * @returns {Promise<{connection, channel}>}
@@ -24,14 +29,24 @@ const connect = async () => {
     connection = await amqp.connect(RABBITMQ_CONFIG.url);
     channel = await connection.createChannel();
 
-    // Ensure queues exist
-    await channel.assertQueue(RABBITMQ_CONFIG.queues.notification, {
-      durable: true,
-    });
+    await channel.assertExchange(DLX_NAME, 'direct', { durable: true });
 
-    await channel.assertQueue(RABBITMQ_CONFIG.queues.messageEvents, {
-      durable: true,
-    });
+    const mainQueues = [
+      RABBITMQ_CONFIG.queues.notification,
+      RABBITMQ_CONFIG.queues.messageEvents,
+    ];
+    for (const q of mainQueues) {
+      const dlq = `${q}.dlq`;
+      await channel.assertQueue(dlq, { durable: true });
+      await channel.bindQueue(dlq, DLX_NAME, q);
+      await channel.assertQueue(q, {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': DLX_NAME,
+          'x-dead-letter-routing-key': q,
+        },
+      });
+    }
 
     console.log('[RabbitMQ] Connected successfully');
 

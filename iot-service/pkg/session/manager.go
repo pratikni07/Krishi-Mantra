@@ -39,16 +39,39 @@ func NewManager() *Manager {
 	return m
 }
 
-// CreateSession creates a new session for a device
+// ErrSessionConflict is returned when a handshake request for a device_id
+// collides with an already-active session and the caller did not set
+// Takeover=true. Callers should surface this as NACK SESSION_ACTIVE_ELSEWHERE
+// to the offending device.
+var ErrSessionConflict = fmt.Errorf("device has an active session")
+
+// CreateSession creates a new session for a device. Refuses concurrent
+// handshakes (same device_id, still-live session) unless req.Takeover is set
+// — previously any second handshake silently displaced the first, letting a
+// rogue device spoof a legitimate one.
 func (m *Manager) CreateSession(req *models.HandshakeRequest) (*models.DeviceSession, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if device already has an active session
+	// Check if device already has an active session. A session is only a
+	// conflict if it hasn't already timed out — an abandoned session (device
+	// lost power, never sent DISCONNECT) should be replaceable freely.
 	if existingSessionID, exists := m.devices[req.DeviceID]; exists {
-		// Invalidate old session
+		existing, ok := m.sessions[existingSessionID]
+		sessionStillAlive := ok && existing.IsActive && time.Since(existing.LastHeartbeat) <= SessionTimeout
+		if sessionStillAlive && !req.Takeover {
+			log.Printf("SECURITY: refused concurrent handshake for device %s (active session %s, takeover=false)",
+				req.DeviceID, existingSessionID)
+			return nil, ErrSessionConflict
+		}
+		// Either the existing session is stale, or the caller explicitly
+		// asked to take over. Displace it.
 		delete(m.sessions, existingSessionID)
-		log.Printf("Invalidated old session %s for device %s", existingSessionID, req.DeviceID)
+		if req.Takeover {
+			log.Printf("Takeover requested for device %s — displacing session %s", req.DeviceID, existingSessionID)
+		} else {
+			log.Printf("Replacing stale session %s for device %s", existingSessionID, req.DeviceID)
+		}
 	}
 
 	// Create new session

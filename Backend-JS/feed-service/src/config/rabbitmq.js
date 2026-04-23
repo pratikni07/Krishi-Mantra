@@ -11,6 +11,10 @@ const RABBITMQ_CONFIG = {
   },
 };
 
+// Dead-letter exchange: rejected messages land in a DLQ for triage rather
+// than being silently dropped or requeued forever.
+const DLX_NAME = 'feed.dlx';
+
 /**
  * Connect to RabbitMQ
  * @returns {Promise<{connection, channel}>}
@@ -24,14 +28,24 @@ const connect = async () => {
     connection = await amqp.connect(RABBITMQ_CONFIG.url);
     channel = await connection.createChannel();
 
-    // Ensure queues exist
-    await channel.assertQueue(RABBITMQ_CONFIG.queues.notification, {
-      durable: true,
-    });
+    await channel.assertExchange(DLX_NAME, 'direct', { durable: true });
 
-    await channel.assertQueue(RABBITMQ_CONFIG.queues.feedEvents, {
-      durable: true,
-    });
+    const mainQueues = [
+      RABBITMQ_CONFIG.queues.notification,
+      RABBITMQ_CONFIG.queues.feedEvents,
+    ];
+    for (const q of mainQueues) {
+      const dlq = `${q}.dlq`;
+      await channel.assertQueue(dlq, { durable: true });
+      await channel.bindQueue(dlq, DLX_NAME, q);
+      await channel.assertQueue(q, {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': DLX_NAME,
+          'x-dead-letter-routing-key': q,
+        },
+      });
+    }
 
     console.log('[RabbitMQ] Connected successfully');
 

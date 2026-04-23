@@ -40,9 +40,19 @@ const setupMiddleware = () => {
     }
   }));
 
-  // CORS Configuration
+  // CORS — require an explicit allowlist; refuse to fall back to '*'.
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+  if (allowedOrigins.length === 0) {
+    console.warn('[Ms-setup] CORS_ORIGIN not set — rejecting all cross-origin requests.');
+  }
   app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   }));
 

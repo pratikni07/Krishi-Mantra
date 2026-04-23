@@ -6,6 +6,8 @@ const {
   deleteVideo,
   getVideoInfo,
 } = require('../config/cloudinary');
+
+const REEL_FOLDER = 'krishimantra/reels';
 const fs = require('fs');
 const path = require('path');
 
@@ -261,6 +263,62 @@ class VideoUploadService {
 
     // Upload from external URL
     return await this.uploadFromUrl(existingUrl);
+  }
+
+  /**
+   * Look up a video already uploaded to Cloudinary by the client, verify
+   * it lives in the expected reels folder, and return canonical metadata
+   * derived from Cloudinary (so clients can't spoof duration/dimensions).
+   *
+   * @param {string} publicId - Cloudinary public_id returned by direct upload
+   */
+  async verifyAndGetMetadata(publicId) {
+    if (!this.isConfigured) {
+      throw new Error('Cloudinary is not configured');
+    }
+    if (!publicId || typeof publicId !== 'string') {
+      const err = new Error('publicId is required');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!publicId.startsWith(REEL_FOLDER + '/')) {
+      const err = new Error(`publicId must live under ${REEL_FOLDER}/`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    let resource;
+    try {
+      resource = await cloudinary.api.resource(publicId, {
+        resource_type: 'video',
+      });
+    } catch (err) {
+      if (err?.http_code === 404 || err?.error?.http_code === 404) {
+        const e = new Error('Video not found in Cloudinary');
+        e.statusCode = 404;
+        throw e;
+      }
+      throw err;
+    }
+
+    const streamingUrls = getStreamingUrls(resource.public_id);
+    return {
+      publicId: resource.public_id,
+      mediaUrl: streamingUrls.hls,
+      urls: {
+        hls: streamingUrls.hls,
+        mp4: streamingUrls.mp4,
+        webm: streamingUrls.webm,
+      },
+      thumbnail: streamingUrls.thumbnail,
+      preview: streamingUrls.preview,
+      duration: resource.duration,
+      width: resource.width,
+      height: resource.height,
+      format: resource.format,
+      size: resource.bytes,
+      originalUrl: resource.secure_url,
+    };
   }
 
   /**

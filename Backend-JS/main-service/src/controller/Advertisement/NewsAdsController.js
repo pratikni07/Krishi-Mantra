@@ -39,7 +39,7 @@ class NewsAdsController {
         return res.json(JSON.parse(cachedAds));
       }
 
-      const newsAds = await NewsAds.find();
+      const newsAds = await NewsAds.find().lean();
 
       // Cache results in Redis
       await RedisClient.setex("news_ads", 3600, JSON.stringify(newsAds)); // 1 hour expiry

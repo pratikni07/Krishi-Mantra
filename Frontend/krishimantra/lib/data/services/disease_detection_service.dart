@@ -62,6 +62,21 @@ class DiseaseDetectionService {
     return float32;
   }
 
+  List<List<List<List<double>>>> _reshapeInput(Float32List flatInput) {
+    final reshaped =
+        List.generate(1, (_) => List.generate(224, (_) => List.generate(224, (_) => List.filled(3, 0.0))));
+
+    int index = 0;
+    for (int y = 0; y < 224; y++) {
+      for (int x = 0; x < 224; x++) {
+        reshaped[0][y][x][0] = flatInput[index++];
+        reshaped[0][y][x][1] = flatInput[index++];
+        reshaped[0][y][x][2] = flatInput[index++];
+      }
+    }
+    return reshaped;
+  }
+
   /// Run on-device TFLite inference.
   /// Returns null if model is not available — caller should fall back to Gemini.
   Future<DiseaseResult?> detectWithTFLite(File imageFile) async {
@@ -74,12 +89,10 @@ class DiseaseDetectionService {
       if (interpreter == null) return null;
 
       final input = _preprocessImage(imageFile);
-      final inputShape = [1, 224, 224, 3];
-      final outputShape = [1, _labels.length];
       final output =
           List.generate(1, (_) => List.filled(_labels.length, 0.0));
 
-      interpreter.run(input.reshape(inputShape), output);
+      interpreter.run(_reshapeInput(input), output);
       interpreter.close();
 
       // Find top prediction

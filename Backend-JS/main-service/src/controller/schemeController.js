@@ -16,7 +16,7 @@ exports.createScheme = async (req, res) => {
 // ✅ Get all schemes
 exports.getSchemes = async (req, res) => {
   try {
-    const schemes = await Scheme.find();
+    const schemes = await Scheme.find().lean();
     res.status(200).json(schemes);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -26,7 +26,7 @@ exports.getSchemes = async (req, res) => {
 // ✅ Get a scheme by ID
 exports.getSchemeById = async (req, res) => {
   try {
-    const scheme = await Scheme.findById(req.params.id);
+    const scheme = await Scheme.findById(req.params.id).lean();
     if (!scheme) {
       return res.status(404).json({ message: "Scheme not found" });
     }

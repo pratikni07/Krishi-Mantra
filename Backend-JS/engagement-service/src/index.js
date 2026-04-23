@@ -19,6 +19,7 @@ const { notFoundHandler, errorHandler } = require('./middlewares/errorHandler');
 const { eventRateLimiter, analyticsRateLimiter } = require('./middlewares/rateLimiter');
 const EventService = require('./services/eventService');
 const AggregationWorker = require('./workers/aggregationWorker');
+const mongoSanitize = require('./middlewares/mongoSanitize');
 const logger = require('./utils/logger');
 
 const app = express();
@@ -55,6 +56,10 @@ if (config.nodeEnv === 'development') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Strip Mongo operator keys ($-prefixed / dotted) from req input before any
+// controller reaches into req.query/body. See middlewares/mongoSanitize.js.
+app.use(mongoSanitize);
+
 // Apply rate limiters
 app.use('/api/engagement/events', eventRateLimiter);
 app.use('/api/engagement/analytics', analyticsRateLimiter);
@@ -75,7 +80,11 @@ const gracefulShutdown = async (signal) => {
     logger.info('HTTP server closed');
 
     try {
-      // Flush remaining events
+      // Stop pulling new messages from RabbitMQ and wait for in-flight
+      // handlers to finish — they need MongoDB/Redis which we close below.
+      await RabbitMQ.stopConsumers(15000);
+
+      // Flush remaining in-memory events to persistence.
       await EventService.shutdown();
       logger.info('Event service shut down');
 

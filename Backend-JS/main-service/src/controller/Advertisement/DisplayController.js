@@ -19,23 +19,25 @@ class DisplayController {
         return res.json(JSON.parse(cachedDisplay));
       }
       
-      // If no cache or Redis is down, get from database
-      const displaySettings = await UIDisplay.findOne();
+      // If no cache or Redis is down, get from database. Read-only — return
+      // plain objects via .lean() to skip Mongoose document hydration on what
+      // can be ~thousands of ad docs per call.
+      const displaySettings = await UIDisplay.findOne().lean();
 
       const dynamicContent = {
         displaySettings: displaySettings || {},
         homeSlider: displaySettings?.Slider
-          ? await HomeSlider.find().sort({ prority: -1 })
+          ? await HomeSlider.find().sort({ prority: -1 }).lean()
           : [],
         splashScreen: displaySettings?.SplashScreen
-          ? await SplashModal.findOne({ prority: true })
+          ? await SplashModal.findOne({ prority: true }).lean()
           : null,
         homeScreenAds: displaySettings?.HomeScreenAdOne
-          ? await HomeSlider.findOne()
+          ? await HomeSlider.findOne().lean()
           : null,
-        feedAds: displaySettings?.FeedAds ? await NewsAds.find() : [],
-        reelAds: displaySettings?.ReelAds ? await NewsAds.find() : [],
-        newsAds: displaySettings?.NewsAds ? await NewsAds.find() : [],
+        feedAds: displaySettings?.FeedAds ? await NewsAds.find().lean() : [],
+        reelAds: displaySettings?.ReelAds ? await NewsAds.find().lean() : [],
+        newsAds: displaySettings?.NewsAds ? await NewsAds.find().lean() : [],
       };
 
       // Try to cache the result but don't fail if Redis is down
@@ -65,8 +67,9 @@ class DisplayController {
     try {
       const updateData = req.body;
 
-      // Find existing settings or create new
-      let displaySettings = await UIDisplay.findOne();
+      // Find existing settings or create new. Only used as a presence check
+      // before the findOneAndUpdate below, so .lean() is safe.
+      let displaySettings = await UIDisplay.findOne().lean();
 
       if (displaySettings) {
         displaySettings = await UIDisplay.findOneAndUpdate({}, updateData, {

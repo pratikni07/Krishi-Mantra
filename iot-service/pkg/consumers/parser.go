@@ -20,11 +20,13 @@ type ParserConsumer struct {
 	apiClient         *api.Client
 }
 
-// NewParserConsumer creates a new parser consumer
-func NewParserConsumer(client *mqttClient.Client, apiClient *api.Client) *ParserConsumer {
+// NewParserConsumer creates a new parser consumer. devMode propagates to
+// the handshake handler so dev builds can run without a main-service
+// API client wired up.
+func NewParserConsumer(client *mqttClient.Client, apiClient *api.Client, devMode bool) *ParserConsumer {
 	sessionMgr := session.NewManager()
-	handshakeHandler := handlers.NewHandshakeHandler(client, sessionMgr, apiClient)
-	
+	handshakeHandler := handlers.NewHandshakeHandler(client, sessionMgr, apiClient, devMode)
+
 	return &ParserConsumer{
 		mqttClient:       client,
 		sessionManager:   sessionMgr,

@@ -1,27 +1,67 @@
 const axios = require('axios');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const otpGenerator = require('otp-generator');
 
 const User = require('../model/User');
 const UserDetail = require('../model/UserDetail');
 const WhatsAppOTP = require('../model/WhatsappOTP');
+const RefreshToken = require('../model/RefreshToken');
 const mailSender = require('../utils/mailSender');
 const { sendOTP: sendSMSOTP } = require('../utils/smsSender');
 const { passwordUpdated } = require('../mail/templates/passwordUpdate');
 const { asyncHandler } = require('../utils');
 const { HTTP_STATUS, JWT_CONFIG, OTP_CONFIG } = require('../utils/constants');
 const logger = require('../utils/logger');
+const otpRateLimit = require('../utils/otpRateLimit');
 
 /**
- * Generate JWT token
- * @param {Object} payload - Token payload
- * @returns {string} - JWT token
+ * Parse a duration string like "30d" into milliseconds.
+ */
+const durationToMs = (d) => {
+  const m = /^(\d+)([smhd])$/.exec(d);
+  if (!m) throw new Error(`Invalid duration: ${d}`);
+  const n = parseInt(m[1], 10);
+  const unit = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[m[2]];
+  return n * unit;
+};
+
+/**
+ * Generate short-lived access token.
  */
 const generateToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: JWT_CONFIG.ACCESS_TOKEN_EXPIRY,
   });
+};
+
+/**
+ * Issue a new access+refresh token pair for a user and persist the
+ * refresh token's hash. Returns { token, refreshToken, refreshTokenId }.
+ *
+ * The refresh token itself is a signed JWT with a random jti so two
+ * tokens can never collide on the `tokenHash` unique index.
+ */
+const issueTokenPair = async (user, accessPayload, req = null) => {
+  const token = generateToken(accessPayload);
+
+  const jti = crypto.randomBytes(16).toString('hex');
+  const refreshToken = jwt.sign(
+    { id: user._id, type: 'refresh', jti },
+    process.env.JWT_SECRET,
+    { expiresIn: JWT_CONFIG.REFRESH_TOKEN_EXPIRY }
+  );
+
+  const stored = await RefreshToken.create({
+    userId: user._id,
+    tokenHash: RefreshToken.hashToken(refreshToken),
+    expiresAt: new Date(Date.now() + durationToMs(JWT_CONFIG.REFRESH_TOKEN_EXPIRY)),
+    userAgent: req?.get?.('user-agent'),
+    ip: req?.ip,
+  });
+
+  return { token, refreshToken, refreshTokenId: stored._id };
 };
 
 /**
@@ -174,6 +214,17 @@ exports.initiateAuth = asyncHandler(async (req, res) => {
     });
   }
 
+  // Per-phone rate limit. Blocks rotating-IP attackers from burning
+  // through SMS quota or guessing OTPs for a single number.
+  const gate = await otpRateLimit.checkAndConsume('initiate', phoneNo);
+  if (!gate.allowed) {
+    res.set('Retry-After', String(gate.retryAfterSec));
+    return res.status(HTTP_STATUS.TOO_MANY_REQUESTS || 429).json({
+      success: false,
+      message: 'Too many OTP requests for this number. Please try again later.',
+    });
+  }
+
   // Check if user exists - if exists, use their saved language preference
   const existingUser = await User.findOne({ phoneNo });
   const isRegistered = !!existingUser;
@@ -279,6 +330,17 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
     });
   }
 
+  // Per-phone verify-attempt limit. Defense against brute-forcing the
+  // 6-digit OTP across many IPs within the OTP's 10-minute validity.
+  const gate = await otpRateLimit.checkAndConsume('verify', phoneNo);
+  if (!gate.allowed) {
+    res.set('Retry-After', String(gate.retryAfterSec));
+    return res.status(HTTP_STATUS.TOO_MANY_REQUESTS || 429).json({
+      success: false,
+      message: 'Too many verification attempts for this number. Please try again later.',
+    });
+  }
+
   // Find the most recent OTP (skip isSent check in development)
   const query = process.env.NODE_ENV === 'development'
     ? { phoneNo }
@@ -323,11 +385,15 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
 
   if (user) {
     // Existing user - login
-    const token = generateToken({
-      phoneNo: user.phoneNo,
-      id: user._id,
-      accountType: user.accountType,
-    });
+    const { token, refreshToken } = await issueTokenPair(
+      user,
+      {
+        phoneNo: user.phoneNo,
+        id: user._id,
+        accountType: user.accountType,
+      },
+      req
+    );
 
     const userResponse = user.toObject();
     delete userResponse.password;
@@ -338,6 +404,7 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
       .json({
         success: true,
         token,
+        refreshToken,
         user: userResponse,
         message: 'Login successful',
       });
@@ -407,16 +474,20 @@ exports.signupWithPhone = asyncHandler(async (req, res) => {
   profileDetails.userId = user._id;
   await profileDetails.save();
 
-  // Generate token
-  const token = generateToken({
-    name: user.name,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    phoneNo: user.phoneNo,
-    id: user._id,
-    accountType: user.accountType,
-    image: user.image,
-  });
+  // Generate token pair
+  const { token, refreshToken } = await issueTokenPair(
+    user,
+    {
+      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phoneNo: user.phoneNo,
+      id: user._id,
+      accountType: user.accountType,
+      image: user.image,
+    },
+    req
+  );
 
   const userResponse = user.toObject();
   delete userResponse.password;
@@ -426,6 +497,7 @@ exports.signupWithPhone = asyncHandler(async (req, res) => {
     .json({
       success: true,
       token,
+      refreshToken,
       user: userResponse,
       message: 'User registered successfully.',
     });
@@ -474,12 +546,16 @@ exports.adminLogin = asyncHandler(async (req, res) => {
     });
   }
 
-  // Generate token
-  const token = generateToken({
-    email: admin.email,
-    id: admin._id,
-    accountType: admin.accountType,
-  });
+  // Generate token pair
+  const { token, refreshToken } = await issueTokenPair(
+    admin,
+    {
+      email: admin.email,
+      id: admin._id,
+      accountType: admin.accountType,
+    },
+    req
+  );
 
   const adminResponse = admin.toObject();
   delete adminResponse.password;
@@ -490,8 +566,115 @@ exports.adminLogin = asyncHandler(async (req, res) => {
     .json({
       success: true,
       token,
+      refreshToken,
       user: adminResponse,
       admin: adminResponse,
       message: 'Admin logged in successfully',
     });
+});
+
+/**
+ * Rotate a refresh token. Validates the presented refresh token, issues
+ * a new pair, marks the old one revoked, and points `replacedBy` at the
+ * new entry. If the presented token was already revoked we treat it as
+ * a replay attack and revoke every outstanding refresh token for that
+ * user so an attacker can't keep refreshing alongside the real user.
+ */
+exports.refreshToken = asyncHandler(async (req, res) => {
+  const presented = req.body?.refreshToken;
+  if (!presented) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Refresh token is required',
+    });
+  }
+
+  let payload;
+  try {
+    payload = jwt.verify(presented, process.env.JWT_SECRET);
+  } catch (err) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: err.name === 'TokenExpiredError'
+        ? 'Refresh token expired'
+        : 'Invalid refresh token',
+    });
+  }
+
+  if (payload.type !== 'refresh') {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Not a refresh token',
+    });
+  }
+
+  const hash = RefreshToken.hashToken(presented);
+  const stored = await RefreshToken.findOne({ tokenHash: hash });
+
+  if (!stored) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Refresh token not recognized',
+    });
+  }
+
+  if (stored.revokedAt) {
+    // Replay of a rotated token — treat as theft, nuke the whole family.
+    await RefreshToken.updateMany(
+      { userId: stored.userId, revokedAt: null },
+      { revokedAt: new Date() }
+    );
+    logger.warn(`Refresh token reuse detected for user ${stored.userId} — all sessions revoked`);
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'Refresh token reuse detected. Please log in again.',
+    });
+  }
+
+  const user = await User.findById(stored.userId);
+  if (!user) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      message: 'User not found',
+    });
+  }
+
+  const pair = await issueTokenPair(
+    user,
+    {
+      id: user._id,
+      phoneNo: user.phoneNo,
+      email: user.email,
+      accountType: user.accountType,
+    },
+    req
+  );
+
+  stored.revokedAt = new Date();
+  stored.replacedBy = pair.refreshTokenId;
+  await stored.save();
+
+  return res.cookie('token', pair.token, getCookieOptions())
+    .status(HTTP_STATUS.OK)
+    .json({
+      success: true,
+      token: pair.token,
+      refreshToken: pair.refreshToken,
+    });
+});
+
+/**
+ * Revoke the presented refresh token (logout).
+ */
+exports.logout = asyncHandler(async (req, res) => {
+  const presented = req.body?.refreshToken;
+  if (presented) {
+    const hash = RefreshToken.hashToken(presented);
+    await RefreshToken.updateOne(
+      { tokenHash: hash, revokedAt: null },
+      { revokedAt: new Date() }
+    );
+  }
+  res.clearCookie('token');
+  return res.status(HTTP_STATUS.OK).json({ success: true, message: 'Logged out' });
 });

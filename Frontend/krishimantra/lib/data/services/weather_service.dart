@@ -4,7 +4,11 @@ import '../../core/utils/app_logger.dart';
 
 class WeatherService {
   final Dio _dio = Dio();
-  final String _apiKey = '4da43886d7063a5f26ef7d40e00c2dd9';
+  // Inject at build time: --dart-define=OPENWEATHER_API_KEY=...
+  // Long-term: move this call behind a backend proxy so the key never
+  // ships in the APK.
+  static const String _apiKey =
+      String.fromEnvironment('OPENWEATHER_API_KEY', defaultValue: '');
   final String _baseUrl = 'https://api.openweathermap.org/data/2.5';
 
   /// Get current weather data

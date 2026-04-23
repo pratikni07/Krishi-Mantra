@@ -13,9 +13,13 @@ class BatchProcessor {
       const channel = rabbitmq.getChannel();
       await channel.prefetch(10);
 
-      await channel.consume(config.rabbitmq.queues.notification, async (msg) => {
+      // Register each consumer with the shutdown tracker so graceful
+      // shutdown can drain in-flight handler invocations before Mongo/Redis
+      // close under us.
+      const notifTag = await channel.consume(config.rabbitmq.queues.notification, async (msg) => {
         if (!msg) return;
 
+        rabbitmq.onHandlerStart();
         try {
           const notificationData = JSON.parse(msg.content.toString());
 
@@ -39,16 +43,22 @@ class BatchProcessor {
           await processor.processNotification(notification);
           channel.ack(msg);
         } catch (error) {
-          logger.error('Error processing notification from queue:', error);
-          // Drop poison messages (e.g., schema validation) to avoid infinite requeue loops.
-          const isValidationError = error?.name === 'ValidationError';
-          channel.nack(msg, false, !isValidationError);
+          // Route every failed message to the DLQ (configured on the queue's
+          // x-dead-letter-exchange) instead of requeueing. Prior logic only
+          // dropped ValidationErrors; a malformed payload that threw any other
+          // kind of error could still pin the consumer in a nack/requeue loop.
+          logger.error('Error processing notification from queue, routing to DLQ:', error);
+          channel.nack(msg, false, false);
+        } finally {
+          rabbitmq.onHandlerEnd();
         }
       });
+      rabbitmq.trackConsumerTag(notifTag.consumerTag);
 
-      await channel.consume(config.rabbitmq.queues.batch, async (msg) => {
+      const batchTag = await channel.consume(config.rabbitmq.queues.batch, async (msg) => {
         if (!msg) return;
 
+        rabbitmq.onHandlerStart();
         try {
           const batch = JSON.parse(msg.content.toString());
           logger.info(`Processing batch: ${batch.batchId} with ${batch.count} notifications`);
@@ -59,14 +69,18 @@ class BatchProcessor {
 
           channel.ack(msg);
         } catch (error) {
-          logger.error('Error processing batch from queue:', error);
-          channel.nack(msg, false, true);
+          logger.error('Error processing batch from queue, routing to DLQ:', error);
+          channel.nack(msg, false, false);
+        } finally {
+          rabbitmq.onHandlerEnd();
         }
       });
+      rabbitmq.trackConsumerTag(batchTag.consumerTag);
 
-      await channel.consume(config.rabbitmq.queues.event, async (msg) => {
+      const eventTag = await channel.consume(config.rabbitmq.queues.event, async (msg) => {
         if (!msg) return;
 
+        rabbitmq.onHandlerStart();
         try {
           const eventPayload = JSON.parse(msg.content.toString());
           await eventNotificationService.handleEvent(eventPayload);
@@ -74,8 +88,11 @@ class BatchProcessor {
         } catch (error) {
           logger.error('Error processing event from queue:', error);
           channel.nack(msg, false, false);
+        } finally {
+          rabbitmq.onHandlerEnd();
         }
       });
+      rabbitmq.trackConsumerTag(eventTag.consumerTag);
 
       logger.info('Batch processor started and consuming notification, batch and event queues');
     } catch (error) {

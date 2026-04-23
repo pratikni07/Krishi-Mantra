@@ -9,8 +9,8 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=secure-password
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME must be set in .env}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD must be set in .env}
 
   api-gateway:
     build:
@@ -39,7 +39,7 @@ services:
       - "4000:4000"
     environment:
       - PORT=4000
-      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/maindb
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/maindb?authSource=admin
     depends_on:
       - mongodb
 
@@ -52,7 +52,7 @@ services:
       - "4001:4001"
     environment:
       - PORT=4001
-      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/notificationdb
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/notificationdb?authSource=admin
     depends_on:
       - mongodb
 
@@ -65,7 +65,7 @@ services:
       - "4002:4002"
     environment:
       - PORT=4002
-      - MONGODB_URI=mongodb://admin:secure-password@mongodb:27017/feeddb
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/feeddb?authSource=admin
     depends_on:
       - mongodb
 

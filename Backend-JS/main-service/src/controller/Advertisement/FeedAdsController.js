@@ -54,7 +54,7 @@ class FeedAdsController {
         return res.json(JSON.parse(cachedAds));
       }
 
-      const feedAds = await FeedAds.find();
+      const feedAds = await FeedAds.find().lean();
 
       // Cache for 1 hour but don't fail if Redis is down
       try {
@@ -197,7 +197,7 @@ class FeedAdsController {
         return res.json(JSON.parse(cachedAds));
       }
 
-      const reelAds = await ReelAds.find();
+      const reelAds = await ReelAds.find().lean();
 
       // Cache for 1 hour but don't fail if Redis is down
       try {

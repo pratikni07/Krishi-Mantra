@@ -29,6 +29,11 @@ type HandshakeRequest struct {
 	Timestamp       time.Time `json:"timestamp"`
 	// Optional authentication token
 	Token           string    `json:"token,omitempty"`
+	// Takeover must be explicitly set to true to displace an active session
+	// for the same device_id. Without it, a second device presenting the same
+	// ID is rejected — this prevents a rogue device from silently hijacking a
+	// legitimate one.
+	Takeover        bool      `json:"takeover,omitempty"`
 }
 
 // HandshakeResponse represents the server's response to a handshake request

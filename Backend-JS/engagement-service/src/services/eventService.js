@@ -20,9 +20,14 @@ const {
   calculateEngagementScore,
 } = require('../utils/helpers');
 
-// In-memory event buffer for batch processing
+// In-memory event buffer for batch processing.
+// Bounded at MAX_BUFFER_SIZE; overflow spills to RabbitMQ so a Mongo outage
+// or flush stall cannot grow the buffer until the process OOMs.
 let eventBuffer = [];
 let flushTimer = null;
+let isFlushing = false;
+let droppedEvents = 0;
+const MAX_BUFFER_SIZE = Math.max(1000, (config.batch.size || 100) * 10);
 
 class EventService {
   /**
@@ -59,15 +64,35 @@ class EventService {
         eventCategory: eventData.eventCategory || this._getEventCategory(eventData.eventName),
       };
 
+      // If buffer is at its hard cap, spill to RabbitMQ instead of growing
+      // the in-process array. Prevents unbounded growth if flushes stall.
+      if (eventBuffer.length >= MAX_BUFFER_SIZE) {
+        droppedEvents++;
+        if (droppedEvents === 1 || droppedEvents % 100 === 0) {
+          logger.warn('Event buffer full, spilling to RabbitMQ', {
+            bufferSize: eventBuffer.length,
+            droppedTotal: droppedEvents,
+          });
+        }
+        if (RabbitMQ.isConnected()) {
+          await RabbitMQ.sendToQueue(enrichedEvent, QUEUES.EVENTS);
+          return { success: true, queued: true, spilled: true };
+        }
+        // RabbitMQ unavailable too — drop the event rather than OOM the process.
+        return { success: false, dropped: true, reason: 'buffer_full' };
+      }
+
       // Add to buffer
       eventBuffer.push(enrichedEvent);
 
       // Update real-time counters in Redis
       await this._updateRealTimeCounters(enrichedEvent);
 
-      // Flush if buffer is full
-      if (eventBuffer.length >= config.batch.size) {
-        await this.flushBuffer();
+      // Fire-and-forget threshold flush — callers shouldn't block on disk I/O
+      if (eventBuffer.length >= config.batch.size && !isFlushing) {
+        this.flushBuffer().catch((err) =>
+          logger.error('Background flush failed:', err.message)
+        );
       }
 
       return { success: true, buffered: true };
@@ -109,9 +134,13 @@ class EventService {
    * Flush event buffer to MongoDB
    */
   static async flushBuffer() {
-    if (eventBuffer.length === 0) return;
+    // Non-reentrant: if a flush is already in flight, skip. Otherwise two
+    // concurrent flushes would double-insert the same event batch when the
+    // interval timer and threshold trigger fire together.
+    if (isFlushing || eventBuffer.length === 0) return;
+    isFlushing = true;
 
-    const eventsToFlush = [...eventBuffer];
+    const eventsToFlush = eventBuffer;
     eventBuffer = [];
 
     const startTime = Date.now();
@@ -135,7 +164,21 @@ class EventService {
       if (RabbitMQ.isConnected()) {
         await RabbitMQ.sendBatchToQueue(eventsToFlush);
       }
+    } finally {
+      isFlushing = false;
     }
+  }
+
+  /**
+   * Buffer telemetry for /health or metrics scraping.
+   */
+  static getBufferStats() {
+    return {
+      bufferSize: eventBuffer.length,
+      maxBufferSize: MAX_BUFFER_SIZE,
+      droppedEvents,
+      isFlushing,
+    };
   }
 
   /**

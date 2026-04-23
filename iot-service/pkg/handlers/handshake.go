@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -18,14 +19,18 @@ type HandshakeHandler struct {
 	mqttClient     *mqttClient.Client
 	sessionManager *session.Manager
 	apiClient      *api.Client
+	devMode        bool
 }
 
-// NewHandshakeHandler creates a new handshake handler
-func NewHandshakeHandler(mqttClient *mqttClient.Client, sessionManager *session.Manager, apiClient *api.Client) *HandshakeHandler {
+// NewHandshakeHandler creates a new handshake handler. devMode permits
+// running without an apiClient; outside dev we fail closed on any
+// subscription validation path with a nil client.
+func NewHandshakeHandler(mqttClient *mqttClient.Client, sessionManager *session.Manager, apiClient *api.Client, devMode bool) *HandshakeHandler {
 	return &HandshakeHandler{
 		mqttClient:     mqttClient,
 		sessionManager: sessionManager,
 		apiClient:      apiClient,
+		devMode:        devMode,
 	}
 }
 
@@ -91,6 +96,20 @@ func (h *HandshakeHandler) handleHandshakeRequest(client mqtt.Client, msg mqtt.M
 	// Create session
 	deviceSession, err := h.sessionManager.CreateSession(&req)
 	if err != nil {
+		// Concurrent-session spoof attempts get a distinct NACK so operators
+		// can alert on them and so legitimate devices don't silently race
+		// each other.
+		if errors.Is(err, session.ErrSessionConflict) {
+			log.Printf("Rejected concurrent handshake for device %s", req.DeviceID)
+			h.sendNACK(&req, "SESSION_ACTIVE_ELSEWHERE")
+			if h.apiClient != nil {
+				go h.apiClient.LogDeviceActivity(req.DeviceID, "HANDSHAKE_CONFLICT", map[string]interface{}{
+					"mac_address":      req.MACAddress,
+					"firmware_version": req.FirmwareVersion,
+				})
+			}
+			return
+		}
 		log.Printf("Error creating session for device %s: %v", req.DeviceID, err)
 		h.sendNACK(&req, "SESSION_CREATION_FAILED")
 		return
@@ -137,12 +156,17 @@ func (h *HandshakeHandler) validateHandshakeRequest(req *models.HandshakeRequest
 	return nil
 }
 
-// validateDeviceSubscription validates device subscription with main service
+// validateDeviceSubscription validates device subscription with main service.
+// Fail-closed: if the API client isn't wired, reject unless the operator
+// has explicitly opted into dev mode (IOT_DEV_MODE=true).
 func (h *HandshakeHandler) validateDeviceSubscription(req *models.HandshakeRequest) (bool, string) {
-	// If API client is not configured, allow connection (backward compatibility)
 	if h.apiClient == nil {
-		log.Printf("Warning: API client not configured, skipping subscription validation")
-		return true, ""
+		if h.devMode {
+			log.Printf("DEV MODE: API client not configured, allowing device %s without subscription check", req.DeviceID)
+			return true, ""
+		}
+		log.Printf("SECURITY: API client not configured — rejecting device %s", req.DeviceID)
+		return false, "SUBSCRIPTION_VALIDATION_UNAVAILABLE"
 	}
 
 	// Prepare validation request

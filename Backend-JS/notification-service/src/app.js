@@ -10,6 +10,7 @@ const redis = require('./config/redis');
 const { Database } = require('./config/mongodb');
 const { RATE_LIMITS, HTTP_STATUS } = require('./utils/constants');
 const { errorHandler, notFoundHandler, requestLogger } = require('./middlewares/errorHandler');
+const mongoSanitize = require('./middlewares/mongoSanitize');
 
 // Create Express app
 const app = express();
@@ -26,21 +27,23 @@ app.use(helmet({
 // Compression for responses
 app.use(compression());
 
-// CORS configuration
+// CORS configuration — fail-closed: require an explicit ALLOWED_ORIGINS list
+// in every non-dev env. Combined with credentials:true, an origin:true fallback
+// would hand cookies to any site that loads the app.
+const allowedOriginsEnv = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+if (allowedOriginsEnv.length === 0) {
+  console.warn(
+    '[notification-service] ALLOWED_ORIGINS not set — rejecting all cross-origin requests.'
+  );
+}
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // No Origin header — server-to-server or mobile app. Not subject to CORS.
     if (!origin) return callback(null, true);
-
-    const allowedOrigins = process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(',')
-      : ['*'];
-
-    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Allow all in development
-    }
+    if (allowedOriginsEnv.includes(origin)) return callback(null, true);
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'],
@@ -52,6 +55,9 @@ app.use(cors(corsOptions));
 // Request parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Strip Mongo operator keys ($-prefixed / dotted) from req input.
+app.use(mongoSanitize);
 
 // Request logging
 app.use(requestLogger);

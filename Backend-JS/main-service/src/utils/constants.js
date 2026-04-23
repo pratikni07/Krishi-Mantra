@@ -79,8 +79,12 @@ const OTP_CONFIG = {
 
 // JWT settings
 const JWT_CONFIG = {
-  ACCESS_TOKEN_EXPIRY: '24h',
-  COOKIE_EXPIRY_DAYS: 3,
+  ACCESS_TOKEN_EXPIRY: '15m',
+  REFRESH_TOKEN_EXPIRY: '30d',
+  // Cookie covers refresh-token lifetime so browser clients don't get
+  // logged out mid-session; the access token inside it still expires
+  // per ACCESS_TOKEN_EXPIRY above.
+  COOKIE_EXPIRY_DAYS: 30,
 };
 
 // Rate limiting - optimized for 10k users

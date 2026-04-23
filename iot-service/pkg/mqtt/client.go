@@ -1,8 +1,11 @@
 package mqtt
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -12,25 +15,89 @@ type Client struct {
 	client mqtt.Client
 }
 
-// NewClient creates a new MQTT client
-func NewClient(brokerURL, clientID string) (*Client, error) {
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(brokerURL)
-	opts.SetClientID(clientID)
-	opts.SetDefaultPublishHandler(messagePubHandler)
-	opts.OnConnect = connectHandler
-	opts.OnConnectionLost = connectLostHandler
-	opts.SetAutoReconnect(true)
-	opts.SetConnectRetry(true)
-	opts.SetConnectRetryInterval(5 * time.Second)
+// Options configures the MQTT client. BrokerURL should use `ssl://` or
+// `tls://` to trigger TLS; CACertPath is optional (for a private CA).
+type Options struct {
+	BrokerURL  string
+	ClientID   string
+	Username   string
+	Password   string
+	CACertPath string
+	// InsecureSkipVerify disables hostname/CA verification. Dev only.
+	InsecureSkipVerify bool
+}
 
-	client := mqtt.NewClient(opts)
+// NewClient creates a new MQTT client using the given options.
+func NewClient(opts Options) (*Client, error) {
+	if opts.BrokerURL == "" {
+		return nil, fmt.Errorf("mqtt: broker URL required")
+	}
+
+	mqttOpts := mqtt.NewClientOptions()
+	mqttOpts.AddBroker(opts.BrokerURL)
+	mqttOpts.SetClientID(opts.ClientID)
+	mqttOpts.SetDefaultPublishHandler(messagePubHandler)
+	mqttOpts.OnConnect = connectHandler
+	mqttOpts.OnConnectionLost = connectLostHandler
+	mqttOpts.SetAutoReconnect(true)
+	mqttOpts.SetConnectRetry(true)
+	mqttOpts.SetConnectRetryInterval(5 * time.Second)
+
+	if opts.Username != "" {
+		mqttOpts.SetUsername(opts.Username)
+		mqttOpts.SetPassword(opts.Password)
+	} else {
+		log.Printf("WARNING: MQTT connecting without credentials — set MQTT_USERNAME/MQTT_PASSWORD for production")
+	}
+
+	if tlsCfg, err := buildTLSConfig(opts); err != nil {
+		return nil, err
+	} else if tlsCfg != nil {
+		mqttOpts.SetTLSConfig(tlsCfg)
+	}
+
+	client := mqtt.NewClient(mqttOpts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		return nil, fmt.Errorf("failed to connect to MQTT broker: %w", token.Error())
 	}
 
-	log.Printf("Connected to MQTT broker: %s", brokerURL)
+	log.Printf("Connected to MQTT broker: %s", opts.BrokerURL)
 	return &Client{client: client}, nil
+}
+
+func buildTLSConfig(opts Options) (*tls.Config, error) {
+	needsTLS := opts.CACertPath != "" || opts.InsecureSkipVerify ||
+		startsWithAny(opts.BrokerURL, "ssl://", "tls://", "mqtts://", "wss://")
+	if !needsTLS {
+		return nil, nil
+	}
+
+	cfg := &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: opts.InsecureSkipVerify,
+	}
+
+	if opts.CACertPath != "" {
+		pem, err := os.ReadFile(opts.CACertPath)
+		if err != nil {
+			return nil, fmt.Errorf("mqtt: read CA cert %s: %w", opts.CACertPath, err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("mqtt: CA cert %s contains no valid PEM", opts.CACertPath)
+		}
+		cfg.RootCAs = pool
+	}
+	return cfg, nil
+}
+
+func startsWithAny(s string, prefixes ...string) bool {
+	for _, p := range prefixes {
+		if len(s) >= len(p) && s[:len(p)] == p {
+			return true
+		}
+	}
+	return false
 }
 
 // Publish publishes a message to a topic

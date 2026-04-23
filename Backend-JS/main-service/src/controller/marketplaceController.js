@@ -9,7 +9,8 @@ exports.getAllProducts = async (req, res) => {
   try {
     const products = await MarketplaceProduct.find()
       .select('title shortDescription priceRange media.url media.type sellerInfo.userName rating tags')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     // Filter to only include images, not videos
     const simplifiedProducts = products.map(product => {
@@ -50,7 +51,8 @@ exports.getProductById = async (req, res) => {
     }
 
     const product = await MarketplaceProduct.findById(req.params.id)
-      .select('-comments'); // Exclude comments from the response
+      .select('-comments')
+      .lean();
 
     if (!product) {
       return res.status(404).json({
@@ -80,7 +82,7 @@ exports.getProductComments = async (req, res) => {
     const { id } = req.params;
     const { page = 1, limit = 10 } = req.query;
 
-    const product = await MarketplaceProduct.findById(id);
+    const product = await MarketplaceProduct.findById(id).lean();
 
     if (!product) {
       return res.status(404).json({
@@ -133,8 +135,9 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    // Get user information
-    const user = await User.findById(req.body.userId);
+    // Get user information. Read-only — we copy a few scalar fields into the
+    // seller payload and never save this user object.
+    const user = await User.findById(req.body.userId).lean();
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -175,7 +178,9 @@ exports.createProduct = async (req, res) => {
 // Update a marketplace product
 exports.updateProduct = async (req, res) => {
   try {
-    const product = await MarketplaceProduct.findById(req.params.id);
+    // Lean read — only used for the ownership check below. The write path
+    // uses findByIdAndUpdate, not product.save().
+    const product = await MarketplaceProduct.findById(req.params.id).lean();
 
     if (!product) {
       return res.status(404).json({
@@ -214,7 +219,8 @@ exports.updateProduct = async (req, res) => {
 // Delete a marketplace product
 exports.deleteProduct = async (req, res) => {
   try {
-    const product = await MarketplaceProduct.findById(req.params.id);
+    // Lean — only used for ownership check; delete uses findByIdAndDelete.
+    const product = await MarketplaceProduct.findById(req.params.id).lean();
 
     if (!product) {
       return res.status(404).json({
@@ -266,8 +272,8 @@ exports.addComment = async (req, res) => {
       });
     }
 
-    // Get user information
-    const user = await User.findById(req.body.userId);
+    // Get user information. Read-only — fields are copied into the comment.
+    const user = await User.findById(req.body.userId).lean();
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -330,8 +336,8 @@ exports.addReplyToComment = async (req, res) => {
       });
     }
 
-    // Get user information
-    const user = await User.findById(req.body.userId);
+    // Get user information. Read-only — fields are copied into the reply.
+    const user = await User.findById(req.body.userId).lean();
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -369,11 +375,14 @@ exports.searchProducts = async (req, res) => {
 
     const query = {};
 
-    if (keyword) {
+    if (keyword && typeof keyword === 'string') {
+      // Escape regex metacharacters so user input can't craft a pattern
+      // (ReDoS / unintended matches). Trim + cap length to bound cost.
+      const safe = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
       query.$or = [
-        { title: { $regex: keyword, $options: 'i' } },
-        { shortDescription: { $regex: keyword, $options: 'i' } },
-        { detailedDescription: { $regex: keyword, $options: 'i' } }
+        { title: { $regex: safe, $options: 'i' } },
+        { shortDescription: { $regex: safe, $options: 'i' } },
+        { detailedDescription: { $regex: safe, $options: 'i' } }
       ];
     }
 
@@ -400,7 +409,8 @@ exports.searchProducts = async (req, res) => {
 
     const products = await MarketplaceProduct.find(query)
       .select('title shortDescription priceRange media.url media.type sellerInfo.userName rating tags')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     // Filter to only include images, not videos
     const simplifiedProducts = products.map(product => {

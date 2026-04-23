@@ -41,9 +41,19 @@ class SubscriptionController extends GetxController {
   }
 
   /// Initialize Stripe
+  // Inject per-build: --dart-define=STRIPE_PUBLISHABLE_KEY=pk_live_...
+  static const String _stripePublishableKey =
+      String.fromEnvironment('STRIPE_PUBLISHABLE_KEY', defaultValue: '');
+
   void _initializeStripe() {
-    Stripe.publishableKey =
-        'pk_test_51SETjbFv4IlcIv7eXq12sSwOuMtpaziC5956Jw5YCr3qwiJDnYn7dUyiaU0LBKauFPxjp9Hqa14djo7fWoH3X0YO00TNFR8RKn';
+    if (_stripePublishableKey.isEmpty) {
+      // Fail loudly so a misconfigured build surfaces immediately
+      // instead of charging against a stale test key in production.
+      throw StateError(
+        'STRIPE_PUBLISHABLE_KEY not set. Pass via --dart-define at build time.',
+      );
+    }
+    Stripe.publishableKey = _stripePublishableKey;
     Stripe.merchantIdentifier = 'merchant.com.krishimantra';
   }
 

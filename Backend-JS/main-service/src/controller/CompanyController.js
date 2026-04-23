@@ -3,6 +3,14 @@ const Product = require('../model/Products');
 const { asyncHandler } = require('../utils');
 const { HTTP_STATUS } = require('../utils/constants');
 
+// Upper bound on the products embedded in a single company response. A
+// company can have thousands of products (seed/fertilizer distributors), and
+// the old `.populate('products')` without a limit shipped the entire list on
+// every company detail view. Clients that need more should page through
+// /companies/:id/products.
+const DEFAULT_PRODUCT_PREVIEW = 20;
+const MAX_PRODUCTS_PER_PAGE = 100;
+
 /**
  * Create a new company
  */
@@ -34,11 +42,16 @@ exports.getAllCompanies = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get company by ID
+ * Get company by ID. Returns a bounded preview of products (DEFAULT_PRODUCT_
+ * PREVIEW by default) plus a productCount so the client knows whether to
+ * follow up with /companies/:id/products.
  */
 exports.getCompanyById = asyncHandler(async (req, res) => {
   const company = await Company.findById(req.params.id)
-    .populate('products')
+    .populate({
+      path: 'products',
+      options: { limit: DEFAULT_PRODUCT_PREVIEW, sort: { createdAt: -1 } },
+    })
     .select('-__v')
     .lean();
 
@@ -50,10 +63,50 @@ exports.getCompanyById = asyncHandler(async (req, res) => {
     });
   }
 
+  // Fetch raw products array length separately so we don't lose the full
+  // count when the populated list is capped. The lean populate above replaces
+  // company.products with the (bounded) populated docs.
+  const productCount = await Product.countDocuments({ company: company._id });
+
   return res.status(HTTP_STATUS.OK).json({
     success: true,
     status: 'success',
-    data: company,
+    data: {
+      ...company,
+      productCount,
+      productsTruncated: productCount > company.products.length,
+    },
+  });
+});
+
+/**
+ * Paginated products for a company. Use this when the preview list from
+ * getCompanyById isn't enough.
+ */
+exports.getCompanyProducts = asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const requestedLimit = parseInt(req.query.limit, 10) || DEFAULT_PRODUCT_PREVIEW;
+  const limit = Math.min(Math.max(1, requestedLimit), MAX_PRODUCTS_PER_PAGE);
+  const skip = (page - 1) * limit;
+
+  const [products, total] = await Promise.all([
+    Product.find({ company: req.params.id })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('-__v')
+      .lean(),
+    Product.countDocuments({ company: req.params.id }),
+  ]);
+
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    status: 'success',
+    results: products.length,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+    data: products,
   });
 });
 

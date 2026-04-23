@@ -88,6 +88,11 @@ class NotificationServer {
             logger.info('WebSocket server closed');
           }
 
+          // Stop pulling new messages and let in-flight handlers finish
+          // BEFORE we close Mongo/Redis — batch-processor handlers write to
+          // MongoDB and would fail if the connection went away under them.
+          await rabbitmq.stopConsumers(15000);
+
           // Disconnect from RabbitMQ
           await rabbitmq.disconnect();
           logger.info('RabbitMQ disconnected');

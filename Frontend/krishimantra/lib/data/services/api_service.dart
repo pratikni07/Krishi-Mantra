@@ -265,6 +265,15 @@ class ApiService {
         final newToken = response.data['token'];
         await _secureStorage.write(key: 'auth_token', value: newToken);
         _accessToken = newToken;
+
+        // Server rotates the refresh token on every use — persist the
+        // new one so the next refresh doesn't replay the consumed token
+        // (which the server treats as theft and revokes everything).
+        final newRefresh = response.data['refreshToken'];
+        if (newRefresh != null) {
+          await _secureStorage.write(key: 'refresh_token', value: newRefresh as String);
+        }
+
         logger.i('Token refreshed successfully', tag: 'Auth');
         return true;
       }

@@ -1,8 +1,35 @@
 const winston = require('winston');
 
+// Scrub secret-looking keys before log meta hits any transport.
+const REDACT_KEY_PATTERNS = [
+  /password/i, /passwd/i, /secret/i, /token/i, /otp/i,
+  /authorization/i, /cookie/i, /api[_-]?key/i, /credential/i, /session[_-]?id/i,
+];
+const redactValue = (value, depth = 0) => {
+  if (depth > 8) return value;
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map((v) => redactValue(v, depth + 1));
+  if (typeof value !== 'object') return value;
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (REDACT_KEY_PATTERNS.some((re) => re.test(k))) out[k] = '[REDACTED]';
+    else out[k] = redactValue(v, depth + 1);
+  }
+  return out;
+};
+const redactFormat = winston.format((info) => {
+  for (const key of Object.keys(info)) {
+    if (key === 'level' || key === 'message' || key === 'timestamp' || key === 'stack') continue;
+    if (REDACT_KEY_PATTERNS.some((re) => re.test(key))) info[key] = '[REDACTED]';
+    else info[key] = redactValue(info[key]);
+  }
+  return info;
+})();
+
 const logFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.errors({ stack: true }),
+  redactFormat,
   winston.format.printf(({ level, message, timestamp, stack, ...meta }) => {
     let log = `${timestamp} [${level.toUpperCase()}]: ${message}`;
 

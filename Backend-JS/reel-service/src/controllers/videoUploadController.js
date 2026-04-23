@@ -94,6 +94,80 @@ class VideoUploadController {
   });
 
   /**
+   * Finalize a direct-to-Cloudinary upload. Client uploads bytes straight
+   * to Cloudinary using a signed upload, then calls this with the public
+   * ID. We look the video up, verify it's in the expected folder, and
+   * create the DB record — no video bytes flow through this service.
+   * POST /api/reels/upload/complete
+   */
+  static completeUpload = catchAsync(async (req, res) => {
+    const { publicId, userId, userName, profilePhoto, description, location } = req.body;
+
+    if (!publicId) {
+      return res.status(400).json({ status: 'error', message: 'publicId is required' });
+    }
+    if (!userId || !userName) {
+      return res.status(400).json({ status: 'error', message: 'userId and userName are required' });
+    }
+    if (!videoUploadService.isAvailable()) {
+      return res.status(503).json({ status: 'error', message: 'Video upload service is not configured' });
+    }
+
+    let meta;
+    try {
+      meta = await videoUploadService.verifyAndGetMetadata(publicId);
+    } catch (err) {
+      return res
+        .status(err.statusCode || 500)
+        .json({ status: 'error', message: err.message });
+    }
+
+    const tags = (description || '').match(/#\w+/g)?.map(t => t.slice(1).toLowerCase()) || [];
+
+    let locationData;
+    if (location) {
+      try {
+        const loc = typeof location === 'string' ? JSON.parse(location) : location;
+        if (loc.latitude && loc.longitude) {
+          locationData = { type: 'Point', coordinates: [loc.longitude, loc.latitude] };
+        }
+      } catch (e) {
+        console.warn('Invalid location data:', e.message);
+      }
+    }
+
+    const reel = await ReelService.createReel({
+      userId,
+      userName,
+      profilePhoto: profilePhoto || '',
+      description: description || '',
+      mediaUrl: meta.mediaUrl,
+      videoUrls: meta.urls,
+      cloudinaryId: meta.publicId,
+      thumbnail: meta.thumbnail,
+      preview: meta.preview,
+      videoMeta: {
+        duration: meta.duration,
+        width: meta.width,
+        height: meta.height,
+        size: meta.size,
+        format: meta.format,
+      },
+      location: locationData,
+      tags,
+    });
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Reel created from direct upload',
+      data: {
+        reel,
+        streaming: { hls: meta.urls.hls, mp4: meta.urls.mp4 },
+      },
+    });
+  });
+
+  /**
    * Get signed upload URL for direct client upload
    * GET /api/reels/upload/signature
    */

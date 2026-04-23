@@ -21,6 +21,7 @@ const redis = require('./config/redis');
 
 // Import middlewares
 const { errorHandler, notFoundHandler, requestLogger } = require('./middlewares/errorHandler');
+const mongoSanitize = require('./middlewares/mongoSanitize');
 
 // Import routes
 const userRoutes = require('./routes/User');
@@ -58,6 +59,10 @@ app.use(helmet({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+
+// Operator-injection defense, applied before any controller touches
+// req.body / req.query / req.params.
+app.use(mongoSanitize);
 
 /**
  * Rate limiting

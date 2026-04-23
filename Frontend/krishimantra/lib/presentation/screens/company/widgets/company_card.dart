@@ -18,122 +18,72 @@ class CompanyCard extends StatelessWidget {
     ResponsiveUtils.init(context);
     final iconErrorSize = ResponsiveUtils.responsive(mobile: 60.0, tablet: 80.0);
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppSizes.radiusXL),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadowLight,
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+    return GestureDetector(
+      onTap: onTap,
       child: Card(
-        elevation: 0,
-        color: Colors.transparent,
+        elevation: 4,
+        color: AppColors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSizes.radiusXL),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppSizes.radiusXL),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.white,
-                  Colors.grey.shade50,
-                ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXL)),
+                child: Container(
+                  width: double.infinity,
+                  color: AppColors.white,
+                  padding: RPadding.all(8),
+                  child: Image.network(
+                    company.logo,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(Icons.business, size: iconErrorSize, color: Colors.grey.shade400);
+                    },
+                  ),
+                ),
               ),
             ),
-            child: InkWell(
-              onTap: onTap,
+            Padding(
+              padding: RPadding.all(8),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Container(
-                      padding: RPadding.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(AppSizes.radiusXXL),
-                          bottomRight: Radius.circular(AppSizes.radiusXXL),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.1),
-                            spreadRadius: 1,
-                            blurRadius: 2,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Image.network(
-                        company.logo,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(Icons.business, size: iconErrorSize, color: Colors.grey.shade400);
-                        },
-                      ),
+                  Text(
+                    company.name,
+                    style: TextStyle(
+                      fontSize: AppSizes.fontL,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textGrey,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  Padding(
-                    padding: RPadding.symmetric(horizontal: 12, vertical: 16),
-                    child: Column(
-                      children: [
-                        Text(
-                          company.name,
+                  SizedBox(height: AppSizes.paddingS),
+                  Row(
+                    children: [
+                      Icon(Icons.star, color: Colors.amber, size: ResponsiveUtils.responsive(mobile: 16.0, tablet: 20.0)),
+                      SizedBox(width: AppSizes.paddingXS),
+                      Expanded(
+                        child: Text(
+                          company.rating.toStringAsFixed(1),
                           style: TextStyle(
-                            fontSize: AppSizes.fontL,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textDark,
+                            fontSize: AppSizes.fontS,
+                            color: AppColors.textGrey,
                           ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        SizedBox(height: AppSizes.paddingS),
-                        Container(
-                          padding: RPadding.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: BorderRadius.circular(AppSizes.radiusXXL),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.15),
-                                spreadRadius: 1,
-                                blurRadius: 3,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.star, color: Colors.amber, size: AppSizes.iconS),
-                              SizedBox(width: AppSizes.paddingXS),
-                              Text(
-                                company.rating.toStringAsFixed(1),
-                                style: TextStyle(
-                                  fontSize: AppSizes.fontM,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textDark,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

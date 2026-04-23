@@ -1,6 +1,7 @@
 const Chat = require("../models/chat.model");
 const User = require("../models/user.model");
 const MessageService = require("../services/message.service");
+const chatRoomCache = require("../utils/chatRoomCache");
 
 class ChatController {
   async createDirectChat(req, res) {
@@ -44,6 +45,8 @@ class ChatController {
           },
         ],
       });
+
+      await chatRoomCache.invalidate([userId, participantId]);
 
       // Add otherParticipants for the requesting user (filter out their own participant entry)
       const chatResponse = chat.toObject();

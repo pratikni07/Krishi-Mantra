@@ -1,9 +1,11 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const path = require('path');
+const dotenv = require('dotenv');
 
 // Load environment variables
-require('dotenv').config({ path: path.join(__dirname, '../../.env.development') });
+dotenv.config({ path: path.join(__dirname, '../../.env.development') });
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const User = require('../model/User');
 

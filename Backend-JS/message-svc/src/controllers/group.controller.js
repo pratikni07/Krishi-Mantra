@@ -1,6 +1,7 @@
 const Group = require("../models/group.model");
 const Chat = require("../models/chat.model");
 const { v4: uuidv4 } = require("uuid");
+const chatRoomCache = require("../utils/chatRoomCache");
 
 class GroupController {
   async createGroup(req, res) {
@@ -42,6 +43,8 @@ class GroupController {
         inviteUrl: uuidv4(),
         memberCount: participants.length + 1,
       });
+
+      await chatRoomCache.invalidate([userId, ...participants.map((p) => p.userId)]);
 
       return res.status(201).json({ chat, group });
     } catch (error) {
@@ -87,6 +90,8 @@ class GroupController {
       group.memberCount += participants.length;
       await group.save();
 
+      await chatRoomCache.invalidate(validatedParticipants.map((p) => p.userId));
+
       return res.json({ message: "Participants added successfully" });
     } catch (error) {
       console.error("Add group participants error:", error);
@@ -122,6 +127,8 @@ class GroupController {
 
       group.memberCount += 1;
       await group.save();
+
+      await chatRoomCache.invalidate(userId);
 
       return res.json({ message: "Joined group successfully" });
     } catch (error) {

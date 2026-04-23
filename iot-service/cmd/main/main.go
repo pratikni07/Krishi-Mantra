@@ -22,7 +22,14 @@ func main() {
 	log.Printf("Configuration loaded - APP_TYPE: %s", cfg.AppType)
 
 	// Create MQTT client
-	mqttClient, err := mqtt.NewClient(cfg.MQTTBrokerURL, cfg.MQTTClientID)
+	mqttClient, err := mqtt.NewClient(mqtt.Options{
+		BrokerURL:          cfg.MQTTBrokerURL,
+		ClientID:           cfg.MQTTClientID,
+		Username:           cfg.MQTTUsername,
+		Password:           cfg.MQTTPassword,
+		CACertPath:         cfg.MQTTCACertPath,
+		InsecureSkipVerify: cfg.MQTTInsecureSkipVerify,
+	})
 	if err != nil {
 		log.Fatalf("Failed to create MQTT client: %v", err)
 	}
@@ -60,25 +67,28 @@ func runDeviceSimulator(cfg *config.Config, mqttClient *mqtt.Client) {
 func runParserConsumer(cfg *config.Config, mqttClient *mqtt.Client) {
 	log.Println("Running in PARSER mode - Parser Consumer")
 
-	// Create API client for main service integration
+	// Fail-closed: the parser exists to gate devices on their main-service
+	// subscription. Running without MAIN_SERVICE_URL + MAIN_SERVICE_API_KEY
+	// silently admits every device, so we refuse to start unless the
+	// operator explicitly opted into IOT_DEV_MODE.
 	var apiClient *api.Client
-	if cfg.MainServiceURL != "" {
+	if cfg.MainServiceURL != "" && cfg.MainServiceAPIKey != "" {
 		apiClient = api.NewClient(cfg.MainServiceURL, cfg.MainServiceAPIKey)
 		log.Printf("Main service API configured: %s", cfg.MainServiceURL)
-		
-		// Test API connectivity
+
 		if err := apiClient.HealthCheck(); err != nil {
 			log.Printf("Warning: Main service health check failed: %v", err)
 			log.Println("Parser will continue but subscription validation may fail")
 		} else {
 			log.Println("Main service API connection verified")
 		}
+	} else if cfg.IoTDevMode {
+		log.Println("DEV MODE: MAIN_SERVICE_URL or MAIN_SERVICE_API_KEY missing — running without subscription validation")
 	} else {
-		log.Println("Warning: Main service URL not configured (MAIN_SERVICE_URL)")
-		log.Println("Subscription validation will be skipped")
+		log.Fatalln("MAIN_SERVICE_URL and MAIN_SERVICE_API_KEY are required in production. Set IOT_DEV_MODE=true to bypass for local development only.")
 	}
 
-	parser := consumers.NewParserConsumer(mqttClient, apiClient)
+	parser := consumers.NewParserConsumer(mqttClient, apiClient, cfg.IoTDevMode)
 	if err := parser.Start(); err != nil {
 		log.Fatalf("Failed to start parser consumer: %v", err)
 	}

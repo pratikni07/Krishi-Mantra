@@ -15,18 +15,29 @@ class AppConfig {
   Environment _environment = Environment.development;
   Environment get environment => _environment;
 
-  /// Development IP address - change this to your computer's local IP for physical device testing
-  /// Use 'localhost' for iOS simulator, '10.0.2.2' for Android emulator
-  /// Use your actual IP (e.g., '192.168.1.100') for physical device testing
-  static const String _devHost = '192.168.1.46'; // Your local machine IP
-  static const String _devPort = '3001';
-  static const String _devSocketPort = '3004';
+  // Build-time overrides via `--dart-define=KEY=value`. Empty string means
+  // "unset" — we then fall back to the per-environment default below.
+  // Keeping defaults here so builds still work without the defines, but
+  // CI/release builds should always inject these explicitly.
+  static const String _apiBaseUrlOverride =
+      String.fromEnvironment('API_BASE_URL', defaultValue: '');
+  static const String _socketUrlOverride =
+      String.fromEnvironment('SOCKET_BASE_URL', defaultValue: '');
+  static const String _imageBaseUrlOverride =
+      String.fromEnvironment('IMAGE_BASE_URL', defaultValue: '');
+  static const String _devHost =
+      String.fromEnvironment('DEV_HOST', defaultValue: 'localhost');
+  static const String _devApiPort =
+      String.fromEnvironment('DEV_API_PORT', defaultValue: '3001');
+  static const String _devSocketPort =
+      String.fromEnvironment('DEV_SOCKET_PORT', defaultValue: '3004');
 
   /// API Base URL based on environment
   String get baseUrl {
+    if (_apiBaseUrlOverride.isNotEmpty) return _apiBaseUrlOverride;
     switch (_environment) {
       case Environment.development:
-        return 'http://$_devHost:$_devPort';
+        return 'http://$_devHost:$_devApiPort';
       case Environment.staging:
         return 'https://staging-api.krishimantra.com';
       case Environment.production:
@@ -36,6 +47,7 @@ class AppConfig {
 
   /// Socket URL based on environment
   String get socketUrl {
+    if (_socketUrlOverride.isNotEmpty) return _socketUrlOverride;
     switch (_environment) {
       case Environment.development:
         return 'http://$_devHost:$_devSocketPort';
@@ -47,7 +59,9 @@ class AppConfig {
   }
 
   /// Image CDN URL
-  String get imageBaseUrl => 'https://cdn.krishimantra.com';
+  String get imageBaseUrl => _imageBaseUrlOverride.isNotEmpty
+      ? _imageBaseUrlOverride
+      : 'https://cdn.krishimantra.com';
 
   /// API Timeouts
   Duration get connectTimeout => const Duration(seconds: 15);

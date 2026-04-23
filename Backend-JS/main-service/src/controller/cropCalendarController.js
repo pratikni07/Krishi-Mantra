@@ -54,7 +54,7 @@ class CropCalendarController {
         return res.json(JSON.parse(cachedCrops));
       }
 
-      const crops = await Crop.find({ status: "active" }).sort({ name: 1 });
+      const crops = await Crop.find({ status: "active" }).sort({ name: 1 }).lean();
       
       // Cache with 1 hour expiry but don't fail if Redis is down
       try {
@@ -85,7 +85,7 @@ class CropCalendarController {
         });
       }
 
-      const crop = await Crop.findById(req.params.id);
+      const crop = await Crop.findById(req.params.id).lean();
       if (!crop) {
         return res.status(404).json({
           success: false,
@@ -179,7 +179,7 @@ class CropCalendarController {
         });
       }
 
-      const activities = await Activity.find().sort({ name: 1 });
+      const activities = await Activity.find().sort({ name: 1 }).lean();
       await redis.setex("all_activities", 3600, JSON.stringify(activities));
 
       res.json({
@@ -222,7 +222,8 @@ class CropCalendarController {
 
       const calendar = await CropCalendar.findOne({ cropId, month })
         .populate("cropId")
-        .populate("activities.activityId");
+        .populate("activities.activityId")
+        .lean();
 
       if (!calendar) {
         return res.status(404).json({
@@ -276,7 +277,7 @@ class CropCalendarController {
           "cropCalendarModifications.cropCalendarId": cropId,
         },
         { "cropCalendarModifications.$": 1 }
-      );
+      ).lean();
 
       if (!modifications) {
         return res.status(404).json({
@@ -330,7 +331,8 @@ class CropCalendarController {
       const crops = await Crop.find(query)
         .skip((page - 1) * limit)
         .limit(parseInt(limit))
-        .sort({ name: 1 });
+        .sort({ name: 1 })
+        .lean();
 
       const total = await Crop.countDocuments(query);
 
