@@ -18,6 +18,7 @@
     "express-rate-limit": "^8.2.1",
     "helmet": "^7.0.0",
     "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^7.5.3",
     "nodemailer": "^6.9.5",
     "winston": "^3.10.0",

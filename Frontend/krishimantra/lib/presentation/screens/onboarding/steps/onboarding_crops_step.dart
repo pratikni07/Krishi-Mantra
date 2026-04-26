@@ -223,22 +223,22 @@ class _CropEditorSheetState extends State<_CropEditorSheet> {
 
   void _save() {
     if (_selectedCrop == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please choose a crop from the list')),
+      Get.snackbar(
+        'Choose a crop',
+        'Type to search and tap one of the chips below the search box.',
+        snackPosition: SnackPosition.BOTTOM,
       );
       return;
     }
     final area = double.tryParse(_areaCtrl.text.trim());
     if (area == null || area <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter area')),
-      );
+      Get.snackbar('Enter area', 'Area must be a positive number.',
+          snackPosition: SnackPosition.BOTTOM);
       return;
     }
     if (_sowingDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick sowing date')),
-      );
+      Get.snackbar('Pick sowing date', 'Tap "Choose" to select the date.',
+          snackPosition: SnackPosition.BOTTOM);
       return;
     }
     final entry = CropEntry(
@@ -295,9 +295,23 @@ class _CropEditorSheetState extends State<_CropEditorSheet> {
                   );
                 }
                 if (_searchResults.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text('No crops matched your search.'),
+                  final err = _c.errorMessage.value;
+                  return Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(err.isNotEmpty
+                            ? 'Search failed: $err'
+                            : 'No crops matched your search.'),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () => _doSearch(_searchCtrl.text.trim()),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry search'),
+                        ),
+                      ],
+                    ),
                   );
                 }
                 return Wrap(
@@ -333,12 +347,24 @@ class _CropEditorSheetState extends State<_CropEditorSheet> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: _areaUnit,
+                    isExpanded: true,
                     decoration: onboardingInput('Unit'),
                     items: const [
-                      DropdownMenuItem(value: 'acre', child: Text('acre')),
-                      DropdownMenuItem(value: 'hectare', child: Text('hectare')),
-                      DropdownMenuItem(value: 'bigha', child: Text('bigha')),
-                      DropdownMenuItem(value: 'gunta', child: Text('gunta')),
+                      DropdownMenuItem(
+                          value: 'acre',
+                          child: Text('acre', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'hectare',
+                          child: Text('hectare',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'bigha',
+                          child: Text('bigha',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'gunta',
+                          child: Text('gunta',
+                              overflow: TextOverflow.ellipsis)),
                     ],
                     onChanged: (v) => setState(() => _areaUnit = v ?? 'acre'),
                   ),

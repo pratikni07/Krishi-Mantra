@@ -35,6 +35,15 @@ class SubscriptionController extends GetxController {
   void onInit() {
     super.onInit();
     _initializeStripe();
+    // Skip auth-required boot fetches when no user is signed in. Without
+    // this, an anonymous app start (sitting on the phone-OTP screen) hits
+    // 401 → triggers the global auth-failure handler → bounces back to
+    // /phone, which races with the user's tap on "Continue".
+    _bootIfAuthenticated();
+  }
+
+  Future<void> _bootIfAuthenticated() async {
+    if (!await _isAuthenticated()) return;
     loadPlans();
     loadCurrentSubscription();
     loadIotAddons();

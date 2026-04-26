@@ -12,7 +12,7 @@ const logger = require('../utils/logger');
  */
 const checkAiMessageLimit = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
 
     if (!userId) {
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -51,7 +51,7 @@ const checkAiMessageLimit = async (req, res, next) => {
  */
 const checkImageAnalysisLimit = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
 
     if (!userId) {
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -89,7 +89,7 @@ const checkImageAnalysisLimit = async (req, res, next) => {
  */
 const checkConsultantChatLimit = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
 
     if (!userId) {
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -127,7 +127,7 @@ const checkConsultantChatLimit = async (req, res, next) => {
  */
 const checkCanCreatePost = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
     const accountType = req.user?.accountType;
 
     // Admins and consultants can always create posts
@@ -168,7 +168,7 @@ const checkCanCreatePost = async (req, res, next) => {
  */
 const checkCanCreateReel = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
     const accountType = req.user?.accountType;
 
     // Admins and consultants can always create reels
@@ -209,7 +209,7 @@ const checkCanCreateReel = async (req, res, next) => {
  */
 const checkMarketplaceLimit = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
     const accountType = req.user?.accountType;
 
     // Admins and marketplace accounts have unlimited access
@@ -251,7 +251,7 @@ const checkMarketplaceLimit = async (req, res, next) => {
  */
 const trackAiMessageUsage = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
     if (userId && req.aiAccess?.limit !== -1) {
       await incrementUsage(userId, 'aiMessage');
     }
@@ -268,7 +268,7 @@ const trackAiMessageUsage = async (req, res, next) => {
  */
 const trackImageAnalysisUsage = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
     if (userId && req.imageAnalysisAccess?.limit !== -1) {
       await incrementUsage(userId, 'imageAnalysis');
     }
@@ -284,7 +284,7 @@ const trackImageAnalysisUsage = async (req, res, next) => {
  */
 const trackConsultantChatUsage = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
     if (userId && req.consultantChatAccess?.limit !== -1) {
       await incrementUsage(userId, 'consultantChat');
     }
@@ -301,7 +301,7 @@ const trackConsultantChatUsage = async (req, res, next) => {
 const requireFeature = (feature) => {
   return async (req, res, next) => {
     try {
-      const userId = req.user?._id;
+      const userId = req.user?._id || req.user?.id;
 
       if (!userId) {
         return res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -338,7 +338,8 @@ const requireFeature = (feature) => {
  */
 const attachSubscriptionInfo = async (req, res, next) => {
   try {
-    if (!req.user?._id) {
+    const userId = req.user?._id || req.user?.id;
+    if (!userId) {
       return next();
     }
 
@@ -346,7 +347,7 @@ const attachSubscriptionInfo = async (req, res, next) => {
     const stripeConfig = require('../config/stripe');
 
     const subscription = await UserSubscription.findOne({
-      userId: req.user._id,
+      userId,
       status: { $in: ['active', 'trialing'] },
       endDate: { $gt: new Date() },
     }).populate('planId');

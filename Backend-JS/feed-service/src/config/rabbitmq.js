@@ -31,7 +31,6 @@ const connect = async () => {
     await channel.assertExchange(DLX_NAME, 'direct', { durable: true });
 
     const mainQueues = [
-      RABBITMQ_CONFIG.queues.notification,
       RABBITMQ_CONFIG.queues.feedEvents,
     ];
     for (const q of mainQueues) {

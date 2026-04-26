@@ -41,6 +41,7 @@ const auth = async (req, res, next) => {
       req.user = decoded;
       next();
     } catch (err) {
+      console.error('[main-service auth] verify failed:', err.name, err.message, 'path=', req.originalUrl, 'token-prefix=', token?.slice(0, 25));
       if (err.name === 'TokenExpiredError') {
         return res.status(HTTP_STATUS.UNAUTHORIZED).json({
           success: false,

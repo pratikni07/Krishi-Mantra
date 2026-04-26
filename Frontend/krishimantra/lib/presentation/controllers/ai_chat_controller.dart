@@ -548,18 +548,19 @@ class AIChatController extends GetxController {
     if (limitInfo != null && limitInfo!['remainingMessages'] != null) {
       remainingMessages.value = limitInfo!['remainingMessages'] as int;
     }
-    if (serverChatId != null) {
+    final resolvedServerChatId = serverChatId;
+    if (resolvedServerChatId != null) {
       final aiMessage = messages[placeholderIdx];
       if (currentChat.value != null) {
         _updateCurrentChatWithServerId(
-          serverChatId,
+          resolvedServerChatId,
           userMessage,
           aiMessage,
           finalContext,
         );
       } else {
         await _createChatFromResponse(
-          serverChatId,
+          resolvedServerChatId,
           userMessage,
           aiMessage,
           finalContext,

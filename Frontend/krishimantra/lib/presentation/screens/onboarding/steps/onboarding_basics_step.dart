@@ -144,14 +144,22 @@ class _OnboardingBasicsStepState extends State<OnboardingBasicsStep> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   value: _gender,
+                  isExpanded: true,
                   decoration: onboardingInput('Gender (optional)'),
                   items: const [
-                    DropdownMenuItem(value: 'male', child: Text('Male')),
-                    DropdownMenuItem(value: 'female', child: Text('Female')),
-                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                    DropdownMenuItem(
+                        value: 'male',
+                        child: Text('Male', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(
+                        value: 'female',
+                        child: Text('Female', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(
+                        value: 'other',
+                        child: Text('Other', overflow: TextOverflow.ellipsis)),
                     DropdownMenuItem(
                         value: 'prefer_not_to_say',
-                        child: Text('Prefer not to say')),
+                        child: Text('Prefer not to say',
+                            overflow: TextOverflow.ellipsis)),
                   ],
                   onChanged: (v) => setState(() => _gender = v),
                 ),

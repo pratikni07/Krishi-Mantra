@@ -67,10 +67,10 @@ class AuthController extends GetxController {
         user.value = UserModel.fromJson(json.decode(userData));
         await navigateAfterAuth();
       } else {
-        Get.offAllNamed(AppRoutes.LOGIN);
+        Get.offAllNamed(AppRoutes.PHONE_NUMBER);
       }
     } catch (e) {
-      Get.offAllNamed(AppRoutes.LOGIN);
+      Get.offAllNamed(AppRoutes.PHONE_NUMBER);
     }
   }
 

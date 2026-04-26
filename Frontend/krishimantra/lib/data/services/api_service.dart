@@ -232,6 +232,11 @@ class ApiService {
           final response = await _retryRequest(error.requestOptions);
           return handler.resolve(response);
         }
+        // Refresh attempt failed cleanly (no token saved, refresh
+        // itself rejected). Force re-login so the user isn't stuck
+        // with an expired access token forever.
+        logger.w('Token refresh returned false — forcing re-login', tag: 'Auth');
+        _handleAuthFailure();
       } catch (e) {
         logger.e('Token refresh failed: $e', tag: 'Auth');
         _handleAuthFailure();
@@ -245,8 +250,14 @@ class ApiService {
   }
 
   bool _shouldRefreshToken(dio.DioException error) {
+    // Don't retry-after-refresh more than once. If a request that was
+    // already retried with a fresh token still 401s, the token isn't the
+    // problem — refreshing again creates an infinite loop and just
+    // burns refresh tokens.
+    final alreadyRetried = error.requestOptions.extra['_retriedAfterRefresh'] == true;
     return error.response?.statusCode == 401 &&
         !_tokenRefreshLock.isRefreshing &&
+        !alreadyRetried &&
         error.requestOptions.path != ApiConstants.LOGIN &&
         error.requestOptions.path != ApiConstants.REFRESH_TOKEN;
   }
@@ -291,6 +302,12 @@ class ApiService {
       headers: {
         ...requestOptions.headers,
         'Authorization': 'Bearer $_accessToken',
+      },
+      // Marker read by _shouldRefreshToken to avoid an infinite refresh
+      // loop when the upstream rejects the freshly issued token too.
+      extra: {
+        ...requestOptions.extra,
+        '_retriedAfterRefresh': true,
       },
     );
 
@@ -364,7 +381,9 @@ class ApiService {
     await _secureStorage.delete(key: 'user_data');
     _accessToken = null;
 
-    Get.offAllNamed('/login');
+    // App auth is phone + OTP; '/login' is the legacy email/password
+    // screen and would confuse users. Send them to the phone-number entry.
+    Get.offAllNamed('/phone');
     logger.i('User logged out due to auth failure', tag: 'Auth');
   }
 
@@ -419,7 +438,17 @@ class ApiService {
       _circuitBreaker.recordSuccess(path);
       return response;
     } catch (e) {
-      _circuitBreaker.recordFailure(path);
+      // Only count server/network failures against the breaker. 4xx
+      // responses (auth, validation) shouldn't open the circuit because
+      // the upstream is healthy — the request itself is the problem.
+      if (e is dio.DioException) {
+        final code = e.response?.statusCode;
+        if (code == null || code >= 500) {
+          _circuitBreaker.recordFailure(path);
+        }
+      } else {
+        _circuitBreaker.recordFailure(path);
+      }
       rethrow;
     }
   }

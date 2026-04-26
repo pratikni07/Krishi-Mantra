@@ -459,7 +459,7 @@ const resumeSubscription = async (req, res) => {
  */
 const getUsageStats = async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
 
     if (!userId) {
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({

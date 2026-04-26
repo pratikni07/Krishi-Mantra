@@ -86,12 +86,22 @@ class _OnboardingFarmStepState extends State<OnboardingFarmStep> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   value: _areaUnit,
+                  isExpanded: true,
                   decoration: onboardingInput('Unit'),
                   items: const [
-                    DropdownMenuItem(value: 'acre', child: Text('acre')),
-                    DropdownMenuItem(value: 'hectare', child: Text('hectare')),
-                    DropdownMenuItem(value: 'bigha', child: Text('bigha')),
-                    DropdownMenuItem(value: 'gunta', child: Text('gunta')),
+                    DropdownMenuItem(
+                        value: 'acre',
+                        child: Text('acre', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(
+                        value: 'hectare',
+                        child:
+                            Text('hectare', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(
+                        value: 'bigha',
+                        child: Text('bigha', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(
+                        value: 'gunta',
+                        child: Text('gunta', overflow: TextOverflow.ellipsis)),
                   ],
                   onChanged: (v) => setState(() => _areaUnit = v ?? 'acre'),
                 ),

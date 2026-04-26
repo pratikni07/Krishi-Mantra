@@ -12,6 +12,9 @@ const PUBLIC_PATHS = [
   // the whole point of it. It authenticates via the body refresh token.
   "/api/main/auth/refresh-token",
   "/api/main/auth/logout",
+  // Splash screen pre-fetches flags before login; the upstream handler
+  // uses optionalAuth so identity is only used for cohort splits.
+  "/api/feature-flags",
 ];
 
 const isPublic = (path) => {
@@ -80,6 +83,7 @@ const gatewayAuth = (req, res, next) => {
     req.trustedAccountType = decoded.accountType;
     next();
   } catch (err) {
+    console.error("[gatewayAuth] JWT verify failed:", err.name, err.message, "path=", req.originalUrl);
     if (err.name === "TokenExpiredError") {
       return res.status(401).json({
         status: "error",
