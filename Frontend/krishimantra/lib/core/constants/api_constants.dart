@@ -30,6 +30,27 @@ class ApiConstants {
   static const String USER_PROFILE = '/api/main/user/profile';
   static const String UPDATE_PROFILE = '/api/main/user/update';
 
+  // Farm profile endpoints (krishi-ai onboarding)
+  static const String FARM_PROFILE_ME = '/api/farm-profile/me';
+  static const String FARM_PROFILE_CROPS = '/api/farm-profile/me/crops';
+  static const String FARM_PROFILE_CROP_BY_ID = '/api/farm-profile/me/crops/:id';
+  static const String FARM_PROFILE_CROP_SEARCH = '/api/farm-profile/crops/search';
+
+  // Weather endpoint (krishi-ai)
+  static const String WEATHER_7DAY = '/api/weather/7day';
+
+  // Feature flags
+  static const String FEATURE_FLAGS = '/api/feature-flags';
+
+  // Action card endpoints
+  static const String ACTION_CARD_TODAY = '/api/action-card/today';
+  static const String ACTION_CARD_HISTORY = '/api/action-card/history';
+  static const String ACTION_CARD_REGENERATE = '/api/action-card/regenerate';
+  static const String ACTION_CARD_ITEM_DONE = '/api/action-card/:cardId/items/:itemId/done';
+  static const String ACTION_CARD_ITEM_SKIP = '/api/action-card/:cardId/items/:itemId/skip';
+  static const String ACTION_CARD_ITEM_SNOOZE = '/api/action-card/:cardId/items/:itemId/snooze';
+  static const String ACTION_CARD_FARMER_INPUT = '/api/action-card/:cardId/farmer-input';
+
   // Feed Endpoints
   static const String FEEDS = '/api/feed/feeds';
   static const String FEED_BY_ID = '/api/feed/feeds/:id';

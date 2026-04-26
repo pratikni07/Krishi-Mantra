@@ -1,8 +1,25 @@
 const express = require("express");
 const router = express.Router();
 const AIController = require("../controllers/ai.controller");
+const AIControllerV2 = require("../controllers/ai-v2.controller");
 const createRateLimiter = require("../middleware/rate-limit.middleware");
 const multer = require("multer");
+
+// legacy → old controller; registry → new provider-pluggable path with context tree + SSE.
+// shadow routes traffic to v2 while retaining legacy for comparison (shadow logging is a
+// later ticket — for now shadow = registry).
+const MODE = (process.env.AI_PROVIDER_MODE || "legacy").toLowerCase();
+const useV2 = MODE === "registry" || MODE === "shadow";
+
+const chatHandler = useV2
+  ? AIControllerV2.sendMessage
+  : AIController.sendMessage.bind(AIController);
+const analyzeImageHandler = useV2
+  ? AIControllerV2.analyzeCropImage
+  : AIController.analyzeCropImage.bind(AIController);
+const analyzeMultiImagesHandler = useV2
+  ? AIControllerV2.analyzeMultipleImages
+  : AIController.analyzeMultipleImages.bind(AIController);
 
 // Create specific rate limiters for different endpoints
 const messageLimiter = createRateLimiter({
@@ -41,23 +58,20 @@ const upload = multer({
 });
 
 // Apply rate limiters to routes
-// Bind methods to preserve 'this' context
-router.post("/chat", messageLimiter, AIController.sendMessage.bind(AIController));
+router.post("/chat", messageLimiter, chatHandler);
 
-// Single image upload route
 router.post(
   "/analyze-image",
   imageLimiter,
-  upload.single("image"), // Field name must be "image"
-  AIController.analyzeCropImage.bind(AIController)
+  upload.single("image"),
+  analyzeImageHandler
 );
 
-// Multiple image upload route
 router.post(
   "/analyze-multi-images",
   imageLimiter,
-  upload.array("images", 5), // Field name must be "images", max 5 files
-  AIController.analyzeMultipleImages.bind(AIController)
+  upload.array("images", 5),
+  analyzeMultiImagesHandler
 );
 
 router.get("/history", defaultLimiter, AIController.getChatHistory.bind(AIController));

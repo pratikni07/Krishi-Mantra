@@ -45,6 +45,15 @@ import 'package:krishimantra/data/repositories/subscription_repository.dart';
 import 'package:krishimantra/presentation/controllers/subscription_controller.dart';
 import 'package:krishimantra/presentation/controllers/background_upload_controller.dart';
 import 'package:krishimantra/data/services/device_registration_service.dart';
+// Farm profile / onboarding (krishi-ai)
+import 'package:krishimantra/data/repositories/farm_profile_repository.dart';
+import 'package:krishimantra/data/services/feature_flag_service.dart';
+import 'package:krishimantra/data/services/voice_player_service.dart';
+import 'package:krishimantra/presentation/controllers/voice_recorder_controller.dart';
+import 'package:krishimantra/presentation/controllers/farm_profile_controller.dart';
+// Action card (krishi-ai)
+import 'package:krishimantra/data/repositories/action_card_repository.dart';
+import 'package:krishimantra/presentation/controllers/action_card_controller.dart';
 
 Future<void> initDependencies() async {
   // Initialize Dio and ApiService first
@@ -58,6 +67,18 @@ Future<void> initDependencies() async {
   await Get.putAsync(() async => socketService, permanent: true);
   await Get.putAsync(() async => LocationService(), permanent: true);
   await Get.putAsync(() async => DeviceRegistrationService(), permanent: true);
+
+  // Feature flag service — read cached flags on construction so the splash
+  // screen has values immediately. Refresh from server lazily after login.
+  await Get.putAsync(
+    () async => await FeatureFlagService().init(),
+    permanent: true,
+  );
+
+  // Voice chat (Build B) — player is permanent so playback doesn't drop on
+  // navigation; recorder controller is lazy so the dialog stays light.
+  Get.put<VoicePlayerService>(VoicePlayerService(), permanent: true);
+  Get.lazyPut<VoiceRecorderController>(() => VoiceRecorderController(), fenix: true);
 
   // Initialize connectivity controller early as it's needed by many components
   Get.put(
@@ -91,6 +112,16 @@ Future<void> initDependencies() async {
   Get.lazyPut(() => NotificationRepository(Get.find<ApiService>()), fenix: true);
   // Add subscription repository
   Get.lazyPut(() => SubscriptionRepository(Get.find<ApiService>()), fenix: true);
+  // Farm profile repository
+  Get.lazyPut(
+    () => FarmProfileRepository(Get.find<ApiService>()),
+    fenix: true,
+  );
+  // Action card repository
+  Get.lazyPut(
+    () => ActionCardRepository(Get.find<ApiService>()),
+    fenix: true,
+  );
 
   // Initialize controllers with fenix: true
   Get.lazyPut(
@@ -186,6 +217,17 @@ Future<void> initDependencies() async {
   // Add subscription controller
   Get.lazyPut(
     () => SubscriptionController(Get.find<SubscriptionRepository>()),
+    fenix: true,
+  );
+
+  // Farm profile / onboarding controller
+  Get.lazyPut(
+    () => FarmProfileController(Get.find<FarmProfileRepository>()),
+    fenix: true,
+  );
+  // Action card controller
+  Get.lazyPut(
+    () => ActionCardController(Get.find<ActionCardRepository>()),
     fenix: true,
   );
 

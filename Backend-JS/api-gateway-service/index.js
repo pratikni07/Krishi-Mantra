@@ -323,6 +323,62 @@ try {
     { "^/": "/api/ai/" } // Prepend /api/ai to the path
   );
 
+  // Weather proxy - also on message-svc, mounted at /api/weather there.
+  const weatherServiceProxy = createServiceProxy(
+    "Weather Service",
+    process.env.MESSAGE_SERVICE_URL,
+    { "^/": "/api/weather/" }
+  );
+
+  // Farm-profile proxy - lives on main-service at /api/farm-profile.
+  const farmProfileServiceProxy = createServiceProxy(
+    "Farm Profile Service",
+    process.env.MAIN_SERVICE_URL,
+    { "^/": "/api/farm-profile/" }
+  );
+
+  // Admin AI-provider config proxy - on main-service, admin-gated.
+  const aiProviderConfigServiceProxy = createServiceProxy(
+    "AI Provider Config",
+    process.env.MAIN_SERVICE_URL,
+    { "^/": "/api/admin/ai-provider/" }
+  );
+
+  // Feature flag proxy - on main-service.
+  const featureFlagsServiceProxy = createServiceProxy(
+    "Feature Flags",
+    process.env.MAIN_SERVICE_URL,
+    { "^/": "/api/feature-flags/" }
+  );
+
+  // Action card proxy - on main-service.
+  const actionCardServiceProxy = createServiceProxy(
+    "Action Card",
+    process.env.MAIN_SERVICE_URL,
+    { "^/": "/api/action-card/" }
+  );
+
+  // Admin AI stats proxy - on message-svc, admin-gated.
+  const aiStatsServiceProxy = createServiceProxy(
+    "AI Stats",
+    process.env.MESSAGE_SERVICE_URL,
+    { "^/": "/api/admin/ai-stats/" }
+  );
+
+  // Admin AI ops (killswitch, shadow log) proxy - on message-svc.
+  const aiOpsServiceProxy = createServiceProxy(
+    "AI Ops",
+    process.env.MESSAGE_SERVICE_URL,
+    { "^/": "/api/admin/ai-ops/" }
+  );
+
+  // Voice chat proxy - on message-svc. Handles audio multipart upload + SSE.
+  const voiceServiceProxy = createServiceProxy(
+    "Voice Service",
+    process.env.MESSAGE_SERVICE_URL,
+    { "^/": "/api/voice/" }
+  );
+
   // Engagement Service proxy - user activity tracking and analytics
   const engagementServiceProxy = createServiceProxy(
     "Engagement Service",
@@ -345,6 +401,14 @@ try {
   app.use("/api/main", ...mainServiceProxy);
   app.use("/api/messages", ...messageServiceProxy);
   app.use("/api/ai", ...aiServiceProxy);
+  app.use("/api/weather", ...weatherServiceProxy);
+  app.use("/api/farm-profile", ...farmProfileServiceProxy);
+  app.use("/api/admin/ai-provider", ...aiProviderConfigServiceProxy);
+  app.use("/api/feature-flags", ...featureFlagsServiceProxy);
+  app.use("/api/action-card", ...actionCardServiceProxy);
+  app.use("/api/admin/ai-stats", ...aiStatsServiceProxy);
+  app.use("/api/admin/ai-ops", ...aiOpsServiceProxy);
+  app.use("/api/voice", ...voiceServiceProxy);
   app.use("/api/feed", ...feedServiceProxy);
   app.use("/api/reels", ...reelServiceProxy);
   app.use("/api/notification", ...notificationServiceProxy);

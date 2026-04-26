@@ -4,6 +4,7 @@ import 'package:krishimantra/core/constants/colors.dart';
 import 'package:krishimantra/core/utils/responsive_utils.dart';
 import 'package:krishimantra/data/services/UserService.dart';
 import 'package:krishimantra/data/services/engagement_service.dart';
+import 'package:krishimantra/presentation/controllers/auth_controller.dart';
 import 'package:krishimantra/routes/app_routes.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -31,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen> {
       // Initialize engagement tracking for logged in user
       await EngagementService().init(userData.id);
       EngagementService().trackLogin();
-      Get.offAllNamed(AppRoutes.MAIN);
+      await AuthController.navigateAfterAuth();
     } else {
       Get.offAllNamed(AppRoutes.LANGUAGE_SELECTION);
     }

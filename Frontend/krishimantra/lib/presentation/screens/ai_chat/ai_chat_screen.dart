@@ -12,6 +12,8 @@ import '../../../core/constants/colors.dart';
 import '../../../core/utils/responsive_utils.dart';
 import '../../../core/utils/language_helper.dart';
 import '../../../data/services/language_service.dart';
+import '../../widgets/ai_chat/voice_input_button.dart';
+import '../../controllers/voice_recorder_controller.dart';
 import '../../controllers/ai_chat_controller.dart';
 import '../../widgets/chat_message_bubble.dart';
 import '../../../data/models/ai_chat.dart';
@@ -57,6 +59,14 @@ class _AIChatScreenState extends State<AIChatScreen> with TranslationMixin {
     _registerTranslations();
     // Load message limit info
     controller.getMessageLimitInfo();
+    // Wire the voice recorder → chat controller. The recorder is lazy-put;
+    // we instantiate it here so the binding is in place before first tap.
+    final recorder = Get.isRegistered<VoiceRecorderController>()
+        ? Get.find<VoiceRecorderController>()
+        : Get.put<VoiceRecorderController>(VoiceRecorderController());
+    recorder.bindOnCommitted((file) async {
+      await controller.sendVoiceTurn(file);
+    });
   }
 
   void _registerTranslations() {
@@ -767,7 +777,11 @@ class _AIChatScreenState extends State<AIChatScreen> with TranslationMixin {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
+
+              // Voice (hold-to-talk) button — sits between text field and send.
+              const VoiceInputButton(),
+              const SizedBox(width: 8),
 
               // Send button
               InkWell(

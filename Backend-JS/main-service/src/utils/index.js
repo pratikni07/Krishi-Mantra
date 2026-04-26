@@ -19,6 +19,8 @@ const {
   marketplaceSchemas,
   serviceSchemas,
   schemeSchemas,
+  farmProfileSchemas,
+  cropSearchSchemas,
 } = require('./validators');
 
 module.exports = {
@@ -39,4 +41,6 @@ module.exports = {
   marketplaceSchemas,
   serviceSchemas,
   schemeSchemas,
+  farmProfileSchemas,
+  cropSearchSchemas,
 };

@@ -15,6 +15,8 @@ import 'widgets/weather_section.dart';
 import '../../widgets/app_header.dart';
 import 'widgets/location_dialog.dart';
 import 'package:get/get.dart';
+import '../../controllers/action_card_controller.dart';
+import '../../widgets/action_card/action_card_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../../data/services/language_service.dart';
@@ -792,6 +794,10 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
               ),
             ),
 
+            // Today's action card (krishi-ai). Lazy-loads on first build via
+            // the ActionCardController binding registered in DI.
+            const SliverToBoxAdapter(child: _ActionCardSection()),
+
             // Carousel Slider
             SliverToBoxAdapter(
               child: Container(
@@ -1216,4 +1222,30 @@ class _HomeScreenState extends State<HomeScreen> with TranslationMixin {
       ),
     );
   }
+}
+
+
+/// Lightweight wrapper that mounts the action-card on the home screen.
+/// Triggers load() the first time it builds; the controller is fenix-cached
+/// so subsequent home rebuilds reuse the existing instance + state.
+class _ActionCardSection extends StatefulWidget {
+  const _ActionCardSection();
+  @override
+  State<_ActionCardSection> createState() => _ActionCardSectionState();
+}
+
+class _ActionCardSectionState extends State<_ActionCardSection> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final c = Get.find<ActionCardController>();
+        if (c.card.value == null) c.load();
+      } catch (_) {}
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const ActionCardWidget();
 }

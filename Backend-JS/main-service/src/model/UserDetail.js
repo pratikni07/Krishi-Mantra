@@ -95,6 +95,10 @@ const UserDetailSchema = new mongoose.Schema(
       type: Number,
       default: 3,
     },
+    farmProfile: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FarmProfile",
+    },
   },
   {
     timestamps: true,

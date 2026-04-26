@@ -30,6 +30,8 @@ import '../presentation/screens/iot/device_registration_screen.dart';
 import '../presentation/screens/farm_measurement/farm_measurement_screen.dart';
 import '../presentation/screens/disease_detection/disease_detection_screen.dart';
 import '../presentation/screens/mandi/mandi_price_screen.dart';
+import '../presentation/screens/onboarding/edit_farm_screen.dart';
+import '../presentation/screens/onboarding/farm_onboarding_screen.dart';
 
 class AppRoutes {
   static const String SPLASH = '/splash';
@@ -75,6 +77,10 @@ class AppRoutes {
   static const String DISEASE_DETECTION = '/disease-detection';
   static const String MANDI_PRICE = '/mandi-price';
 
+  // Farm profile onboarding (krishi-ai)
+  static const String FARM_ONBOARDING = '/farm-onboarding';
+  static const String EDIT_FARM = '/edit-farm';
+
   static final routes = [
     GetPage(name: SPLASH, page: () => SplashScreen()),
     GetPage(name: LOGIN, page: () => LoginScreen()),
@@ -91,6 +97,8 @@ class AppRoutes {
     // GetPage(name: NEWS, page: () => NewsScreen()),
     GetPage(name: SCHEMES, page: () => GovSchemesScreen()),
     GetPage(name: SETTINGS, page: () => const SettingsScreen()),
+    GetPage(name: FARM_ONBOARDING, page: () => const FarmOnboardingScreen()),
+    GetPage(name: EDIT_FARM, page: () => const EditFarmScreen()),
 
     // New authentication routes
     GetPage(

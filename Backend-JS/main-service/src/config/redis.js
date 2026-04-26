@@ -273,6 +273,21 @@ class RedisClient {
   }
 
   /**
+   * Publish a message to a channel. Returns the number of subscribers
+   * that received it, or null if redis is unavailable.
+   */
+  async publish(channel, payload) {
+    try {
+      if (!(await this._ensureConnection())) return null;
+      const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      return await this.client.publish(channel, body);
+    } catch (error) {
+      logger.warn(`Redis PUBLISH error for channel "${channel}":`, error.message);
+      return null;
+    }
+  }
+
+  /**
    * Close Redis connection
    * @returns {Promise<void>}
    */

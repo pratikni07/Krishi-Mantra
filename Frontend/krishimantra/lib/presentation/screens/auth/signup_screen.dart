@@ -483,8 +483,9 @@ class _SignupScreenState extends State<SignupScreen> {
       }
 
       if (success) {
-        // Registration successful, navigate to main screen
-        Get.offAllNamed(AppRoutes.MAIN);
+        // Registration successful — route via post-auth navigator so new
+        // users start with the farm-profile onboarding flow.
+        await AuthController.navigateAfterAuth();
       }
     }
   }

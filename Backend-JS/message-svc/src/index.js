@@ -107,11 +107,32 @@ class App {
       });
     });
 
+    // Prometheus metrics — scraped by ops; restricted to local network in
+    // prod via the gateway's IP allowlist. We expose it before auth/rate-limit
+    // routes so health-checks don't burn quota.
+    const metrics = require('./services/metrics.service');
+    metrics.init();
+    this.app.get('/metrics', async (req, res) => {
+      try {
+        res.setHeader('Content-Type', metrics.contentType());
+        res.send(await metrics.exportMetrics());
+      } catch (err) {
+        res.status(500).send(`# metrics export failed: ${err.message}`);
+      }
+    });
+
     // API routes
     this.app.use('/api/chat', require('./routes/chat.routes'));
     this.app.use('/api/group', require('./routes/group.routes'));
     this.app.use('/api/message', require('./routes/message.routes'));
+    // /api/ai/internal must mount BEFORE /api/ai so the more-specific prefix
+    // is matched first; the internal router uses HMAC auth, not user JWT.
+    this.app.use('/api/ai/internal', require('./routes/ai-internal.routes'));
     this.app.use('/api/ai', require('./routes/ai.routes'));
+    this.app.use('/api/weather', require('./routes/weather.routes'));
+    this.app.use('/api/admin/ai-stats', require('./routes/ai-stats.routes'));
+    this.app.use('/api/admin/ai-ops', require('./routes/ai-ops.routes'));
+    this.app.use('/api/voice', require('./routes/voice.routes'));
 
     // 404 handler
     this.app.use(notFoundHandler);
@@ -137,6 +158,14 @@ class App {
 
       // Initialize Socket.IO service
       this.socketService = new SocketService(this.server);
+
+      // Start AI-related pub/sub subscribers (best-effort; no-op if redis unavailable)
+      try {
+        require('./services/ai-config.service').startSubscriber();
+        require('./services/farm-profile.client').startSubscriber();
+      } catch (subErr) {
+        console.warn('Subscriber startup failed:', subErr.message);
+      }
 
       // Start HTTP server
       this.server.listen(this.PORT, () => {

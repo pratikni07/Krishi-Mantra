@@ -318,7 +318,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
       if (result != null) {
         if (result.isRegistered) {
-          Get.offAllNamed(AppRoutes.MAIN);
+          await AuthController.navigateAfterAuth();
         } else {
           Get.to(() => SignupScreen(phoneNumber: widget.phoneNumber));
         }

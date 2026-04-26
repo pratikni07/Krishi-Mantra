@@ -9,7 +9,13 @@ import '../../data/models/ai_chat_message.dart';
 import '../../data/repositories/ai_chat_repository.dart';
 import '../../data/services/SocketService.dart';
 import '../../data/services/UserService.dart';
+import '../../data/services/ai_stream_service.dart';
+import '../../data/services/feature_flag_service.dart';
 import '../../data/services/language_service.dart';
+import '../../data/services/voice_chat_service.dart';
+import '../../data/services/voice_player_service.dart';
+import 'dart:io';
+import '../../data/services/_sse.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/services/api_service.dart';
@@ -57,6 +63,17 @@ class AIChatController extends GetxController {
 
   final messageText = ''.obs;
   final currentChatId = ''.obs;
+
+  // Streaming state — only populated while a streaming turn is in flight.
+  // The placeholder assistant message in `messages` is updated in place as
+  // deltas arrive; `streamingTurnIndex` points to it so the UI can rebuild
+  // only that row instead of the whole list.
+  final streamingTurnIndex = (-1).obs;
+  final isStreamingEnabled = true.obs;
+  StreamSubscription<AiStreamEvent>? _streamSub;
+
+  AiStreamService _newStreamService() =>
+      AiStreamService(userService: _userService);
 
   AIChatController(this._repository, this._userService);
 
@@ -184,6 +201,19 @@ class AIChatController extends GetxController {
   }
 
   Future<void> sendMessage(String message) async {
+    // Streaming on if both the local toggle AND the remote-config flag agree.
+    // Either side flipping off (e.g. an emergency rollback via the
+    // feature-flag endpoint) downgrades the next turn to legacy.
+    final ffOn = Get.isRegistered<FeatureFlagService>()
+        ? Get.find<FeatureFlagService>().aiStreamingEnabled
+        : true;
+    if (isStreamingEnabled.value && ffOn) {
+      return _sendMessageStreaming(message);
+    }
+    return _sendMessageLegacy(message);
+  }
+
+  Future<void> _sendMessageLegacy(String message) async {
     if (remainingMessages.value <= 0) {
       Get.snackbar(
         'Daily Limit Reached',
@@ -342,6 +372,386 @@ class AIChatController extends GetxController {
     } finally {
       isTyping.value = false;
     }
+  }
+
+  /// Streams the AI reply turn via SSE. Appends an empty assistant message,
+  /// then mutates its `content` field as deltas arrive. On `done`, persists
+  /// the final usage payload onto the message and chat metadata. On `error`,
+  /// either falls back to the legacy non-streaming path (for transport-level
+  /// failures) or surfaces the error.
+  Future<void> _sendMessageStreaming(String message) async {
+    if (remainingMessages.value <= 0) {
+      Get.snackbar(
+        'Daily Limit Reached',
+        'You have reached your daily message limit',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+    if (isRateLimited.value) {
+      final remainingTime =
+          rateLimitReset.value - DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      if (remainingTime > 0) {
+        Get.snackbar(
+          'Rate Limited',
+          'Please wait ${remainingTime} seconds before sending another message',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+        return;
+      }
+    }
+    remainingMessages.value--;
+
+    final userId = await _userService.getUserId();
+    final userName = await _userService.getFirstName();
+    final userPhoto = await _userService.getImage();
+    if (userId == null || userName == null) {
+      Get.snackbar('Error', 'User not authenticated',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white);
+      return;
+    }
+
+    final userMessage = AIChatMessage(
+      role: 'user',
+      content: message,
+      timestamp: DateTime.now(),
+    );
+    messages.add(userMessage);
+    _engagementService.trackAIChatMessage(isUserMessage: true);
+
+    // Placeholder assistant message; mutated in place as deltas arrive.
+    final placeholder = AIChatMessage(
+      role: 'assistant',
+      content: '',
+      timestamp: DateTime.now(),
+    );
+    messages.add(placeholder);
+    final placeholderIdx = messages.length - 1;
+    streamingTurnIndex.value = placeholderIdx;
+    isTyping.value = true;
+
+    final preferredLanguage = await _getPreferredLanguage();
+    final location = await _getLocationData();
+    final weather = await _getWeatherData();
+
+    final svc = _newStreamService();
+    final buffer = StringBuffer();
+    String? serverChatId;
+    Map<String, dynamic>? finalContext;
+    Map<String, dynamic>? limitInfo;
+    bool sawDelta = false;
+    bool fellBackToLegacy = false;
+
+    try {
+      await _streamSub?.cancel();
+      _streamSub = svc
+          .sendChat(AiStreamRequest(
+            message: message,
+            chatId: currentChat.value?.id,
+            preferredLanguage: preferredLanguage,
+            userName: userName,
+            userProfilePhoto: userPhoto ?? '',
+            location: location,
+            weather: weather,
+          ))
+          .listen(
+        (ev) {
+          if (ev.type == 'delta' && ev.text != null) {
+            buffer.write(ev.text);
+            sawDelta = true;
+            messages[placeholderIdx] = AIChatMessage(
+              role: 'assistant',
+              content: buffer.toString(),
+              timestamp: placeholder.timestamp,
+            );
+          } else if (ev.type == 'done') {
+            final p = ev.payload ?? {};
+            // Non-SSE fallback emits the full envelope here.
+            final fullText = p['message']?.toString();
+            if (fullText != null && fullText.isNotEmpty && !sawDelta) {
+              buffer.write(fullText);
+              messages[placeholderIdx] = AIChatMessage(
+                role: 'assistant',
+                content: fullText,
+                timestamp: placeholder.timestamp,
+              );
+            }
+            serverChatId = p['chatId']?.toString() ?? serverChatId;
+            finalContext = p['context'] is Map<String, dynamic>
+                ? Map<String, dynamic>.from(p['context'])
+                : null;
+            limitInfo = p['limitInfo'] is Map<String, dynamic>
+                ? Map<String, dynamic>.from(p['limitInfo'])
+                : null;
+          } else if (ev.type == 'error') {
+            final code = ev.payload?['code']?.toString() ?? 'STREAM_ERROR';
+            final status = ev.payload?['status'];
+            if ((code.startsWith('HTTP_') || code == 'STREAM_CLOSED') &&
+                !sawDelta) {
+              fellBackToLegacy = true;
+            } else if (code == 'RATE_LIMIT' || status == 429) {
+              isRateLimited.value = true;
+              rateLimitReset.value =
+                  DateTime.now().millisecondsSinceEpoch ~/ 1000 + 30;
+            }
+            Get.snackbar(
+              'AI Error',
+              ev.payload?['message']?.toString() ?? code,
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+              duration: const Duration(seconds: 3),
+            );
+          }
+        },
+        onError: (e) {
+          if (!sawDelta) fellBackToLegacy = true;
+        },
+      );
+
+      await _streamSub?.asFuture<void>();
+    } catch (e) {
+      if (!sawDelta) fellBackToLegacy = true;
+    } finally {
+      svc.close();
+      _streamSub = null;
+      streamingTurnIndex.value = -1;
+      isTyping.value = false;
+    }
+
+    if (fellBackToLegacy) {
+      // Remove the (empty) placeholder we just added, then fall back.
+      if (placeholderIdx < messages.length &&
+          messages[placeholderIdx].role == 'assistant' &&
+          messages[placeholderIdx].content.isEmpty) {
+        messages.removeAt(placeholderIdx);
+      }
+      // Also remove the user echo we added — legacy will re-add both turns.
+      if (messages.isNotEmpty &&
+          messages.last.role == 'user' &&
+          messages.last.content == message) {
+        messages.removeLast();
+      }
+      remainingMessages.value++; // _sendMessageLegacy will decrement again
+      return _sendMessageLegacy(message);
+    }
+
+    // Persist final state — same hooks as the legacy path.
+    final aiText = buffer.toString();
+    if (limitInfo != null && limitInfo!['remainingMessages'] != null) {
+      remainingMessages.value = limitInfo!['remainingMessages'] as int;
+    }
+    if (serverChatId != null) {
+      final aiMessage = messages[placeholderIdx];
+      if (currentChat.value != null) {
+        _updateCurrentChatWithServerId(
+          serverChatId,
+          userMessage,
+          aiMessage,
+          finalContext,
+        );
+      } else {
+        await _createChatFromResponse(
+          serverChatId,
+          userMessage,
+          aiMessage,
+          finalContext,
+        );
+      }
+    } else if (currentChat.value != null && finalContext != null) {
+      _updateCurrentChat(userMessage, messages[placeholderIdx], finalContext);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Voice path — VoiceRecorderController calls into us via `sendVoiceTurn`.
+  //
+  // The flow mirrors `_sendMessageStreaming`:
+  //  1. Append a user-voice placeholder bubble (transcribing: true).
+  //  2. Append an empty assistant-voice placeholder.
+  //  3. Open SSE; route transcript/delta/audio/done events to the
+  //     respective bubbles + audio player.
+  //  4. Persist on done; on error or transport failure, surface a snackbar.
+  // ---------------------------------------------------------------------------
+  Future<void> sendVoiceTurn(File audio, { String mimeType = 'audio/mp4' }) async {
+    if (remainingMessages.value <= 0) {
+      Get.snackbar(
+        'Daily Limit Reached',
+        'You have reached your daily message limit',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    final userId = await _userService.getUserId();
+    final userName = await _userService.getFirstName();
+    final userPhoto = await _userService.getImage();
+    if (userId == null || userName == null) {
+      Get.snackbar('Error', 'User not authenticated',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white);
+      return;
+    }
+
+    remainingMessages.value--;
+
+    final preferredLanguage = await _getPreferredLanguage();
+
+    // Pre-create placeholder bubbles. The user side starts with no transcript
+    // (transcribing: true); the assistant side starts empty and grows on each
+    // delta.
+    final userBubble = AIChatMessage(
+      role: 'user',
+      content: '',
+      timestamp: DateTime.now(),
+      voice: VoiceMeta.userPlaceholder().copyWith(language: preferredLanguage),
+    );
+    messages.add(userBubble);
+    final userIdx = messages.length - 1;
+    final assistantBubble = AIChatMessage(
+      role: 'assistant',
+      content: '',
+      timestamp: DateTime.now(),
+      voice: VoiceMeta.assistantPlaceholder(),
+    );
+    messages.add(assistantBubble);
+    final assistantIdx = messages.length - 1;
+
+    isTyping.value = true;
+
+    final svc = VoiceChatService(_userService);
+    final player = Get.isRegistered<VoicePlayerService>()
+        ? Get.find<VoicePlayerService>()
+        : Get.put<VoicePlayerService>(VoicePlayerService(), permanent: true);
+    await player.startNewQueue();
+
+    String fullText = '';
+    String? transcriptLang;
+    String? finalChatId;
+    Map<String, dynamic>? donePayload;
+    bool sawAudio = false;
+    bool sawError = false;
+
+    try {
+      await for (final ev in svc.sendVoiceTurn(VoiceTurnRequest(
+        audio: audio,
+        mimeType: mimeType,
+        chatId: currentChat.value?.id,
+        preferredLanguage: preferredLanguage,
+        userName: userName,
+        userProfilePhoto: userPhoto ?? '',
+      ))) {
+        if (ev.type == 'transcript') {
+          final text = ev.data['text']?.toString() ?? '';
+          transcriptLang = ev.data['lang']?.toString();
+          final conf = (ev.data['confidence'] as num?)?.toDouble();
+          messages[userIdx] = messages[userIdx].copyWith(
+            content: text,
+            voice: messages[userIdx].voice!.copyWith(
+                  transcript: text,
+                  transcribing: false,
+                  language: transcriptLang,
+                  confidence: conf,
+                ),
+          );
+        } else if (ev.type == 'delta') {
+          final text = ev.data['text']?.toString() ?? '';
+          fullText += text;
+          messages[assistantIdx] = messages[assistantIdx].copyWith(
+            content: fullText,
+          );
+        } else if (ev.type == 'audio') {
+          sawAudio = true;
+          final b64 = ev.data['data']?.toString();
+          final mime = ev.data['mime']?.toString() ?? 'audio/mp3';
+          final seq = (ev.data['seq'] as num?)?.toInt() ?? 0;
+          if (b64 != null && b64.isNotEmpty) {
+            await player.enqueueBase64(b64: b64, mime: mime, seq: seq);
+          }
+        } else if (ev.type == 'done') {
+          donePayload = ev.data;
+          finalChatId = ev.data['chatId']?.toString();
+          await player.flush();
+          final voiceBlock = ev.data['voice'] is Map<String, dynamic>
+              ? Map<String, dynamic>.from(ev.data['voice'])
+              : null;
+          final voiceName = voiceBlock?['voiceName']?.toString();
+          final ttsCost = (voiceBlock?['ttsCostUsd'] as num?)?.toDouble();
+          messages[assistantIdx] = messages[assistantIdx].copyWith(
+            voice: messages[assistantIdx].voice!.copyWith(
+                  voiceName: voiceName,
+                  ttsCostUsd: ttsCost,
+                  audioMime: 'audio/mp3',
+                ),
+          );
+        } else if (ev.type == 'error') {
+          sawError = true;
+          final code = ev.data['code']?.toString() ?? 'voice_error';
+          final msg = ev.data['message']?.toString() ?? code;
+          // STT_EMPTY shows the user a friendly retry prompt; other errors
+          // are surfaced in the assistant bubble.
+          if (code == 'STT_EMPTY') {
+            messages[userIdx] = messages[userIdx].copyWith(
+              voice: messages[userIdx].voice!.copyWith(
+                    transcribing: false,
+                    transcribingFailed: true,
+                  ),
+              content: '',
+            );
+            // Remove the empty assistant placeholder.
+            if (assistantIdx < messages.length) messages.removeAt(assistantIdx);
+            Get.snackbar('Couldn\'t catch that', 'Please try again',
+                snackPosition: SnackPosition.BOTTOM);
+          } else {
+            Get.snackbar('Voice error', msg,
+                snackPosition: SnackPosition.BOTTOM,
+                backgroundColor: Colors.red,
+                colorText: Colors.white);
+          }
+        }
+      }
+    } catch (e) {
+      sawError = true;
+      Get.snackbar('Voice failed', e.toString(),
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white);
+    } finally {
+      isTyping.value = false;
+      svc.close();
+    }
+
+    // Persist final chat state (same hooks as the streaming text path).
+    if (sawError) return;
+    if (finalChatId != null) {
+      final user = messages[userIdx];
+      final ai = assistantIdx < messages.length ? messages[assistantIdx] : user;
+      if (currentChat.value != null) {
+        _updateCurrentChatWithServerId(finalChatId!, user, ai, donePayload?['context']);
+      } else {
+        await _createChatFromResponse(finalChatId!, user, ai, donePayload?['context']);
+      }
+    }
+    if (donePayload != null && donePayload!['title'] != null) {
+      final c = currentChat.value;
+      if (c != null) {
+        currentChat.value = c.copyWith(
+          title: donePayload!['title'].toString(),
+        );
+      }
+    }
+    // Touch lint: avoid "unused" warnings
+    if (sawAudio || transcriptLang == null) {}
   }
 
   void _handleRateLimit(Map<String, dynamic> rateLimit) {
@@ -1039,6 +1449,7 @@ class AIChatController extends GetxController {
     _aiMessageSubscription?.cancel();
     _aiTypingSubscription?.cancel();
     _aiAnalyzingSubscription?.cancel();
+    _streamSub?.cancel();
     _rateLimitTimer?.cancel();
     super.onClose();
   }

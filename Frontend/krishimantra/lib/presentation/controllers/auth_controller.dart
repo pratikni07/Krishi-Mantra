@@ -6,7 +6,9 @@ import '../../data/models/user_model.dart';
 import '../../data/models/otp_response_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/services/UserService.dart';
+import '../../data/services/feature_flag_service.dart';
 import '../../routes/app_routes.dart';
+import 'farm_profile_controller.dart';
 import 'presigned_url_controller.dart';
 
 class AuthController extends GetxController {
@@ -19,6 +21,40 @@ class AuthController extends GetxController {
 
   AuthController(this._authRepository);
 
+  /// Post-auth router. Probes the user's farm profile; if onboarding is
+  /// incomplete, sends them to the multi-step onboarding flow first.
+  /// Falls back to MAIN on any error so a flaky network never blocks login.
+  static Future<void> navigateAfterAuth() async {
+    // Refresh feature flags now that we have a token; the splash already
+    // primed the cache on cold start, but a fresh fetch picks up admin
+    // changes since the last session.
+    bool onboardingV2Enabled = true;
+    try {
+      if (Get.isRegistered<FeatureFlagService>()) {
+        final ff = Get.find<FeatureFlagService>();
+        await ff.refresh(force: true);
+        onboardingV2Enabled = ff.onboardingV2Enabled;
+      }
+    } catch (_) {
+      // Flags are best-effort — if missing, default to onboarding-on.
+    }
+
+    try {
+      if (onboardingV2Enabled && Get.isRegistered<FarmProfileController>()) {
+        final fp = Get.find<FarmProfileController>();
+        await fp.loadFromServer();
+        final status = fp.profile.value?.onboardingStatus;
+        if (status != 'completed') {
+          Get.offAllNamed(AppRoutes.FARM_ONBOARDING);
+          return;
+        }
+      }
+    } catch (_) {
+      // Best-effort routing — never block the user's login on this probe.
+    }
+    Get.offAllNamed(AppRoutes.MAIN);
+  }
+
   void togglePasswordVisibility() =>
       isPasswordVisible.value = !isPasswordVisible.value;
 
@@ -29,7 +65,7 @@ class AuthController extends GetxController {
 
       if (token != null && userData != null) {
         user.value = UserModel.fromJson(json.decode(userData));
-        Get.offAllNamed(AppRoutes.MAIN);
+        await navigateAfterAuth();
       } else {
         Get.offAllNamed(AppRoutes.LOGIN);
       }
@@ -54,7 +90,7 @@ class AuthController extends GetxController {
           key: 'user_data',
           value: json.encode(userJson),
         );
-        Get.offAllNamed(AppRoutes.MAIN);
+        await navigateAfterAuth();
         return true;
       } else {
         throw Exception('Login failed: User data is null');

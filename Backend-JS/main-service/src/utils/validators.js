@@ -291,6 +291,82 @@ const schemeSchemas = {
   }),
 };
 
+// FarmProfile schemas — backs the /api/farm-profile/* routes (T05)
+const areaUnits = ['acre', 'hectare', 'bigha', 'gunta'];
+const soilTypes = ['sandy', 'loam', 'clay', 'black', 'red', 'laterite', 'alluvial', 'silty'];
+const irrigationSources = ['borewell', 'canal', 'river', 'pond', 'rainfed', 'drip', 'sprinkler'];
+const growthStages = [
+  'pre_sowing',
+  'germination',
+  'seedling',
+  'vegetative',
+  'flowering',
+  'fruiting',
+  'maturity',
+  'harvested',
+];
+const plantingMethods = ['direct_sowing', 'transplanting', 'broadcasting', 'line_sowing', 'other'];
+const irrigationMethods = ['rainfed', 'drip', 'sprinkler', 'flood', 'furrow', 'other'];
+
+const cropEntryBase = {
+  cropId: validators.objectId,
+  cropName: Joi.string().trim().max(100),
+  variety: Joi.string().trim().max(100).allow(''),
+  area: Joi.number().min(0),
+  areaUnit: Joi.string().valid(...areaUnits),
+  sowingDate: Joi.date(),
+  expectedHarvestDate: Joi.date(),
+  growthStage: Joi.string().valid(...growthStages),
+  plantingMethod: Joi.string().valid(...plantingMethods),
+  irrigationMethod: Joi.string().valid(...irrigationMethods),
+  notes: Joi.string().max(500).allow(''),
+  isActive: Joi.boolean(),
+};
+
+const farmProfileSchemas = {
+  upsert: Joi.object({
+    age: Joi.number().integer().min(10).max(120),
+    gender: Joi.string().valid('male', 'female', 'other', 'prefer_not_to_say'),
+    preferredLanguage: Joi.string().length(2),
+    location: Joi.object({
+      type: Joi.string().valid('Point').default('Point'),
+      coordinates: Joi.array().length(2).items(Joi.number()).required(),
+    }),
+    address: Joi.object({
+      village: Joi.string().max(120).allow(''),
+      taluka: Joi.string().max(120).allow(''),
+      district: Joi.string().max(120).allow(''),
+      state: Joi.string().max(120).allow(''),
+      country: Joi.string().max(120).default('India'),
+      pincode: Joi.string().pattern(/^\d{4,10}$/).allow(''),
+    }),
+    totalArea: Joi.number().min(0),
+    totalAreaUnit: Joi.string().valid(...areaUnits),
+    ownership: Joi.string().valid('owned', 'leased', 'shared', 'mixed'),
+    soilTypes: Joi.array().items(Joi.string().valid(...soilTypes)).max(8),
+    irrigationSources: Joi.array().items(Joi.string().valid(...irrigationSources)).max(8),
+    experienceYears: Joi.number().integer().min(0).max(100),
+    onboardingStatus: Joi.string().valid('not_started', 'in_progress', 'completed'),
+  }).min(1),
+
+  addCrop: Joi.object({
+    ...cropEntryBase,
+    cropId: validators.objectId.required(),
+    cropName: Joi.string().trim().max(100).required(),
+    area: Joi.number().min(0).required(),
+    sowingDate: Joi.date().required(),
+  }),
+
+  updateCrop: Joi.object(cropEntryBase).min(1),
+};
+
+const cropSearchSchemas = {
+  query: Joi.object({
+    q: Joi.string().trim().max(100).allow(''),
+    limit: Joi.number().integer().min(1).max(50).default(20),
+  }),
+};
+
 module.exports = {
   validators,
   validate,
@@ -304,4 +380,6 @@ module.exports = {
   marketplaceSchemas,
   serviceSchemas,
   schemeSchemas,
+  farmProfileSchemas,
+  cropSearchSchemas,
 };

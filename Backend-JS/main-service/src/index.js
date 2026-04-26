@@ -38,6 +38,10 @@ const marketplaceRoutes = require('./routes/marketplaceRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const iotDeviceRoutes = require('./routes/iotDeviceRoutes');
 const deviceRegistrationRoutes = require('./routes/deviceRegistrationRoutes');
+const farmProfileRoutes = require('./routes/farmProfileRoutes');
+const aiProviderConfigRoutes = require('./routes/aiProviderConfigRoutes');
+const featureFlagsRoutes = require('./routes/featureFlagsRoutes');
+const actionCardRoutes = require('./routes/actionCardRoutes');
 
 // Initialize express app
 const app = express();
@@ -198,6 +202,10 @@ app.use('/marketplace', marketplaceRoutes);
 app.use('/subscription', subscriptionRoutes);
 app.use('/api/v1/iot', iotDeviceRoutes);
 app.use('/api/device-registration', deviceRegistrationRoutes);
+app.use('/api/farm-profile', farmProfileRoutes);
+app.use('/api/admin/ai-provider', aiProviderConfigRoutes);
+app.use('/api/feature-flags', featureFlagsRoutes);
+app.use('/api/action-card', actionCardRoutes);
 
 /**
  * 404 Handler
@@ -252,6 +260,22 @@ const startServer = async () => {
   try {
     // Connect to database
     await connectDB();
+
+    // Start the action-card cron only when explicitly enabled. Default off
+    // in dev so local restarts don't burn provider quota; default on in prod
+    // by setting ACTION_CARD_CRON_ENABLED=true in the deploy env.
+    const cronEnabled = /^(1|true|yes|on)$/i.test(
+      String(process.env.ACTION_CARD_CRON_ENABLED || '').trim()
+    );
+    if (cronEnabled) {
+      try {
+        const cardCron = require('./services/action-card/card.cron');
+        cardCron.start();
+        logger.info('Action-card cron started');
+      } catch (err) {
+        logger.warn('Action-card cron failed to start', { error: err.message });
+      }
+    }
 
     // Start listening
     app.listen(PORT, () => {

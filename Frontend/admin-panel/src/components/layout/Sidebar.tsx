@@ -116,6 +116,11 @@ const menuItems = [
     icon: Bell,
   },
   {
+    title: "AI Provider",
+    href: "/settings/ai-provider",
+    icon: Cpu,
+  },
+  {
     title: "Settings",
     href: "/settings",
     icon: Settings,

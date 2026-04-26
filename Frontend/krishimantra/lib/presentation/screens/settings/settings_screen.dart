@@ -6,6 +6,7 @@ import 'package:krishimantra/core/utils/language_helper.dart';
 import 'package:krishimantra/presentation/controllers/connectivity_controller.dart';
 import 'package:krishimantra/presentation/controllers/subscription_controller.dart';
 import 'package:krishimantra/routes/app_routes.dart';
+import 'package:krishimantra/presentation/widgets/ai_chat/voice_settings_section.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -200,6 +201,11 @@ class _SettingsScreenState extends State<SettingsScreen> with TranslationMixin {
                     size: AppSizes.iconM,
                   ),
                 )),
+
+            const Divider(color: AppColors.divider),
+
+            // Voice section (krishi-ai Build B)
+            const VoiceSettingsSection(),
 
             const Divider(color: AppColors.divider),
 
