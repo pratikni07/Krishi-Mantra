@@ -27,6 +27,32 @@ class ReelService {
     }
   }
 
+  /**
+   * Annotate a list of reels with each one's `like.isLiked` status for the
+   * given viewer. Replaces a per-reel `Like.findOne` (N+1 against Mongo) with
+   * a single `find({ reel: { $in: ids }, userId })` and an in-memory map —
+   * fewer round trips, lower DB load, and cache-friendly under load.
+   */
+  static async annotateLikedFlags(reels, userId) {
+    if (!userId || !Array.isArray(reels) || reels.length === 0) return reels;
+
+    const ids = reels.map((r) => r._id).filter(Boolean);
+    if (ids.length === 0) return reels;
+
+    const liked = await Like.find({ reel: { $in: ids }, userId })
+      .select('reel')
+      .lean();
+    const likedSet = new Set(liked.map((l) => String(l.reel)));
+
+    for (const reel of reels) {
+      reel.like = {
+        ...(reel.like || {}),
+        isLiked: likedSet.has(String(reel._id)),
+      };
+    }
+    return reels;
+  }
+
   static async createReel(reelData) {
     try {
       // Extract and store tags from description
@@ -59,8 +85,29 @@ class ReelService {
     }
   }
 
+  /**
+   * Build a deterministic cache key from a filters object. Plain
+   * `JSON.stringify(filters)` is non-deterministic — `{a: 1, b: 2}` and
+   * `{b: 2, a: 1}` produce different keys, so two callers asking for the
+   * same logical filter set hit different cache entries (one fills the
+   * cache, the other re-queries). Sorting the keys recursively gives the
+   * same string regardless of insertion order.
+   */
+  static _stableStringify(value) {
+    if (value === null || typeof value !== "object") {
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+      return `[${value.map((v) => ReelService._stableStringify(v)).join(",")}]`;
+    }
+    const keys = Object.keys(value).sort();
+    return `{${keys
+      .map((k) => `${JSON.stringify(k)}:${ReelService._stableStringify(value[k])}`)
+      .join(",")}}`;
+  }
+
   static async getReels(page = 1, limit = 10, filters = {}, userId = null) {
-    const cacheKey = `reels:page:${page}:limit:${limit}:${JSON.stringify(
+    const cacheKey = `reels:page:${page}:limit:${limit}:${ReelService._stableStringify(
       filters
     )}:user:${userId || "guest"}`;
 
@@ -83,17 +130,7 @@ class ReelService {
     ]);
 
     // Enhance reels with like status if userId is provided
-    if (userId) {
-      await Promise.all(
-        reels.map(async (reel) => {
-          const like = await Like.findOne({ reel: reel._id, userId });
-          reel.like = {
-            ...reel.like,
-            isLiked: !!like,
-          };
-        })
-      );
-    }
+    await ReelService.annotateLikedFlags(reels, userId);
 
     const result = PaginationUtils.formatPaginationResponse(
       reels,
@@ -207,17 +244,7 @@ class ReelService {
     ]);
 
     // Enhance reels with like status if userId is provided
-    if (userId) {
-      await Promise.all(
-        reels.map(async (reel) => {
-          const like = await Like.findOne({ reel: reel._id, userId });
-          reel.like = {
-            ...(reel.like || {}),
-            isLiked: !!like,
-          };
-        })
-      );
-    }
+    await ReelService.annotateLikedFlags(reels, userId);
 
     const result = PaginationUtils.formatPaginationResponse(
       reels,
@@ -469,17 +496,7 @@ class ReelService {
     ]);
 
     // Enhance reels with like status if viewerId is provided
-    if (viewerId) {
-      await Promise.all(
-        reels.map(async (reel) => {
-          const like = await Like.findOne({ reel: reel._id, userId: viewerId });
-          reel.like = {
-            ...reel.like,
-            isLiked: !!like,
-          };
-        })
-      );
-    }
+    await ReelService.annotateLikedFlags(reels, viewerId);
 
     const result = PaginationUtils.formatPaginationResponse(
       reels,

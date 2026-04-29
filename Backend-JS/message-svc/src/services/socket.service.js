@@ -224,49 +224,77 @@ class SocketService {
   }
 
   setupChatHandlers(socket) {
-    // Create new direct chat
+    // Create new direct chat. Race-free upsert keyed on the canonical
+    // participant pair — two simultaneous `chat:create:direct` calls
+    // (e.g. user A and user B both tapping "message" at the same time)
+    // converge on a single Chat document instead of producing two.
     socket.on("chat:create:direct", this.withRateLimit(socket, async (data) => {
       const { participantId, userId } = data;
+      const directChatKey = Chat.buildDirectKey(userId, participantId);
 
-      // Use static method for efficient lookup
-      const existingChat = await Chat.findDirectChat(userId, participantId);
-      if (existingChat) {
-        socket.emit("chat:create:response", existingChat);
-        return;
+      // findOneAndUpdate with upsert is the atomic primitive: if a chat
+      // with this directChatKey already exists, return it; otherwise
+      // insert and return the new one. The unique partial index is the
+      // safety net — a concurrent insert that loses the race surfaces
+      // here as a duplicate-key error and we just refetch.
+      let chat;
+      let isNew = false;
+      try {
+        const result = await Chat.findOneAndUpdate(
+          { type: 'direct', directChatKey },
+          {
+            $setOnInsert: {
+              type: 'direct',
+              directChatKey,
+              participants: [
+                {
+                  userId,
+                  userName: data.userName,
+                  profilePhoto: data.profilePhoto,
+                },
+                {
+                  userId: participantId,
+                  userName: data.participantName,
+                  profilePhoto: data.participantProfilePhoto,
+                },
+              ],
+            },
+          },
+          { new: true, upsert: true, setDefaultsOnInsert: true, rawResult: true }
+        );
+        chat = result.value;
+        isNew = !result.lastErrorObject?.updatedExisting;
+      } catch (err) {
+        if (err && err.code === 11000) {
+          chat = await Chat.findOne({ type: 'direct', directChatKey });
+        } else {
+          throw err;
+        }
       }
 
-      const chat = await Chat.create({
-        type: "direct",
-        participants: [
-          {
-            userId,
-            userName: data.userName,
-            profilePhoto: data.profilePhoto,
-          },
-          {
-            userId: participantId,
-            userName: data.participantName,
-            profilePhoto: data.participantProfilePhoto,
-          },
-        ],
-      });
-
-      // Drop cached chat-room lists for both sides so their next reconnect
-      // picks up this chat without waiting for the TTL.
-      await chatRoomCache.invalidate([userId, participantId]);
-
-      // Notify participants about new chat
-      this.emitToUser(participantId, "chat:new", chat);
       socket.emit("chat:create:response", chat);
 
-      // Join the new chat room
-      socket.join(chat._id.toString());
+      // Backfill directChatKey for legacy rows that pre-date this field —
+      // protects the unique index from a future second-write doubling up.
+      if (chat && !chat.directChatKey) {
+        await Chat.updateOne({ _id: chat._id }, { $set: { directChatKey } }).catch(() => {});
+      }
+
+      if (isNew) {
+        // Drop cached chat-room lists for both sides so their next reconnect
+        // picks up this chat without waiting for the TTL.
+        await chatRoomCache.invalidate([userId, participantId]);
+        // Notify the other participant about the new chat
+        this.emitToUser(participantId, "chat:new", chat);
+        // Join the new chat room
+        socket.join(chat._id.toString());
+      }
     }));
   }
 
   setupMessageHandlers(socket) {
     socket.on("message:send", this.withRateLimit(socket, async (data) => {
-      const { chatId, content, mediaType, mediaUrl, mediaMetadata } = data;
+      const { chatId, content, mediaType, mediaUrl, mediaMetadata, clientMessageId } = data;
 
       const chat = await Chat.findById(chatId).lean();
       if (!chat) {
@@ -291,6 +319,7 @@ class SocketService {
         mediaType,
         mediaUrl,
         mediaMetadata,
+        clientMessageId,
       });
 
       // Emit to all users in chat room
@@ -330,11 +359,36 @@ class SocketService {
         socket.userId
       );
 
+      // Per-message read receipts to the chat room — peers' bubbles flip
+      // to "read", and the user's own other devices that have the chat
+      // open get the message-level update too.
       this.io.to(chatId).emit("message:read:update", {
         userId: socket.userId,
         messageIds: result.messageIds,
         timestamp: new Date(),
       });
+
+      // Cross-device chat-list sync. The chat-list screen on a sibling
+      // device is unlikely to have the chat room open, so the room
+      // broadcast above doesn't reach it. Push a separate user-scoped
+      // event so the unread-badge on every device for *this* user
+      // converges to the new count without a list refetch. Refetch the
+      // current per-user count after the increment so the value is the
+      // server's truth, not a guess.
+      try {
+        const fresh = await Chat.findById(chatId).lean();
+        const newUnread = fresh?.unreadCount?.[socket.userId]
+          ?? fresh?.unreadCount?.get?.(socket.userId)
+          ?? 0;
+        this.emitToUser(socket.userId, "chat:unread:update", {
+          chatId,
+          unreadCount: newUnread,
+          timestamp: new Date(),
+        });
+      } catch (err) {
+        // Non-fatal — receipts already sent to the room above.
+        console.warn("chat:unread:update emit failed:", err.message);
+      }
     }));
   }
 

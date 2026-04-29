@@ -5,12 +5,20 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/otp_response_model.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/services/SocketService.dart';
 import '../../data/services/UserService.dart';
 import '../../data/services/engagement_service.dart';
 import '../../data/services/feature_flag_service.dart';
+import '../../data/services/push_notification_service.dart';
 import '../../routes/app_routes.dart';
 import 'farm_profile_controller.dart';
+import 'feed_controller.dart';
+import 'message_controller.dart';
+import 'notification_controller.dart';
 import 'presigned_url_controller.dart';
+import 'reel_controller.dart';
+import 'subscription_controller.dart';
+import 'video_tutorial_controller.dart';
 
 class AuthController extends GetxController {
   final _storage = const FlutterSecureStorage();
@@ -25,7 +33,9 @@ class AuthController extends GetxController {
 
   /// Post-auth router. Probes the user's farm profile; if onboarding is
   /// incomplete, sends them to the multi-step onboarding flow first.
-  /// Falls back to MAIN on any error so a flaky network never blocks login.
+  /// Falls back to MAIN on any error so a flaky network never blocks login,
+  /// but errors are now logged and a non-blocking snackbar surfaces the
+  /// degraded path so support has something to triage from a bug report.
   static Future<void> navigateAfterAuth() async {
     // Refresh feature flags now that we have a token; the splash already
     // primed the cache on cold start, but a fresh fetch picks up admin
@@ -37,8 +47,11 @@ class AuthController extends GetxController {
         await ff.refresh(force: true);
         onboardingV2Enabled = ff.onboardingV2Enabled;
       }
-    } catch (_) {
+    } catch (e, st) {
       // Flags are best-effort — if missing, default to onboarding-on.
+      // Log so we can detect a flag-service outage from telemetry.
+      // ignore: avoid_print
+      print('navigateAfterAuth: feature-flag refresh failed: $e\n$st');
     }
 
     try {
@@ -51,8 +64,19 @@ class AuthController extends GetxController {
           return;
         }
       }
-    } catch (_) {
+    } catch (e, st) {
       // Best-effort routing — never block the user's login on this probe.
+      // Surface the degraded path to the user and log so it doesn't
+      // disappear silently into a `catch (_) {}`.
+      // ignore: avoid_print
+      print('navigateAfterAuth: farm-profile probe failed: $e\n$st');
+      try {
+        Get.snackbar(
+          'Heads up',
+          "Couldn't load your farm profile — using cached data.",
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      } catch (_) {}
     }
     Get.offAllNamed(AppRoutes.MAIN);
   }
@@ -220,7 +244,6 @@ class AuthController extends GetxController {
   }
 
   Future<bool> signupWithPhone({
-    required String name,
     required String firstName,
     required String lastName,
     required String phoneNo,
@@ -230,7 +253,6 @@ class AuthController extends GetxController {
       isLoading.value = true;
 
       final Map<String, dynamic> data = {
-        'name': name,
         'firstName': firstName,
         'lastName': lastName,
         'phoneNo': phoneNo,
@@ -283,7 +305,13 @@ class AuthController extends GetxController {
     }
   }
 
-  // Add this method to your AuthController class
+  // Upload the user-picked profile image during signup. The previous
+  // implementation swallowed every error and returned null, which made
+  // signup silently fall back to the default avatar — confusing for
+  // users who picked an image and saw it disappear with no message. Now
+  // we surface a non-blocking snackbar so they know the upload failed
+  // (signup itself still continues with the default avatar so the
+  // attempt isn't lost).
   Future<String?> _uploadImage(File imageFile) async {
     try {
       final presignedUrlController = Get.find<PresignedUrlController>();
@@ -294,6 +322,13 @@ class AuthController extends GetxController {
         userId: user.value?.id, isVideo: false,
       );
     } catch (e) {
+      try {
+        Get.snackbar(
+          'Profile photo',
+          'Could not upload your photo — using a default avatar for now. You can change it later in profile settings.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      } catch (_) {}
       return null;
     }
   }
@@ -332,10 +367,42 @@ class AuthController extends GetxController {
       );
       await _engagement.endSession();
 
+
+      // Clear the FCM token *before* we wipe local user state. The
+      // unregister call needs the user id to identify which token row
+      // to clear server-side; once `clearAllData()` runs below, that id
+      // is gone. The push service also calls FirebaseMessaging.deleteToken()
+      // so any in-flight messages bounce instead of being delivered to
+      // the post-logout account on this device.
+      try {
+        if (Get.isRegistered<PushNotificationService>()) {
+          await Get.find<PushNotificationService>().stopAndUnregister();
+        }
+      } catch (_) {}
+
+      // Best-effort backend revoke + local secure-storage wipe.
+      // The repository continues even if the server is unreachable, so the
+      // local state below always runs.
       await _authRepository.logout();
       await _storage.deleteAll();
       await _userService.clearAllData();
       user.value = null;
+
+      // Tear down feature controllers so the next user (or re-login of the
+      // same user) starts with fresh state. All of these are registered as
+      // `lazyPut(..., fenix: true)`, so Get re-instantiates them on the
+      // next `Get.find<T>()`. ApiService / UserService / SocketService are
+      // permanent and intentionally not deleted.
+      _disposeFeatureControllers();
+
+      // Disconnect the socket so we drop any per-user rooms / listeners.
+      // The next post-login flow will reconnect with a fresh handshake.
+      try {
+        if (Get.isRegistered<SocketService>()) {
+          Get.find<SocketService>().disconnect();
+        }
+      } catch (_) {}
+
       Get.offAllNamed(AppRoutes.PHONE_NUMBER);
     } catch (e) {
       Get.snackbar(
@@ -346,5 +413,24 @@ class AuthController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void _disposeFeatureControllers() {
+    void safeDelete<T>() {
+      try {
+        if (Get.isRegistered<T>()) {
+          Get.delete<T>(force: true);
+        }
+      } catch (_) {}
+    }
+
+    safeDelete<FeedController>();
+    safeDelete<MessageController>();
+    safeDelete<ReelController>();
+    safeDelete<VideoTutorialController>();
+    safeDelete<NotificationController>();
+    safeDelete<SubscriptionController>();
+    safeDelete<FarmProfileController>();
+    safeDelete<PresignedUrlController>();
   }
 }

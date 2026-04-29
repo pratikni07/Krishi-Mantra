@@ -1,6 +1,8 @@
 const notificationService = require('../../services/notification.service');
 const logger = require('../../utils/logger');
 const eventNotificationService = require('../../services/event-notification.service');
+const Notification = require('../../models/notification.model');
+const UserPrefs = require('../../models/user.model');
 
 exports.createNotification = async (req, res) => {
   try {
@@ -139,5 +141,120 @@ exports.sendTestNotification = async (req, res) => {
   } catch (error) {
     logger.error('Controller error - sendTestNotification:', error);
     res.status(500).json({ success: false, message: 'Failed to send test notification', error: error.message });
+  }
+};
+
+/**
+ * Register or rotate a device's FCM/APNs token.
+ *
+ * Mobile clients call this on first launch (after notification permission
+ * is granted) and on every cold start so we always have the latest token —
+ * FCM rotates tokens after app updates, restore-from-backup, and "clear
+ * data" actions, and a stale token silently drops every push for that
+ * device. The endpoint is idempotent: re-registering the same token is
+ * a no-op write.
+ */
+exports.registerPushToken = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { token, platform } = req.body || {};
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'token is required',
+      });
+    }
+    if (!['android', 'ios', 'web'].includes(platform)) {
+      return res.status(400).json({
+        success: false,
+        message: 'platform must be one of android, ios, web',
+      });
+    }
+
+    const updated = await UserPrefs.updatePushToken(userId, token, platform);
+    return res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    logger.error('Controller error - registerPushToken:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to register push token',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Clear the registered push token (sign-out, "do not disturb").
+ * The mobile client calls this on logout so a re-login on the same device
+ * doesn't deliver pre-logout pushes to the next user.
+ */
+exports.unregisterPushToken = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    await UserPrefs.updateOne(
+      { userId },
+      {
+        $set: {
+          'channels.push.token': null,
+          'channels.push.platform': null,
+          'channels.push.enabled': false,
+        },
+      }
+    );
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    logger.error('Controller error - unregisterPushToken:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to unregister push token',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Mark every unread notification as read in one call. The previous flow
+ * required the client to PATCH each id individually, which fanned out
+ * to N writes for the unread badge to clear — slow over flaky networks
+ * and a per-tap source of dropped writes.
+ */
+exports.markAllAsRead = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await Notification.updateMany(
+      { userId, seenAt: null },
+      { $set: { seenAt: new Date(), status: 'read' } }
+    );
+    return res.status(200).json({
+      success: true,
+      data: { modified: result.modifiedCount || 0 },
+    });
+  } catch (error) {
+    logger.error('Controller error - markAllAsRead:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to mark notifications as read',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Cheap unread-count probe for the badge. Used by the mobile client to
+ * keep the bell icon's red dot in sync without re-fetching the full list.
+ */
+exports.getUnreadCount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const count = await Notification.countUnread(userId);
+    return res.status(200).json({ success: true, data: { unread: count } });
+  } catch (error) {
+    logger.error('Controller error - getUnreadCount:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch unread count',
+      error: error.message,
+    });
   }
 };

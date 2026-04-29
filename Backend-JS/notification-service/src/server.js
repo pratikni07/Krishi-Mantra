@@ -1,5 +1,11 @@
 require('dotenv').config();
 const http = require('http');
+
+if (!process.env.JWT_SECRET) {
+  console.error('[notification-service] JWT_SECRET not set. Refusing to start.');
+  process.exit(1);
+}
+
 const app = require('./app');
 const config = require('./config');
 const { connectDB, Database } = require('./config/mongodb');

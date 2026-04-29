@@ -96,40 +96,33 @@ class _ReelsPageState extends State<ReelsPage> {
   }
 
   Future<void> _combineReelsAndAds() async {
-    if (_reelAds.isEmpty) {
-      logger.d('No ads available to combine with reels', tag: 'ReelsPage');
-      return;
-    }
-
-    // Create a non-reactive copy to avoid RxList.length infinite recursion
+    // Snapshot the reactive list to avoid RxList.length infinite recursion
+    // inside setState.
     final reelsList = List<ReelModel>.from(_reelController.reels);
 
-    if (reelsList.isEmpty) {
-      logger.d('No reels available to combine with ads', tag: 'ReelsPage');
-      return;
-    }
-
-    logger.d(
-        'Combining ${reelsList.length} reels with ${_reelAds.length} ads', tag: 'ReelsPage');
-
+    // Always rebuild the combined list, even if either input is empty:
+    //   - ads empty + reels present  → reels-only, ads can be inserted later
+    //   - reels empty (still loading) → empty list, build() falls through
+    //     to the reels-direct path which shows the loading/empty state
+    //   - both empty                  → empty list (build shows empty state)
+    //
+    // The previous early-returns left a stale `_combinedContent` in place.
+    // If ads loaded first while reels were still in flight, this method
+    // bailed; later reel arrival never re-triggered it, so ads never
+    // appeared interspersed and (in pathological cases) the page sat on
+    // an empty `_combinedContent` while reels accumulated invisibly.
     final List<Map<String, dynamic>> newCombinedContent = [];
 
-    // Combine reels and ads
     for (int i = 0; i < reelsList.length; i++) {
-      newCombinedContent
-          .add({'type': 'reel', 'content': reelsList[i]});
+      newCombinedContent.add({'type': 'reel', 'content': reelsList[i]});
 
-      // Insert an ad after every _reelsPerAd reels
-      if ((i + 1) % _reelsPerAd == 0 &&
-          i < reelsList.length - 1 &&
-          _reelAds.isNotEmpty) {
+      if (_reelAds.isNotEmpty &&
+          (i + 1) % _reelsPerAd == 0 &&
+          i < reelsList.length - 1) {
         final adIndex = ((i + 1) / _reelsPerAd - 1).toInt() % _reelAds.length;
-        logger.d('Adding ad at index $adIndex after reel ${i + 1}', tag: 'ReelsPage');
         newCombinedContent.add({'type': 'ad', 'content': _reelAds[adIndex]});
       }
     }
-
-    logger.d('Combined content contains ${newCombinedContent.length} items', tag: 'ReelsPage');
 
     if (mounted) {
       setState(() {
@@ -996,6 +989,12 @@ class ReelVideoCard extends StatefulWidget {
 class _ReelVideoCardState extends State<ReelVideoCard> {
   final ReelController _reelController = Get.find<ReelController>();
   late VideoPlayerController _videoPlayerController;
+  // Tracks whether `_videoPlayerController` has been assigned. If the user
+  // scrolls past this card before _initializeVideoPlayer() reaches the
+  // assignment, the `late` field is still uninitialized and any access
+  // (including dispose) throws LateInitializationError. Guarding dispose
+  // on this flag prevents the throw and the resulting controller leak.
+  bool _isControllerAssigned = false;
   static const int PRELOAD_AHEAD = 1; // Reduced to prevent memory issues
   static final Map<String, VideoPlayerController> _videoCache = {};
   static const int MAX_CACHE_SIZE = 3; // Reduced cache size for stability
@@ -1085,6 +1084,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
       // Check cache first
       if (_videoCache.containsKey(videoUrl)) {
         _videoPlayerController = _videoCache[videoUrl]!;
+        _isControllerAssigned = true;
         _videoCache.remove(videoUrl);
         logger.d('Using cached video controller', tag: 'ReelVideoCard');
       } else {
@@ -1099,6 +1099,7 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
           videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
           // HLS streaming is automatically supported by video_player
         );
+        _isControllerAssigned = true;
 
         logger.d('Starting video initialization (${isHls ? "HLS adaptive" : "direct"})...', tag: 'ReelVideoCard');
 
@@ -1140,19 +1141,31 @@ class _ReelVideoCardState extends State<ReelVideoCard> {
   @override
   void dispose() {
     _isDisposed = true;
-    try {
-      // Always pause the video first
-      _videoPlayerController.pause();
 
-      // Dispose if not in cache
-      if (!_videoCache.containsValue(_videoPlayerController)) {
-        _videoPlayerController.dispose();
+    // Only touch the controller if it actually got assigned. The user can
+    // scroll past this card before _initializeVideoPlayer assigns the late
+    // field; touching it then throws LateInitializationError, the previous
+    // catch swallowed it, and the controller (if it managed to spawn from
+    // the network call after dispose) leaked.
+    if (_isControllerAssigned) {
+      try {
+        _videoPlayerController.pause();
+      } catch (e) {
+        logger.e('Error pausing video on dispose: $e', tag: 'ReelVideoCard');
       }
+      try {
+        if (!_videoCache.containsValue(_videoPlayerController)) {
+          _videoPlayerController.dispose();
+        }
+      } catch (e) {
+        logger.e('Error disposing video controller: $e', tag: 'ReelVideoCard');
+      }
+    }
 
-      // Clean up old cache entries to prevent memory buildup
+    try {
       _cleanupCache();
     } catch (e) {
-      logger.e('Error disposing video: $e', tag: 'ReelVideoCard');
+      logger.e('Error cleaning video cache: $e', tag: 'ReelVideoCard');
     }
     super.dispose();
   }

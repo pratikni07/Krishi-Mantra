@@ -5,6 +5,7 @@ import 'package:krishimantra/core/utils/responsive_utils.dart';
 import '../../../data/services/language_service.dart';
 import '../../../core/utils/language_helper.dart';
 import '../../../core/utils/error_with_translation.dart';
+import '../../../routes/app_routes.dart';
 import '../../controllers/auth_controller.dart';
 import '../language/LanguageSelectionPage.dart';
 
@@ -109,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                   Hero(
                     tag: 'app_logo',
                     child: Image.asset(
-                      'assets/Images/Logo.png',
+                      'assets/Images/krishimantra-logo.png',
                       height: logoSize,
                       width: logoSize,
                     ),
@@ -268,12 +269,14 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
 
                   SizedBox(height: AppSizes.paddingL),
 
-                  // Forgot Password
+                  // Forgot Password — recovery on this app is phone+OTP, so
+                  // route to the phone-number screen rather than a dead
+                  // email reset flow.
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () {
-                        // TODO: Navigate to forgot password screen
+                        Get.offAllNamed(AppRoutes.PHONE_NUMBER);
                       },
                       child: Text(
                         getTranslation(KEY_FORGOT_PASSWORD),
@@ -313,7 +316,10 @@ class _LoginScreenState extends State<LoginScreen> with TranslationMixin {
                       ),
                       TextButton(
                         onPressed: () {
-                          // Navigate to register screen
+                          // Registration on this app is phone+OTP-based; the
+                          // phone-number screen handles both new and returning
+                          // users by branching on isRegistered after OTP verify.
+                          Get.offAllNamed(AppRoutes.PHONE_NUMBER);
                         },
                         child: Text(
                           getTranslation(KEY_REGISTER),

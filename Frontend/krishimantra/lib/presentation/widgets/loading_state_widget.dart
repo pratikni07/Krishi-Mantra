@@ -70,7 +70,7 @@ class _LoadingStateWidgetState extends State<LoadingStateWidget> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textGrey.withOpacity(0.85),
+                color: AppColors.textGrey.withValues(alpha: 0.85),
               ),
               textAlign: TextAlign.center,
             ),

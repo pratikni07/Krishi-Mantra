@@ -12,10 +12,16 @@ class CropModel {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  // Cached translations
+  // Cached translations. Each cache stores both the translated string AND
+  // the LanguageService version it was translated under; getters compare
+  // against the current version and re-translate if the user has switched
+  // languages since the value was cached.
   String? _translatedName;
+  int? _translatedNameVersion;
   String? _translatedScientificName;
+  int? _translatedScientificNameVersion;
   String? _translatedDescription;
+  int? _translatedDescriptionVersion;
 
   CropModel({
     required this.id,
@@ -32,51 +38,81 @@ class CropModel {
 
   // Get translated name
   Future<String> getTranslatedName() async {
-    if (_translatedName != null) return _translatedName!;
-
     final languageService = await LanguageService.getInstance();
-    _translatedName = await languageService.translate(name);
-    return _translatedName!;
+    if (_translatedName != null &&
+        _translatedNameVersion == languageService.languageVersion) {
+      return _translatedName!;
+    }
+    final translated = await languageService.translate(name);
+    _translatedName = translated;
+    _translatedNameVersion = languageService.languageVersion;
+    return translated;
   }
 
   // Get translated scientific name
   Future<String> getTranslatedScientificName() async {
-    if (_translatedScientificName != null) return _translatedScientificName!;
-
     final languageService = await LanguageService.getInstance();
-    _translatedScientificName = await languageService.translate(scientificName);
-    return _translatedScientificName!;
+    if (_translatedScientificName != null &&
+        _translatedScientificNameVersion == languageService.languageVersion) {
+      return _translatedScientificName!;
+    }
+    final translated = await languageService.translate(scientificName);
+    _translatedScientificName = translated;
+    _translatedScientificNameVersion = languageService.languageVersion;
+    return translated;
   }
 
   // Get translated description
   Future<String> getTranslatedDescription() async {
-    if (_translatedDescription != null) return _translatedDescription!;
-
     final languageService = await LanguageService.getInstance();
-    _translatedDescription = await languageService.translate(description);
-    return _translatedDescription!;
+    if (_translatedDescription != null &&
+        _translatedDescriptionVersion == languageService.languageVersion) {
+      return _translatedDescription!;
+    }
+    final translated = await languageService.translate(description);
+    _translatedDescription = translated;
+    _translatedDescriptionVersion = languageService.languageVersion;
+    return translated;
+  }
+
+  /// Parse a server-provided ISO date string. Forces a UTC interpretation
+  /// when the string is bare (no `Z` and no offset) so the calendar isn't
+  /// shifted by the device's local timezone — a Europe-region user used to
+  /// see "yesterday's" stage on early-morning fetches because backend dates
+  /// without a tz suffix were interpreted as local time.
+  static DateTime _parseServerDate(dynamic raw) {
+    if (raw == null) return DateTime.now().toUtc();
+    if (raw is! String || raw.isEmpty) return DateTime.now().toUtc();
+    final hasTz = raw.endsWith('Z') ||
+        RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(raw);
+    final input = hasTz ? raw : '${raw}Z';
+    try {
+      return DateTime.parse(input).toUtc();
+    } catch (_) {
+      return DateTime.now().toUtc();
+    }
   }
 
   factory CropModel.fromJson(Map<String, dynamic> json) {
     return CropModel(
-      id: json['_id'] ?? '',
-      name: json['name'] ?? '',
-      scientificName: json['scientificName'] ?? '',
-      description: json['description'] ?? '',
-      growingPeriod: json['growingPeriod'] ?? 0,
-      seasons: json['seasons'] != null
+      id: (json['_id'] ?? json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      scientificName: (json['scientificName'] ?? '').toString(),
+      description: (json['description'] ?? '').toString(),
+      growingPeriod: (json['growingPeriod'] is int)
+          ? json['growingPeriod'] as int
+          : int.tryParse('${json['growingPeriod'] ?? ''}') ?? 0,
+      seasons: json['seasons'] is List
           ? (json['seasons'] as List)
-              .map((season) => Season.fromJson(season))
+              .whereType<Map>()
+              .map((season) =>
+                  Season.fromJson(Map<String, dynamic>.from(season)))
               .toList()
-          : [],
-      imageUrl: json['imageUrl'] ?? '',
-      status: json['status'] ?? '',
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
-          : DateTime.now(),
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'])
-          : DateTime.now(),
+          : <Season>[],
+      imageUrl: (json['imageUrl'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      createdAt: _parseServerDate(json['createdAt']),
+      updatedAt: _parseServerDate(json['updatedAt']),
     );
   }
 

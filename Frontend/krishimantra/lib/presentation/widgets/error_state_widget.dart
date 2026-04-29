@@ -88,7 +88,7 @@ class _ErrorStateWidgetState extends State<ErrorStateWidget> {
               _translatedSubtitle,
               style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textGrey.withOpacity(0.85),
+                color: AppColors.textGrey.withValues(alpha: 0.85),
                 height: 1.5,
               ),
               textAlign: TextAlign.center,

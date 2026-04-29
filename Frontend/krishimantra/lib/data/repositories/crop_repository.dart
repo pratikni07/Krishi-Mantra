@@ -36,37 +36,41 @@ class CropRepository {
     }
   }
 
-  Future<CropCalendarModel> getCropCalendar(String cropId) async {
+  Future<CropCalendarModel> getCropCalendar(String cropId, {int? month}) async {
     try {
-      print('[CropRepository] Fetching calendar for cropId: $cropId');
-      final response =
-          await _apiService.get('/api/main/crop-calendar/calendar/$cropId/6');
+      // Default to the current month so the calendar reflects "what's happening
+      // now" rather than the previously hardcoded June.
+      final int resolvedMonth = month ?? DateTime.now().month;
+      final response = await _apiService
+          .get('/api/main/crop-calendar/calendar/$cropId/$resolvedMonth');
 
-      print('[CropRepository] Response received: ${response.statusCode}');
-      print('[CropRepository] Response data type: ${response.data.runtimeType}');
+      // Defensive parse — refuse to feed non-Map payloads to fromJson which
+      // assumes a dynamic-keyed map. The previous code assumed any non-data
+      // shape was the calendar itself and would explode inside fromJson with
+      // a hard-to-debug type error if the gateway returned a plain string
+      // (timeouts, 502 HTML pages, etc.).
+      final raw = response.data;
+      if (raw is! Map) {
+        throw Exception('Unexpected crop calendar response format');
+      }
+      final asMap = Map<String, dynamic>.from(raw);
 
-      // Handle both formats
-      if (response.data is Map && response.data.containsKey('data')) {
-        // Response with success property
-        if (response.data['success'] == true) {
-          final data = response.data['data'];
-          if (data == null) throw Exception('No crop data found');
-          print('[CropRepository] Parsing calendar data...');
-          return CropCalendarModel.fromJson(data);
+      if (asMap.containsKey('data')) {
+        if (asMap['success'] == true) {
+          final data = asMap['data'];
+          if (data is! Map) throw Exception('No crop data found');
+          return CropCalendarModel.fromJson(Map<String, dynamic>.from(data));
         }
         throw Exception(
-            'Failed to fetch crop calendar: ${response.data['message'] ?? 'Unknown error'}');
-      } else {
-        // Direct response
-        print('[CropRepository] Parsing direct response...');
-        return CropCalendarModel.fromJson(response.data);
+            'Failed to fetch crop calendar: ${asMap['message'] ?? 'Unknown error'}');
       }
+
+      // Direct response (no envelope) — only valid if it actually looks
+      // like a calendar payload.
+      return CropCalendarModel.fromJson(asMap);
     } on DioException catch (e) {
-      print('[CropRepository] DioException: ${e.message}');
-      print('[CropRepository] Response: ${e.response?.data}');
       throw Exception('Network error: ${e.message}');
     } catch (e) {
-      print('[CropRepository] Exception: $e');
       rethrow;
     }
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter/services.dart';
@@ -37,6 +39,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver, Tr
   List<dynamic> _feedAds = [];
   final Random _random = Random();
   bool _wasInactive = false;
+
+  // Throttles infinite-scroll page fetches. Without this, every scroll tick
+  // past the 80% threshold queues another `fetchRecommendedFeeds()` — Flutter
+  // ScrollController fires events at frame rate, so a single fast flick can
+  // kick off 5+ duplicate page requests, returning duplicate feed items into
+  // the list before the controller's `isRecommendedLoading` flips.
+  Timer? _scrollFetchDebounce;
 
   // Translation keys
   static const String KEY_TRENDING_HASHTAGS = 'trending_hashtags';
@@ -104,15 +113,24 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver, Tr
 
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent * 0.8) {
-      if (!_feedController.isRecommendedLoading.value &&
-          _feedController.hasMoreRecommendedFeeds.value) {
-        _feedController.fetchRecommendedFeeds();
-      }
+      // Coalesce rapid-fire scroll events into a single page fetch.
+      // The `isRecommendedLoading` guard inside the if-block isn't enough
+      // on its own because the value flips false too late — between the
+      // first emit returning and the next page issue, several events
+      // can sneak through.
+      if (_scrollFetchDebounce?.isActive ?? false) return;
+      _scrollFetchDebounce = Timer(const Duration(milliseconds: 250), () {
+        if (!_feedController.isRecommendedLoading.value &&
+            _feedController.hasMoreRecommendedFeeds.value) {
+          _feedController.fetchRecommendedFeeds();
+        }
+      });
     }
   }
 
   @override
   void dispose() {
+    _scrollFetchDebounce?.cancel();
     _scrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

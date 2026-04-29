@@ -66,6 +66,15 @@ const messageSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    // Client-generated UUID for idempotency. The mobile client tags every
+    // outbound `message:send` with a stable id so a manual retry (or socket
+    // reconnect mid-emit) can't create two copies of the same message.
+    // Indexed unique-per-sender — different users can't collide and we
+    // can't fail a legit message because some other user picked the same
+    // UUID. Sparse so legacy rows without the field don't trip the index.
+    clientMessageId: {
+      type: String,
+    },
   },
   {
     timestamps: true,
@@ -77,6 +86,10 @@ messageSchema.index({ chatId: 1, createdAt: -1 }); // Get messages for a chat
 messageSchema.index({ chatId: 1, isDeleted: 1, createdAt: -1 }); // Get non-deleted messages
 messageSchema.index({ sender: 1, createdAt: -1 }); // Get messages by user
 messageSchema.index({ chatId: 1, 'readBy.userId': 1 }); // Find unread messages
+messageSchema.index(
+  { sender: 1, clientMessageId: 1 },
+  { unique: true, sparse: true, partialFilterExpression: { clientMessageId: { $exists: true } } }
+);
 
 // Static method to get unread count for a user in a chat
 messageSchema.statics.getUnreadCount = async function(chatId, userId) {

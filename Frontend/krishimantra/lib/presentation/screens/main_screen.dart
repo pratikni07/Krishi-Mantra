@@ -7,6 +7,7 @@ import 'package:krishimantra/presentation/screens/profile/ProfileScreen.dart';
 import '../../data/services/language_service.dart';
 
 import '../../core/constants/colors.dart';
+import '../widgets/connectivity_banner.dart';
 import 'home/home_screen.dart';
 import 'reel/reels_page.dart';
 import 'package:get/get.dart';
@@ -75,7 +76,9 @@ class _MainScreenState extends State<MainScreen> {
     final bottomPadding = mediaQuery.padding.bottom;
     
     return Scaffold(
-      body: _pages[_selectedIndex],
+      // Wrap each tab body with the offline banner so the alert is visible
+      // regardless of which screen the user is currently looking at.
+      body: ConnectivityBanner.wrap(_pages[_selectedIndex]),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppColors.white,

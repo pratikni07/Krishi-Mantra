@@ -186,7 +186,19 @@ class ReelController extends BaseController {
 
   Future<List<ReelModel>> getReelsByTag(String tagName) async {
     return await handleAsync<List<ReelModel>>(
-          () => _reelRepository.getReelsByTag(tagName),
+          () async {
+            final tagReels = await _reelRepository.getReelsByTag(tagName);
+            // Replace the active list so the reels feed actually shows
+            // the tag-filtered set. Without this, the previous version
+            // returned the data but the page kept rendering whatever was
+            // already on screen — selecting a tag had no visible effect.
+            currentPage.value = 1;
+            hasMorePages.value = false;
+            reels.value = tagReels;
+            isRecommendationMode.value = false;
+            update();
+            return tagReels;
+          },
           showLoading: true,
         ) ??
         [];
@@ -328,8 +340,12 @@ class ReelController extends BaseController {
     // Track in engagement service
     _engagementService.trackReelView(reelId, watchDuration: watchDuration, completionRate: completionRate);
 
-    // Fire and forget - don't await
-    _reelRepository.recordInteraction(reelId, InteractionType.view);
+    // Fire and forget — but with a `.catchError` so a failed recommendation
+    // ping doesn't surface as an unhandled future. The view itself is
+    // best-effort telemetry; the next fetch will reconcile recommendations.
+    _reelRepository
+        .recordInteraction(reelId, InteractionType.view)
+        .catchError((_) {});
   }
 
   /// Record reel completion

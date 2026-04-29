@@ -3,7 +3,8 @@
  * Handles all subscription-related operations for Krishi Mantra
  */
 
-const { SubscriptionPlan, UserSubscription, PaymentHistory, UsageTracking, IotAddon, UserIotAddon } = require('../model/Subscription');
+const { SubscriptionPlan, UserSubscription, PaymentHistory, UsageTracking, IotAddon, UserIotAddon, PendingCheckoutSession } = require('../model/Subscription');
+const { notify } = require('../utils/notificationClient');
 const User = require('../model/User');
 const UserDetail = require('../model/UserDetail');
 const stripeConfig = require('../config/stripe');
@@ -160,6 +161,15 @@ const createCheckoutSession = async (req, res) => {
       cancelUrl: `${process.env.FRONTEND_URL || 'krishimantra://'}subscription/cancel`,
     });
 
+    // Persist (sessionId -> userId) so the webhook handler can verify the
+    // session was created by the same user before activating.
+    await PendingCheckoutSession.create({
+      sessionId: session.id,
+      userId,
+      planName,
+      billingCycle,
+    });
+
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: 'Checkout session created',
@@ -220,24 +230,56 @@ const createPaymentIntent = async (req, res) => {
 };
 
 /**
- * Confirm payment and activate subscription (for mobile)
+ * Confirm payment and activate subscription (for mobile).
+ *
+ * Hardening:
+ *  - Trust intent metadata, not request body, for userId/planName/billingCycle.
+ *    The body fields are ignored except `paymentIntentId`. createPaymentIntent
+ *    writes the trusted values into Stripe metadata server-side at create time;
+ *    re-reading them here prevents a hijacked-intent attack where user A pays
+ *    for an intent created by user B.
+ *  - Verify intent.metadata.userId === authenticated user.
+ *  - Idempotent: if a PaymentHistory row already exists for this intent, return
+ *    the existing subscription instead of creating a duplicate. Combined with
+ *    the unique sparse index on stripePaymentIntentId this guards against
+ *    races between concurrent confirm calls.
+ *  - Refuse to activate if the user already has a different active subscription.
  */
 const confirmPayment = async (req, res) => {
   try {
-    const { paymentIntentId, planName, billingCycle } = req.body;
+    const { paymentIntentId } = req.body;
     const user = req.user;
+    const userId = (user._id || user.id).toString();
 
-    // Handle both `_id` (from DB) and `id` (from JWT token)
-    const userId = user._id || user.id;
-
-    if (!paymentIntentId || !planName || !billingCycle) {
+    if (!paymentIntentId) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
-        message: 'Payment intent ID, plan name, and billing cycle are required',
+        message: 'Payment intent ID is required',
       });
     }
 
-    // Verify payment intent
+    // Idempotency: short-circuit if we've already processed this intent.
+    const existingPayment = await PaymentHistory.findOne({
+      stripePaymentIntentId: paymentIntentId,
+    });
+    if (existingPayment) {
+      // Make sure the caller is the same user the intent belongs to. Don't
+      // leak another user's subscription back to a hijacker.
+      if (existingPayment.userId.toString() !== userId) {
+        return res.status(HTTP_STATUS.FORBIDDEN).json({
+          success: false,
+          message: 'Payment intent does not belong to this user',
+        });
+      }
+      const existingSubscription = await UserSubscription.findById(existingPayment.subscriptionId);
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'Subscription already activated',
+        data: { subscription: existingSubscription },
+      });
+    }
+
+    // Verify payment intent with Stripe
     const paymentIntent = await stripeConfig.stripe.paymentIntents.retrieve(paymentIntentId);
 
     if (paymentIntent.status !== 'succeeded') {
@@ -247,12 +289,51 @@ const confirmPayment = async (req, res) => {
       });
     }
 
-    // Get plan
+    // Trust the intent's metadata (set server-side at create time), not
+    // the request body. This blocks a hijacker from paying a different
+    // user's intent and activating their own plan.
+    const intentUserId = paymentIntent.metadata?.userId;
+    const planName = paymentIntent.metadata?.planName;
+    const billingCycle = paymentIntent.metadata?.billingCycle;
+
+    if (!intentUserId || !planName || !billingCycle) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Payment intent is missing required metadata',
+      });
+    }
+
+    if (intentUserId !== userId) {
+      logger.warn(
+        `confirmPayment: user ${userId} attempted to confirm intent ${paymentIntentId} owned by ${intentUserId}`
+      );
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        success: false,
+        message: 'Payment intent does not belong to this user',
+      });
+    }
+
+    // Get plan (DB record — for displayName + planId)
     const plan = await SubscriptionPlan.findOne({ name: planName });
     if (!plan) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({
         success: false,
         message: 'Plan not found',
+      });
+    }
+
+    // Reject if a different active subscription already exists. This mirrors
+    // the guard in createCheckoutSession so the mobile path can't bypass it.
+    const existingActive = await UserSubscription.findOne({
+      userId,
+      status: 'active',
+      endDate: { $gt: new Date() },
+    });
+    if (existingActive && existingActive.planName !== planName) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'You already have an active subscription. Cancel it before subscribing to a different plan.',
+        currentPlan: existingActive.planName,
       });
     }
 
@@ -285,16 +366,31 @@ const confirmPayment = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Create payment history
-    await PaymentHistory.create({
-      userId: userId,
-      subscriptionId: subscription._id,
-      stripePaymentIntentId: paymentIntentId,
-      amount: paymentIntent.amount,
-      currency: paymentIntent.currency,
-      status: 'succeeded',
-      description: `${plan.displayName} - ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} Subscription`,
-    });
+    // Create payment history. Unique index on stripePaymentIntentId blocks
+    // duplicates if two confirm calls race past the existence check above.
+    try {
+      await PaymentHistory.create({
+        userId: userId,
+        subscriptionId: subscription._id,
+        stripePaymentIntentId: paymentIntentId,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+        status: 'succeeded',
+        description: `${plan.displayName} - ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} Subscription`,
+      });
+    } catch (err) {
+      // Duplicate key — another concurrent confirm call won the race.
+      // The subscription is already activated; treat as success.
+      if (err && err.code === 11000) {
+        logger.info(`confirmPayment: duplicate intent ${paymentIntentId} short-circuited via unique index`);
+        return res.status(HTTP_STATUS.OK).json({
+          success: true,
+          message: 'Subscription already activated',
+          data: { subscription, plan },
+        });
+      }
+      throw err;
+    }
 
     // Update user detail
     await UserDetail.findOneAndUpdate(
@@ -316,22 +412,6 @@ const confirmPayment = async (req, res) => {
     await redis.del(`subscription:user:${userId}`);
 
     logger.info(`Subscription activated for user ${userId}: ${plan.name}`);
-
-    // Authoritative revenue event. Source of truth for the analytics
-    // dashboard — the FE-emitted version is opportunistic for funnels.
-    engagementEmitter.emit({
-      userId: String(userId),
-      eventName: 'subscription_purchase',
-      eventCategory: 'commerce',
-      properties: {
-        planName: plan.name,
-        billingCycle,
-        amount: paymentIntent.amount,
-        currency: paymentIntent.currency,
-        paymentIntentId,
-        source: 'server',
-      },
-    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -406,18 +486,6 @@ const cancelSubscription = async (req, res) => {
     await redis.del(`subscription:user:${userId}`);
 
     logger.info(`Subscription cancelled for user ${userId}`);
-
-    engagementEmitter.emit({
-      userId: String(userId),
-      eventName: 'subscription_cancel_confirmed',
-      eventCategory: 'commerce',
-      properties: {
-        planName: subscription.planName,
-        cancelImmediately: !!cancelImmediately,
-        reason: reason || null,
-        source: 'server',
-      },
-    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -510,6 +578,26 @@ const getUsageStats = async (req, res) => {
     // Get today's usage
     const usage = await UsageTracking.getTodayUsage(userId);
 
+    // Aggregate this calendar month's video consultations across all
+    // per-day rows. The daily counters reset by virtue of a new row
+    // being created each day, but `videoConsultationsPerMonth` is a
+    // monthly limit — without summing the month we'd compare a
+    // single-day count against a monthly cap, undercounting and
+    // letting users exceed it.
+    const now = new Date();
+    const monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    const monthlyAgg = await UsageTracking.aggregate([
+      { $match: { userId, date: { $gte: monthStart } } },
+      {
+        $group: {
+          _id: null,
+          videoConsultationsUsed: { $sum: '$videoConsultationsUsed' },
+        },
+      },
+    ]);
+    const videoConsultationsUsedMonth =
+      (monthlyAgg[0] && monthlyAgg[0].videoConsultationsUsed) || 0;
+
     // Get user's subscription/plan limits
     const subscription = await UserSubscription.findOne({
       userId,
@@ -530,7 +618,7 @@ const getUsageStats = async (req, res) => {
       aiMessages: limits.aiMessagesPerDay === -1 ? -1 : Math.max(0, limits.aiMessagesPerDay - usage.aiMessagesUsed),
       imageAnalysis: limits.imageAnalysisPerDay === -1 ? -1 : Math.max(0, limits.imageAnalysisPerDay - usage.imageAnalysisUsed),
       consultantChats: limits.consultantChatsPerDay === -1 ? -1 : Math.max(0, limits.consultantChatsPerDay - usage.consultantChatsUsed),
-      videoConsultations: limits.videoConsultationsPerMonth === -1 ? -1 : Math.max(0, limits.videoConsultationsPerMonth - usage.videoConsultationsUsed),
+      videoConsultations: limits.videoConsultationsPerMonth === -1 ? -1 : Math.max(0, limits.videoConsultationsPerMonth - videoConsultationsUsedMonth),
     };
 
     res.status(HTTP_STATUS.OK).json({
@@ -541,7 +629,9 @@ const getUsageStats = async (req, res) => {
           aiMessagesUsed: usage.aiMessagesUsed,
           imageAnalysisUsed: usage.imageAnalysisUsed,
           consultantChatsUsed: usage.consultantChatsUsed,
-          videoConsultationsUsed: usage.videoConsultationsUsed,
+          // Month-to-date so the client sees usage that matches the
+          // monthly limit it's compared against.
+          videoConsultationsUsed: videoConsultationsUsedMonth,
         },
         limits: {
           aiMessagesPerDay: limits.aiMessagesPerDay,
@@ -679,7 +769,38 @@ const handleWebhook = async (req, res) => {
 
 // Webhook handlers
 async function handleCheckoutCompleted(session) {
-  const { userId, planName, billingCycle } = session.metadata;
+  // Look up the session in our DB. If we never created it, refuse to
+  // activate — the webhook signature was valid but the metadata is not
+  // something we recorded, so we can't trust it.
+  const pending = await PendingCheckoutSession.findOne({ sessionId: session.id });
+  if (!pending) {
+    logger.error(
+      `handleCheckoutCompleted: no pending session record for ${session.id}; refusing activation`
+    );
+    return;
+  }
+
+  // Cross-check: the metadata carried by Stripe must match what we
+  // stored at create time. A mismatch means either tampering or a
+  // service drift; either way, don't activate.
+  const metaUserId = session.metadata?.userId;
+  const metaPlanName = session.metadata?.planName;
+  const metaBillingCycle = session.metadata?.billingCycle;
+  const expectedUserId = pending.userId.toString();
+
+  if (
+    metaUserId !== expectedUserId ||
+    metaPlanName !== pending.planName ||
+    metaBillingCycle !== pending.billingCycle
+  ) {
+    logger.error(
+      `handleCheckoutCompleted: metadata mismatch for session ${session.id}. expected user=${expectedUserId} plan=${pending.planName} cycle=${pending.billingCycle}; got user=${metaUserId} plan=${metaPlanName} cycle=${metaBillingCycle}`
+    );
+    return;
+  }
+
+  const userId = expectedUserId;
+  const { planName, billingCycle } = pending;
 
   logger.info(`Checkout completed for user ${userId}: ${planName}`);
 
@@ -731,6 +852,10 @@ async function handleCheckoutCompleted(session) {
 
   // Clear cache
   await redis.del(`subscription:user:${userId}`);
+
+  // Consume the pending record so a replay of the same webhook can't
+  // re-activate later.
+  await PendingCheckoutSession.deleteOne({ sessionId: session.id });
 }
 
 async function handleSubscriptionUpdated(subscription) {

@@ -11,26 +11,44 @@ import '../../widgets/empty_state_widget.dart';
 import '../../widgets/loading_state_widget.dart';
 import '../../widgets/error_state_widget.dart';
 
-class CropsScreen extends StatelessWidget {
+class CropsScreen extends StatefulWidget {
   const CropsScreen({super.key});
 
   @override
+  State<CropsScreen> createState() => _CropsScreenState();
+}
+
+class _CropsScreenState extends State<CropsScreen> {
+  final CropController cropController = Get.find<CropController>();
+  final TextEditingController searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Run once per screen mount. The previous version queued this same
+    // call from `addPostFrameCallback` on every build, which fired on
+    // every rebuild (including keyboard show/hide and language switches)
+    // — the controller's cache short-circuited the request, but it still
+    // burned a frame's worth of work and made profiling noisy.
+    if (Get.isRegistered<CropController>()) {
+      cropController.fetchAllCrops(refresh: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final CropController cropController = Get.find<CropController>();
-    final TextEditingController searchController = TextEditingController();
     final mediaQuery = MediaQuery.of(context);
     final screenHeight = mediaQuery.size.height;
     final topPadding = mediaQuery.padding.top;
 
     // Calculate appropriate height for app bar - reduced for less spacing
     final appBarHeight = screenHeight * 0.20;
-
-    // Ensure fresh data when returning to this screen
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (Get.isRegistered<CropController>()) {
-        cropController.fetchAllCrops(refresh: false);
-      }
-    });
 
     return Scaffold(
       backgroundColor: Colors.white,

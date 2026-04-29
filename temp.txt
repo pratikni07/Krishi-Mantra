@@ -1,0 +1,4 @@
+weather : 4da43886d7063a5f26ef7d40e00c2dd9
+
+- MONGO_INITDB_ROOT_USERNAME=admin
+- MONGO_INITDB_ROOT_PASSWORD=secure-password

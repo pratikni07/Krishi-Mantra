@@ -169,8 +169,7 @@ class VideoTutorialController extends GetxController {
 
       // Fetch comments
       await fetchComments(videoId);
-    } catch (e) {
-      print('Error loading video details: $e');
+    } catch (_) {
       hasError.value = true;
     } finally {
       isLoading.value = false;
@@ -194,9 +193,6 @@ class VideoTutorialController extends GetxController {
         page: currentPage.value,
         limit: 10,
       );
-
-      // Debug - print the response to see its structure
-      print('Comments response: ${response}');
 
       // Check if the data structure matches what we expect
       if (response['data'] != null) {
@@ -222,7 +218,6 @@ class VideoTutorialController extends GetxController {
         hasMoreComments.value = false;
       }
     } catch (e) {
-      print('Error fetching comments: $e');
       Get.snackbar('Error', 'Failed to load comments: $e');
     } finally {
       isLoadingComments.value = false;
@@ -313,10 +308,9 @@ class VideoTutorialController extends GetxController {
         );
         currentVideo.refresh();
       }
-    } catch (e) {
-      print('Error toggling like: $e');
+    } catch (_) {
       Get.snackbar('Error', 'Failed to toggle like');
-      
+
       // Revert to original state on error
       await loadVideoDetails(videoId);
     }
@@ -335,17 +329,24 @@ class VideoTutorialController extends GetxController {
         },
       );
 
-      // Add the new comment to the local list
+      // Insert the server's persisted comment at the top. We do NOT refetch
+      // the list here — the previous version did `fetchComments(refresh: true)`
+      // immediately after, but if the read path was served by a replica that
+      // hadn't caught up yet, the new comment vanished from the UI. Trusting
+      // the response from the same write request is read-after-write safe.
       if (response['status'] == 'success' && response['data'] != null) {
-        final newComment = response['data'];
-        comments.insert(
-            0, Map<String, dynamic>.from(newComment)); // Add at the beginning
+        final newComment = Map<String, dynamic>.from(response['data']);
+        // Avoid duplicates if the server somehow returned an existing id.
+        final existing = comments.indexWhere(
+          (c) => c['_id'] != null && c['_id'] == newComment['_id'],
+        );
+        if (existing == -1) {
+          comments.insert(0, newComment);
+        } else {
+          comments[existing] = newComment;
+        }
       }
-
-      // Refresh comments to ensure everything is in sync
-      await fetchComments(videoId, refresh: true);
-    } catch (e) {
-      print('Error adding comment: $e');
+    } catch (_) {
       Get.snackbar('Error', 'Failed to add comment');
       rethrow;
     }
@@ -523,8 +524,7 @@ class VideoTutorialController extends GetxController {
           break;
         }
       }
-    } catch (e) {
-      print('Error adding reply: $e');
+    } catch (_) {
       Get.snackbar('Error', 'Failed to add reply');
       rethrow;
     }
@@ -537,8 +537,8 @@ class VideoTutorialController extends GetxController {
     isLoadingMore.value = true;
     try {
       await fetchComments(videoId);
-    } catch (e) {
-      print('Error loading more comments: $e');
+    } catch (_) {
+      // Silent — pagination errors are non-fatal; the user can retry.
     } finally {
       isLoadingMore.value = false;
     }

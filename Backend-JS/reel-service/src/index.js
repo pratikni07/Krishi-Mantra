@@ -7,6 +7,11 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 
+if (!process.env.JWT_SECRET) {
+  console.error('[reel-service] JWT_SECRET not set. Refusing to start.');
+  process.exit(1);
+}
+
 const connectDB = require('./config/database');
 const { Database } = require('./config/database');
 const redis = require('./config/redis');

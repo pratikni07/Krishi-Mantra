@@ -212,4 +212,44 @@ class NotificationRepository {
       rethrow;
     }
   }
+
+  /// Register or rotate this device's FCM token with the notification
+  /// service. Idempotent — calling with the same `(userId, token)` is a
+  /// no-op write on the server side.
+  Future<void> registerPushToken({
+    required String userId,
+    required String token,
+    required String platform,
+  }) async {
+    await _apiService.put(
+      '$_baseUrl/users/$userId/push-token',
+      data: {'token': token, 'platform': platform},
+    );
+  }
+
+  /// Clear the registered push token (logout). Best-effort: the caller
+  /// should not block logout on this — the FCM SDK's local
+  /// `deleteToken()` is the authoritative end of the chain.
+  Future<void> unregisterPushToken({required String userId}) async {
+    await _apiService.delete('$_baseUrl/users/$userId/push-token');
+  }
+
+  /// Cheap unread-count probe for the bell badge.
+  Future<int> getUnreadCount(String userId) async {
+    final response =
+        await _apiService.get('$_baseUrl/users/$userId/notifications/unread-count');
+    final data = response.data is Map ? response.data['data'] : null;
+    if (data is Map && data['unread'] is num) return (data['unread'] as num).toInt();
+    return 0;
+  }
+
+  /// Mark every unread notification as read in one call.
+  Future<int> markAllAsRead(String userId) async {
+    final response = await _apiService.patch(
+      '$_baseUrl/users/$userId/notifications/read-all',
+    );
+    final data = response.data is Map ? response.data['data'] : null;
+    if (data is Map && data['modified'] is num) return (data['modified'] as num).toInt();
+    return 0;
+  }
 }

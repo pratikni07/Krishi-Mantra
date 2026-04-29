@@ -18,6 +18,23 @@ class MarketplaceRepository {
     }
   }
 
+  /// Fetch the server-managed list of product categories. Falls back to a
+  /// minimal defensive set if the server is unreachable so the picker still
+  /// renders something — the previous hardcoded list got out of sync any
+  /// time admin added or removed a category.
+  Future<List<String>> getCategories() async {
+    try {
+      final response = await _apiService.get('/api/main/marketplace/categories');
+      final data = ApiHelper.handleResponse(response)['data'];
+      if (data is List) {
+        return data.map((e) => e.toString()).toList();
+      }
+      return const <String>[];
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
   Future<dynamic> getMarketplaceProductById(String id) async {
     try {
       final response = await _apiService.get('/api/main/marketplace/$id');

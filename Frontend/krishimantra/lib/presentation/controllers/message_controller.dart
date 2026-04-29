@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -37,6 +38,8 @@ class MessageController extends GetxController {
   final isLoadingConsultants = false.obs;
   final consultantError = Rx<String?>(null);
 
+  StreamSubscription<Map<String, dynamic>>? _chatUnreadSubscription;
+
   MessageController(this._messageRepository, this._userService);
 
   // Add a temporary message to the UI
@@ -57,6 +60,65 @@ class MessageController extends GetxController {
   void onInit() {
     super.onInit();
     loadUserInfo();
+
+    // Cross-device unread reconciliation. When the same user reads a chat
+    // on device A, the server emits `chat:unread:update` to ALL of that
+    // user's sockets — this listener applies the new count locally so
+    // device B's chat-list badge converges without a manual refresh.
+    try {
+      if (Get.isRegistered<SocketService>()) {
+        _chatUnreadSubscription = Get.find<SocketService>()
+            .chatUnreadStream
+            .listen(_handleChatUnreadUpdate);
+      }
+    } catch (_) {
+      // Socket service may not be registered yet on cold start —
+      // the stream binding is best-effort.
+    }
+  }
+
+  void _handleChatUnreadUpdate(Map<String, dynamic> data) {
+    final chatId = data['chatId']?.toString();
+    final newUnread = data['unreadCount'];
+    if (chatId == null || newUnread is! num) return;
+
+    final index = chats.indexWhere((c) => c.id == chatId);
+    if (index == -1) return;
+
+    final chat = chats[index];
+    final me = userId.value;
+    if (me == null) return;
+
+    final updated = Map<String, int>.from(chat.unreadCount);
+    updated[me] = newUnread.toInt();
+    chats[index] = Chat(
+      id: chat.id,
+      type: chat.type,
+      participants: chat.participants,
+      unreadCount: updated,
+      createdAt: chat.createdAt,
+      updatedAt: chat.updatedAt,
+      lastMessage: chat.lastMessage,
+      lastMessageDetails: chat.lastMessageDetails,
+      groupDetails: chat.groupDetails,
+      otherParticipants: chat.otherParticipants,
+    );
+  }
+
+  @override
+  void onClose() {
+    // Clear in-memory chat state on disposal so a re-instantiation of the
+    // controller (post-logout / fenix re-create for a new user) doesn't
+    // surface user-1's messages or temp-message overlays. The socket
+    // listeners themselves live on the screens, which already cancel
+    // their own StreamSubscriptions in dispose().
+    _chatUnreadSubscription?.cancel();
+    _chatUnreadSubscription = null;
+    messages.clear();
+    chats.clear();
+    tempMessages.clear();
+    consultants.clear();
+    super.onClose();
   }
 
   Future<void> loadMessages({
@@ -221,6 +283,17 @@ class MessageController extends GetxController {
           chats[chatIndex] = updatedChat;
         }
       }
+
+      // Broadcast the read receipt over the socket so the sender's
+      // message bubble flips to "read" in real time. Without this, the
+      // read state is only persisted in our DB and the peer never sees
+      // the update — they'd have to refetch the chat to see the receipt.
+      try {
+        if (Get.isRegistered<SocketService>()) {
+          Get.find<SocketService>()
+              .markMessagesAsRead(updatedMessage.chatId, [messageId]);
+        }
+      } catch (_) {}
     } catch (e) {
       error.value = 'Failed to mark message as read';
       if (kDebugMode) {

@@ -22,6 +22,12 @@ class MarketplaceController extends BaseController {
   final RxBool isLoadingComments = false.obs;
   final RxBool hasMoreComments = true.obs;
   int currentPage = 1;
+  // The product whose comments populate the `comments` list. When the user
+  // navigates between product details without an explicit refresh, the
+  // shared `currentPage` would otherwise carry over and the next fetch
+  // would request the wrong page for the new product (and append to a
+  // list that still holds the previous product's comments).
+  String? _commentsProductId;
 
   final RxMap<String, dynamic> productDetails = RxMap();
   final RxList<Map<String, dynamic>> comments = RxList();
@@ -37,6 +43,12 @@ class MarketplaceController extends BaseController {
   final RxDouble maxPrice = 1000000.0.obs;
   final RxList<String> selectedTags = <String>[].obs;
 
+  /// Categories fetched from the server. Empty until [fetchCategories] runs.
+  /// Listeners (filter chips, add-product picker) should fall back to their
+  /// own defaults when this is empty so the UI never blanks out during the
+  /// initial load.
+  final RxList<String> categories = <String>[].obs;
+
   RxString searchTerm = ''.obs;
 
   Timer? _debounce;
@@ -50,6 +62,22 @@ class MarketplaceController extends BaseController {
     super.onInit();
     scrollController.addListener(_scrollListener);
     fetchProducts();
+    // Best-effort — don't block first paint of the marketplace screen on
+    // this call.
+    fetchCategories();
+  }
+
+  /// Pull the latest category list from the server. Idempotent and silent
+  /// on failure: keeps any previously-loaded list rather than blanking it.
+  Future<void> fetchCategories() async {
+    try {
+      final list = await _marketplaceRepository.getCategories();
+      if (list.isNotEmpty) {
+        categories.assignAll(list);
+      }
+    } catch (_) {
+      // Silent — picker falls back to local defaults.
+    }
   }
 
   @override
@@ -150,38 +178,59 @@ class MarketplaceController extends BaseController {
           final userId = await _userService.getUserId();
           productData['userId'] = userId;
 
-          // Upload images and videos
-          List<Map<String, dynamic>> media = [];
+          // Upload images and videos. Track failures explicitly so the user
+          // can decide whether to keep editing or proceed without the
+          // failed media — silently dropping a failed image (the previous
+          // behaviour) would let users post listings with missing photos
+          // and no idea why.
+          final media = <Map<String, dynamic>>[];
+          final failedImages = <int>[];
+          final failedVideos = <int>[];
 
-          // Upload images
-          for (var imageFile in imageFiles) {
-            final imageUrl = await uploadMediaFile(imageFile, false);
+          for (var i = 0; i < imageFiles.length; i++) {
+            final imageUrl = await uploadMediaFile(imageFiles[i], false);
             if (imageUrl != null) {
               media.add({'type': 'image', 'url': imageUrl});
+            } else {
+              failedImages.add(i + 1);
             }
           }
 
-          // Upload videos
-          for (var videoFile in videoFiles) {
-            final videoUrl = await uploadMediaFile(videoFile, true);
+          for (var i = 0; i < videoFiles.length; i++) {
+            final videoUrl = await uploadMediaFile(videoFiles[i], true);
             if (videoUrl != null) {
               media.add(
                   {'type': 'video', 'url': videoUrl, 'isYoutubeVideo': false});
+            } else {
+              failedVideos.add(i + 1);
             }
           }
 
+          if (failedImages.isNotEmpty || failedVideos.isNotEmpty) {
+            final parts = <String>[];
+            if (failedImages.isNotEmpty) {
+              parts.add('images ${failedImages.join(', ')}');
+            }
+            if (failedVideos.isNotEmpty) {
+              parts.add('videos ${failedVideos.join(', ')}');
+            }
+            // Throwing here aborts the create so the caller's "Save" button
+            // stays available and the user can retry. handleAsync surfaces
+            // the message via the controller's error stream.
+            throw Exception(
+                'Could not upload ${parts.join(' and ')}. Tap save again to retry.');
+          }
+
           // Add YouTube URLs
-          for (var youtubeUrl in youtubeUrls) {
+          for (final youtubeUrl in youtubeUrls) {
             if (youtubeUrl.isNotEmpty) {
               media.add(
                   {'type': 'video', 'url': youtubeUrl, 'isYoutubeVideo': true});
             }
           }
 
-          // Add media to product data
           productData['media'] = media;
 
-          // Send request to API
           await _marketplaceRepository.addMarketplaceProduct(productData);
           _engagement.trackEvent(
             EventName.marketplaceCreateCompleted,
@@ -190,17 +239,35 @@ class MarketplaceController extends BaseController {
               'mediaCount': media.length,
             },
           );
+
+          // Refresh the marketplace list so the freshly-added product appears
+          // without forcing the user to leave and re-enter the screen. Done
+          // here (not in the screen) so every entry point that calls
+          // addProduct gets the same behaviour.
+          try {
+            await fetchMarketplaceProducts(forceRefresh: true);
+          } catch (_) {
+            // Surface only the add-success path; refresh failure shouldn't
+            // unwind the create.
+          }
           return true;
         }, showLoading: true) ??
         false;
   }
 
   Future<void> fetchComments(String productId, {bool refresh = false}) async {
-    if (refresh) {
+    // Treat a product switch as an implicit refresh so we don't carry over
+    // pagination state or stale comments from the previous product.
+    final productChanged =
+        _commentsProductId != null && _commentsProductId != productId;
+    final shouldReset = refresh || productChanged;
+
+    if (shouldReset) {
       currentPage = 1;
       comments.clear();
       hasMoreComments.value = true;
     }
+    _commentsProductId = productId;
 
     if (!hasMoreComments.value || isLoadingMore) return;
 
@@ -218,7 +285,7 @@ class MarketplaceController extends BaseController {
         final List<Map<String, dynamic>> commentsList =
             List<Map<String, dynamic>>.from(response['data'] ?? []);
 
-        if (refresh) {
+        if (shouldReset) {
           comments.value = commentsList;
         } else {
           comments.addAll(commentsList);
@@ -247,12 +314,24 @@ class MarketplaceController extends BaseController {
         final Map<String, dynamic> newComment =
             Map<String, dynamic>.from(response['data']);
 
-        newComment.addAll({
-          '_id': newComment['_id'] ?? DateTime.now().toString(),
-          'createdAt': DateTime.now().toIso8601String(),
-          'updatedAt': DateTime.now().toIso8601String(),
-          'replies': newComment['replies'] ?? [],
-        });
+        // The server returns the persisted comment including its real
+        // ObjectId. The previous code overwrote the _id with
+        // `DateTime.now().toString()` if the server didn't include one,
+        // which then collided with future comments and broke
+        // delete/edit/reply lookups (those match on _id). If the server
+        // truly returned no id, drop the entry rather than fabricating
+        // one — a refresh will pull it from the next list fetch.
+        if (newComment['_id'] == null) {
+          throw Exception('Server response missing comment id');
+        }
+
+        // Backfill timestamps + replies array only if the server omitted
+        // them. Don't overwrite real values.
+        newComment.putIfAbsent('createdAt',
+            () => DateTime.now().toUtc().toIso8601String());
+        newComment.putIfAbsent('updatedAt',
+            () => DateTime.now().toUtc().toIso8601String());
+        newComment.putIfAbsent('replies', () => <dynamic>[]);
 
         comments.insert(0, newComment);
         _engagement.trackEvent(

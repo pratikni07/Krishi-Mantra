@@ -6,6 +6,11 @@ const compression = require('compression');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
+if (!process.env.JWT_SECRET) {
+  console.error('[message-svc] JWT_SECRET not set. Refusing to start.');
+  process.exit(1);
+}
+
 const SocketService = require('./services/socket.service');
 const Database = require('./config/database');
 const Redis = require('./config/redis');

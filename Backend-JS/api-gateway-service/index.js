@@ -9,6 +9,11 @@ const { gatewayAuth } = require("./middlewares/auth");
 const mongoSanitize = require("./middlewares/mongoSanitize");
 const { createBreaker } = require("./middlewares/circuitBreaker");
 
+if (!process.env.JWT_SECRET) {
+  console.error("[api-gateway] JWT_SECRET not set. Refusing to start.");
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -89,8 +94,21 @@ console.log("Configured CORS allowed origins:", allowedOrigins);
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
+      // Browser preflights and same-origin requests omit `Origin`. The
+      // mobile clients also do — but mobile traffic carries a real
+      // Authorization header, so the auth layer is what actually gates
+      // it. Allowing `!origin` blanket in production also opens the
+      // door to curl / server-to-server / non-browser tools probing
+      // the gateway. We accept that trade-off in non-production so
+      // local tooling keeps working, and reject it in production where
+      // the only legitimate non-browser caller is mobile (which auth
+      // handles independently).
+      if (!origin) {
+        if (process.env.NODE_ENV === "production") {
+          return callback(new Error("Not allowed by CORS: missing origin"), false);
+        }
+        return callback(null, true);
+      }
 
       if (
         allowedOrigins.indexOf(origin) !== -1 ||
@@ -398,22 +416,37 @@ try {
 
   // Routes. createServiceProxy returns [breakerMiddleware, proxy]; spread it
   // so Express sees two ordered handlers.
-  app.use("/api/main", ...mainServiceProxy);
-  app.use("/api/messages", ...messageServiceProxy);
-  app.use("/api/ai", ...aiServiceProxy);
-  app.use("/api/weather", ...weatherServiceProxy);
-  app.use("/api/farm-profile", ...farmProfileServiceProxy);
-  app.use("/api/admin/ai-provider", ...aiProviderConfigServiceProxy);
-  app.use("/api/feature-flags", ...featureFlagsServiceProxy);
-  app.use("/api/action-card", ...actionCardServiceProxy);
-  app.use("/api/admin/ai-stats", ...aiStatsServiceProxy);
-  app.use("/api/admin/ai-ops", ...aiOpsServiceProxy);
-  app.use("/api/voice", ...voiceServiceProxy);
-  app.use("/api/feed", ...feedServiceProxy);
-  app.use("/api/reels", ...reelServiceProxy);
-  app.use("/api/notification", ...notificationServiceProxy);
-  app.use("/api/engagement", ...engagementServiceProxy);
+  //
+  // The current public surface lives under `/api/<service>/...`. To make
+  // future breaking changes manageable, we ALSO mount each proxy under
+  // `/api/v1/<service>/...` (same target, same pathRewrite — no behaviour
+  // change). New clients can opt into the versioned URL today; when we
+  // need v2, we'll add `/api/v2/...` mounts pointing at v2-aware
+  // services and clients migrate at their own pace. Today's `/api/...`
+  // is implicitly v1 and stays that way until we need to retire it.
+  const versionedMounts = [
+    ["main", mainServiceProxy],
+    ["messages", messageServiceProxy],
+    ["ai", aiServiceProxy],
+    ["weather", weatherServiceProxy],
+    ["farm-profile", farmProfileServiceProxy],
+    ["admin/ai-provider", aiProviderConfigServiceProxy],
+    ["feature-flags", featureFlagsServiceProxy],
+    ["action-card", actionCardServiceProxy],
+    ["admin/ai-stats", aiStatsServiceProxy],
+    ["admin/ai-ops", aiOpsServiceProxy],
+    ["voice", voiceServiceProxy],
+    ["feed", feedServiceProxy],
+    ["reels", reelServiceProxy],
+    ["notification", notificationServiceProxy],
+    ["engagement", engagementServiceProxy],
+  ];
+  for (const [path, proxy] of versionedMounts) {
+    app.use(`/api/${path}`, ...proxy);
+    app.use(`/api/v1/${path}`, ...proxy);
+  }
   app.use("/api/upload", uploadRoutes);
+  app.use("/api/v1/upload", uploadRoutes);
 } catch (error) {
   console.error("Error setting up proxies:", error.message);
   process.exit(1);

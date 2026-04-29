@@ -7,6 +7,11 @@ const compression = require('compression');
 // Load environment configuration first
 const config = require('./config/environment');
 
+if (!process.env.JWT_SECRET) {
+  console.error('[feed-service] JWT_SECRET not set. Refusing to start.');
+  process.exit(1);
+}
+
 // Import database and redis
 const database = require('./config/database');
 const redis = require('./config/redis');

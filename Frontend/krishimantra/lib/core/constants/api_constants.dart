@@ -16,6 +16,8 @@ class ApiConstants {
   static const String FORGOT_PASSWORD = '/api/main/auth/forgot-password';
   static const String RESET_PASSWORD = '/api/main/auth/reset-password';
   static const String REFRESH_TOKEN = '/api/main/auth/refresh-token';
+  static const String AUTH_ME = '/api/main/auth/me';
+  static const String LOGOUT = '/api/main/auth/logout';
 
   // Phone auth endpoints
   static const String INITIATE_AUTH = '/api/main/auth/initiate-auth';
@@ -57,7 +59,7 @@ class ApiConstants {
   static const String FEED_LIKE = '/api/feed/feeds/:id/like';
   static const String FEED_COMMENT = '/api/feed/feeds/:id/comment';
   static const String FEED_COMMENTS = '/api/feed/comments/getComment';
-  static const String FEED_RANDOM = '/api/feed/feeds/feeds/random';
+  static const String FEED_RANDOM = '/api/feed/feeds/random';
   static const String FEED_RECOMMENDED =
       '/api/feed/feeds/user/:userId/recommended';
   static const String FEED_TOP = '/api/feed/feeds/getoptwo';

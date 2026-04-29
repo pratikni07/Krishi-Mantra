@@ -12,10 +12,11 @@ const {
   adminLogin,
   refreshToken,
   logout,
+  getMe,
 } = require("../controller/Auth");
 const validate = require("../middlewares/validate");
 const authSchemas = require("../schemas/auth");
-const { adminAuth } = require("../middlewares/auth");
+const { adminAuth, auth } = require("../middlewares/auth");
 
 // New mobile authentication routes
 router.post("/initiate-auth", validate({ body: authSchemas.initiateAuth }), initiateAuth);
@@ -25,6 +26,10 @@ router.post("/signup-with-phone", validate({ body: authSchemas.signupWithPhone }
 // Token lifecycle
 router.post("/refresh-token", validate({ body: authSchemas.refreshToken }), refreshToken);
 router.post("/logout", validate({ body: authSchemas.logout }), logout);
+
+// Cheap protected endpoint used by the mobile splash to validate the cached
+// access token before navigating into the authed UI.
+router.get("/me", auth, getMe);
 
 // Add admin login route
 router.post("/admin/login", validate({ body: authSchemas.adminLogin }), adminLogin);

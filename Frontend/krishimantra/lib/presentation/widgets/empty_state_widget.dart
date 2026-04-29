@@ -101,7 +101,7 @@ class _EmptyStateWidgetState extends State<EmptyStateWidget> {
               _translatedSubtitle,
               style: TextStyle(
                 fontSize: 15,
-                color: AppColors.textGrey.withOpacity(0.85),
+                color: AppColors.textGrey.withValues(alpha: 0.85),
                 height: 1.5,
               ),
               textAlign: TextAlign.center,

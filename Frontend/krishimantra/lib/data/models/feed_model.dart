@@ -133,4 +133,18 @@ class FeedModel {
       isLiked: isLiked ?? this.isLiked,
     );
   }
+
+  /// Apply server-authoritative like state, leaving everything else alone.
+  /// Used by the optimistic-update reconcile path: after the server returns
+  /// the new count and isLiked, we overwrite our locally-toggled values so
+  /// concurrent likes from other devices can't drift our count.
+  FeedModel copyWithServerLikeState({int? likeCount, bool? isLiked}) {
+    final nextLike = Map<String, dynamic>.from(like);
+    if (likeCount != null) nextLike['count'] = likeCount;
+    if (isLiked != null) nextLike['isLiked'] = isLiked;
+    return copyWith(
+      like: nextLike,
+      isLiked: isLiked ?? this.isLiked,
+    );
+  }
 }

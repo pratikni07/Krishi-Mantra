@@ -32,29 +32,39 @@ class AppConfig {
   static const String _devSocketPort =
       String.fromEnvironment('DEV_SOCKET_PORT', defaultValue: '3004');
 
-  /// API Base URL based on environment
+  /// API Base URL based on environment.
+  ///
+  /// Production / staging builds MUST inject API_BASE_URL via --dart-define.
+  /// Falling back to a hardcoded host risks shipping a release pointing at
+  /// localhost or a dev URL, so we hard-fail instead.
   String get baseUrl {
     if (_apiBaseUrlOverride.isNotEmpty) return _apiBaseUrlOverride;
     switch (_environment) {
       case Environment.development:
         return 'http://$_devHost:$_devApiPort';
       case Environment.staging:
-        return 'https://staging-api.krishimantra.com';
       case Environment.production:
-        return 'https://api.krishimantra.com';
+        throw StateError(
+          'API_BASE_URL is not set for ${_environment.name}. '
+          'Pass --dart-define=API_BASE_URL=https://... at build time.',
+        );
     }
   }
 
-  /// Socket URL based on environment
+  /// Socket URL based on environment.
+  ///
+  /// Same release-build rule as [baseUrl] — must be injected explicitly.
   String get socketUrl {
     if (_socketUrlOverride.isNotEmpty) return _socketUrlOverride;
     switch (_environment) {
       case Environment.development:
         return 'http://$_devHost:$_devSocketPort';
       case Environment.staging:
-        return 'https://staging-socket.krishimantra.com';
       case Environment.production:
-        return 'https://socket.krishimantra.com';
+        throw StateError(
+          'SOCKET_BASE_URL is not set for ${_environment.name}. '
+          'Pass --dart-define=SOCKET_BASE_URL=https://... at build time.',
+        );
     }
   }
 

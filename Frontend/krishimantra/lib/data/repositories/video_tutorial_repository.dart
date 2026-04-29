@@ -26,9 +26,24 @@ class VideoTutorialRepository {
           'limit': limit,
         },
       );
-      return (response.data['data']['data'] as List)
-          .map((video) => VideoTutorial.fromJson(video))
-          .toList();
+
+      // Backend currently wraps the pagination payload in `data`, giving
+      // `{status, data: {data: [...videos], pagination}}`. Older builds
+      // shipped a flatter `{status, data: [...videos]}`. Tolerate both so a
+      // future backend flatten won't null-deref the client.
+      final root = response.data;
+      final outer = root is Map ? root['data'] : null;
+      final List<dynamic>? videos = outer is List
+          ? outer
+          : (outer is Map && outer['data'] is List
+              ? outer['data'] as List
+              : null);
+
+      if (videos == null) {
+        throw Exception('Unexpected getVideos response shape');
+      }
+
+      return videos.map((video) => VideoTutorial.fromJson(video)).toList();
     } catch (e) {
       throw Exception('Failed to fetch videos: $e');
     }
@@ -100,13 +115,13 @@ class VideoTutorialRepository {
     String? parentComment,
   }) async {
     try {
-      final queryParams = {
+      final Map<String, dynamic> queryParams = {
         'page': page,
         'limit': limit,
       };
 
       if (parentComment != null) {
-        queryParams['parentComment'] = parentComment as int;
+        queryParams['parentComment'] = parentComment;
       }
 
       final response = await _apiService.get(
@@ -145,7 +160,7 @@ class VideoTutorialRepository {
 
   Future<void> toggleCommentLike(String commentId) async {
     try {
-      await _apiService.post('/reels/videos/comments/$commentId/like');
+      await _apiService.post('/api/reels/videos/comments/$commentId/like');
     } catch (e) {
       throw Exception('Failed to toggle comment like: $e');
     }

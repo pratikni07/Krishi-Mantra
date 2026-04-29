@@ -257,7 +257,14 @@ class VideoTutorialService {
     });
 
     if (commentData.parentComment) {
-      const parentComment = await VideoComment.findById(commentData.parentComment);
+      // Refuse to attach a reply to a soft-deleted parent. Without the
+      // isDeleted filter, a moderator deleting a thread head would still
+      // accept new replies that the list query then hides — orphaning the
+      // reply count from the visible comments.
+      const parentComment = await VideoComment.findOne({
+        _id: commentData.parentComment,
+        isDeleted: false,
+      });
       if (!parentComment) {
         throw new Error("Parent comment not found");
       }

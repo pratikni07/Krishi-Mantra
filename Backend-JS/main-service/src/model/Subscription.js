@@ -323,7 +323,9 @@ const PaymentHistorySchema = new mongoose.Schema(
 );
 
 PaymentHistorySchema.index({ userId: 1, createdAt: -1 });
-PaymentHistorySchema.index({ stripePaymentIntentId: 1 }, { sparse: true });
+// Unique sparse index — enforces idempotency. confirmPayment must not
+// create two PaymentHistory rows for the same Stripe paymentIntentId.
+PaymentHistorySchema.index({ stripePaymentIntentId: 1 }, { unique: true, sparse: true });
 
 /**
  * Usage Tracking Schema
@@ -617,12 +619,41 @@ UserIotAddonSchema.statics.getActiveAddons = async function (userId) {
   }).populate('addonId');
 };
 
+/**
+ * Pending Checkout Session
+ *
+ * Persists the (sessionId, userId, planName, billingCycle) tuple at session
+ * creation time. The Stripe webhook handler looks up this row before
+ * activating a subscription so a forged event with arbitrary metadata can't
+ * activate someone else's account. Auto-expires after 24h via TTL index —
+ * sessions older than that are either consumed or abandoned.
+ */
+const PendingCheckoutSessionSchema = new mongoose.Schema(
+  {
+    sessionId: { type: String, required: true, unique: true },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+    planName: { type: String, required: true },
+    billingCycle: { type: String, enum: ['monthly', 'yearly'], required: true },
+    createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 },
+  },
+  { timestamps: true }
+);
+
 const SubscriptionPlan = mongoose.model('SubscriptionPlan', SubscriptionPlanSchema);
 const UserSubscription = mongoose.model('UserSubscription', UserSubscriptionSchema);
 const PaymentHistory = mongoose.model('PaymentHistory', PaymentHistorySchema);
 const UsageTracking = mongoose.model('UsageTracking', UsageTrackingSchema);
 const IotAddon = mongoose.model('IotAddon', IotAddonSchema);
 const UserIotAddon = mongoose.model('UserIotAddon', UserIotAddonSchema);
+const PendingCheckoutSession = mongoose.model(
+  'PendingCheckoutSession',
+  PendingCheckoutSessionSchema
+);
 
 module.exports = {
   SubscriptionPlan,
@@ -631,4 +662,5 @@ module.exports = {
   UsageTracking,
   IotAddon,
   UserIotAddon,
+  PendingCheckoutSession,
 };

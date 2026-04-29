@@ -1,6 +1,40 @@
 import 'crop_model.dart';
 import '../services/language_service.dart';
 
+/// Tiny helper that pairs a cached translation with the LanguageService
+/// version it was produced under, and re-translates when the version is
+/// stale. Centralised so each model class doesn't have to repeat the
+/// version-check boilerplate around every cached field.
+class _VersionedTranslation {
+  String? _value;
+  int? _version;
+
+  Future<String> resolve(LanguageService svc, String source) async {
+    if (_value != null && _version == svc.languageVersion) return _value!;
+    final translated = await svc.translate(source);
+    _value = translated;
+    _version = svc.languageVersion;
+    return translated;
+  }
+}
+
+/// List variant — translates the whole batch at once and invalidates on
+/// language change. Backed by `translateBatch` so a list of N strings does
+/// at most N unique-string requests (often far fewer with duplicates).
+class _VersionedTranslationList {
+  List<String>? _value;
+  int? _version;
+
+  Future<List<String>> resolve(
+      LanguageService svc, List<String> source) async {
+    if (_value != null && _version == svc.languageVersion) return _value!;
+    final translated = await svc.translateBatch(source);
+    _value = translated;
+    _version = svc.languageVersion;
+    return translated;
+  }
+}
+
 class CropCalendarModel {
   final WeatherConsiderations weatherConsiderations;
   final ExpectedOutcomes expectedOutcomes;
@@ -16,10 +50,12 @@ class CropCalendarModel {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  // Cached translations
-  String? _translatedGrowthStage;
-  List<String>? _translatedTips;
-  List<String>? _translatedNextMonthPreparation;
+  // Cached translations. Each entry pairs the cached value with the
+  // LanguageService version it was translated under, so a runtime language
+  // switch invalidates them automatically.
+  final _growthStageCache = _VersionedTranslation();
+  final _tipsCache = _VersionedTranslationList();
+  final _nextMonthPrepCache = _VersionedTranslationList();
 
   CropCalendarModel({
     required this.weatherConsiderations,
@@ -37,36 +73,15 @@ class CropCalendarModel {
     required this.updatedAt,
   });
 
-  // Get translated growth stage
-  Future<String> getTranslatedGrowthStage() async {
-    if (_translatedGrowthStage != null) return _translatedGrowthStage!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedGrowthStage = await languageService.translate(growthStage);
-    return _translatedGrowthStage!;
-  }
+  Future<String> getTranslatedGrowthStage() async =>
+      _growthStageCache.resolve(await LanguageService.getInstance(), growthStage);
 
-  // Get translated tips
-  Future<List<String>> getTranslatedTips() async {
-    if (_translatedTips != null) return _translatedTips!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedTips = await Future.wait(
-      tips.map((tip) => languageService.translate(tip))
-    );
-    return _translatedTips!;
-  }
+  Future<List<String>> getTranslatedTips() async =>
+      _tipsCache.resolve(await LanguageService.getInstance(), tips);
 
-  // Get translated next month preparation
-  Future<List<String>> getTranslatedNextMonthPreparation() async {
-    if (_translatedNextMonthPreparation != null) return _translatedNextMonthPreparation!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedNextMonthPreparation = await Future.wait(
-      nextMonthPreparation.map((prep) => languageService.translate(prep))
-    );
-    return _translatedNextMonthPreparation!;
-  }
+  Future<List<String>> getTranslatedNextMonthPreparation() async =>
+      _nextMonthPrepCache.resolve(
+          await LanguageService.getInstance(), nextMonthPreparation);
 
   factory CropCalendarModel.fromJson(Map<String, dynamic> json) {
     return CropCalendarModel(
@@ -92,9 +107,9 @@ class WeatherConsiderations {
   final String rainfall;
   final String humidity;
 
-  // Cached translations
-  String? _translatedRainfall;
-  String? _translatedHumidity;
+  // Cached translations — invalidated on language switch via _Versioned*.
+  final _rainfallCache = _VersionedTranslation();
+  final _humidityCache = _VersionedTranslation();
 
   WeatherConsiderations({
     required this.idealTemperature,
@@ -102,23 +117,11 @@ class WeatherConsiderations {
     required this.humidity,
   });
 
-  // Get translated rainfall
-  Future<String> getTranslatedRainfall() async {
-    if (_translatedRainfall != null) return _translatedRainfall!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedRainfall = await languageService.translate(rainfall);
-    return _translatedRainfall!;
-  }
+  Future<String> getTranslatedRainfall() async =>
+      _rainfallCache.resolve(await LanguageService.getInstance(), rainfall);
 
-  // Get translated humidity
-  Future<String> getTranslatedHumidity() async {
-    if (_translatedHumidity != null) return _translatedHumidity!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedHumidity = await languageService.translate(humidity);
-    return _translatedHumidity!;
-  }
+  Future<String> getTranslatedHumidity() async =>
+      _humidityCache.resolve(await LanguageService.getInstance(), humidity);
 
   factory WeatherConsiderations.fromJson(Map<String, dynamic> json) {
     return WeatherConsiderations(
@@ -147,31 +150,17 @@ class ExpectedOutcomes {
   final String growth;
   final List<String> signs;
 
-  // Cached translations
-  String? _translatedGrowth;
-  List<String>? _translatedSigns;
+  // Cached translations — invalidated on language switch via _Versioned*.
+  final _growthCache = _VersionedTranslation();
+  final _signsCache = _VersionedTranslationList();
 
   ExpectedOutcomes({required this.growth, required this.signs});
 
-  // Get translated growth
-  Future<String> getTranslatedGrowth() async {
-    if (_translatedGrowth != null) return _translatedGrowth!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedGrowth = await languageService.translate(growth);
-    return _translatedGrowth!;
-  }
+  Future<String> getTranslatedGrowth() async =>
+      _growthCache.resolve(await LanguageService.getInstance(), growth);
 
-  // Get translated signs
-  Future<List<String>> getTranslatedSigns() async {
-    if (_translatedSigns != null) return _translatedSigns!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedSigns = await Future.wait(
-      signs.map((sign) => languageService.translate(sign))
-    );
-    return _translatedSigns!;
-  }
+  Future<List<String>> getTranslatedSigns() async =>
+      _signsCache.resolve(await LanguageService.getInstance(), signs);
 
   factory ExpectedOutcomes.fromJson(Map<String, dynamic> json) {
     return ExpectedOutcomes(
@@ -188,9 +177,9 @@ class Activity {
   final String importance;
   final String id;
 
-  // Cached translation
-  String? _translatedInstructions;
-  String? _translatedImportance;
+  // Cached translations — invalidated on language switch via _Versioned*.
+  final _instructionsCache = _VersionedTranslation();
+  final _importanceCache = _VersionedTranslation();
 
   Activity({
     required this.timing,
@@ -200,23 +189,13 @@ class Activity {
     required this.id,
   });
 
-  // Get translated instructions
-  Future<String> getTranslatedInstructions() async {
-    if (_translatedInstructions != null) return _translatedInstructions!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedInstructions = await languageService.translate(instructions);
-    return _translatedInstructions!;
-  }
+  Future<String> getTranslatedInstructions() async =>
+      _instructionsCache.resolve(
+          await LanguageService.getInstance(), instructions);
 
-  // Get translated importance
-  Future<String> getTranslatedImportance() async {
-    if (_translatedImportance != null) return _translatedImportance!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedImportance = await languageService.translate(importance);
-    return _translatedImportance!;
-  }
+  Future<String> getTranslatedImportance() async =>
+      _importanceCache.resolve(
+          await LanguageService.getInstance(), importance);
 
   factory Activity.fromJson(Map<String, dynamic> json) {
     return Activity(
@@ -250,19 +229,14 @@ class Timing {
   final int week;
   final String recommendedTime;
 
-  // Cached translation
-  String? _translatedRecommendedTime;
+  // Cached translation — invalidated on language switch via _Versioned*.
+  final _recommendedTimeCache = _VersionedTranslation();
 
   Timing({required this.week, required this.recommendedTime});
 
-  // Get translated recommended time
-  Future<String> getTranslatedRecommendedTime() async {
-    if (_translatedRecommendedTime != null) return _translatedRecommendedTime!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedRecommendedTime = await languageService.translate(recommendedTime);
-    return _translatedRecommendedTime!;
-  }
+  Future<String> getTranslatedRecommendedTime() async =>
+      _recommendedTimeCache.resolve(
+          await LanguageService.getInstance(), recommendedTime);
 
   factory Timing.fromJson(Map<String, dynamic> json) {
     return Timing(
@@ -278,10 +252,10 @@ class PossibleIssue {
   final List<String> preventiveMeasures;
   final String id;
 
-  // Cached translations
-  String? _translatedProblem;
-  String? _translatedSolution;
-  List<String>? _translatedPreventiveMeasures;
+  // Cached translations — invalidated on language switch via _Versioned*.
+  final _problemCache = _VersionedTranslation();
+  final _solutionCache = _VersionedTranslation();
+  final _preventiveMeasuresCache = _VersionedTranslationList();
 
   PossibleIssue({
     required this.problem,
@@ -290,34 +264,15 @@ class PossibleIssue {
     required this.id,
   });
 
-  // Get translated problem
-  Future<String> getTranslatedProblem() async {
-    if (_translatedProblem != null) return _translatedProblem!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedProblem = await languageService.translate(problem);
-    return _translatedProblem!;
-  }
+  Future<String> getTranslatedProblem() async =>
+      _problemCache.resolve(await LanguageService.getInstance(), problem);
 
-  // Get translated solution
-  Future<String> getTranslatedSolution() async {
-    if (_translatedSolution != null) return _translatedSolution!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedSolution = await languageService.translate(solution);
-    return _translatedSolution!;
-  }
+  Future<String> getTranslatedSolution() async =>
+      _solutionCache.resolve(await LanguageService.getInstance(), solution);
 
-  // Get translated preventive measures
-  Future<List<String>> getTranslatedPreventiveMeasures() async {
-    if (_translatedPreventiveMeasures != null) return _translatedPreventiveMeasures!;
-    
-    final languageService = await LanguageService.getInstance();
-    _translatedPreventiveMeasures = await Future.wait(
-      preventiveMeasures.map((measure) => languageService.translate(measure))
-    );
-    return _translatedPreventiveMeasures!;
-  }
+  Future<List<String>> getTranslatedPreventiveMeasures() async =>
+      _preventiveMeasuresCache.resolve(
+          await LanguageService.getInstance(), preventiveMeasures);
 
   factory PossibleIssue.fromJson(Map<String, dynamic> json) {
     return PossibleIssue(
