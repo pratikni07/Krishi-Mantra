@@ -81,8 +81,14 @@ class FeedRepository {
     }
   }
 
-  // Add like to feed
-  Future<bool> addLike(String feedId, Map<String, dynamic> userData) async {
+  // Toggle a like on a feed and return the server's authoritative count
+  // and isLiked state. Returning the full snapshot lets the controller
+  // reconcile the optimistic update so client and server can't drift on
+  // counts under concurrent likes from other devices.
+  Future<Map<String, dynamic>> addLike(
+    String feedId,
+    Map<String, dynamic> userData,
+  ) async {
     try {
       final response = await _apiService.post(
         '/api/feed/feeds/$feedId/like',
@@ -90,7 +96,15 @@ class FeedRepository {
       );
 
       final data = ApiHelper.handleResponse(response);
-      return data['success'] ?? false;
+      return {
+        'success': data['success'] ?? false,
+        // Server returns either { likeCount, isLiked } or nests them under
+        // `data` — accept both shapes.
+        'likeCount': data['likeCount'] ??
+            (data['data'] is Map ? data['data']['likeCount'] : null),
+        'isLiked': data['isLiked'] ??
+            (data['data'] is Map ? data['data']['isLiked'] : null),
+      };
     } catch (e) {
       throw ApiHelper.handleError(e);
     }
@@ -112,6 +126,15 @@ class FeedRepository {
         data: commentData,
       );
 
+      // Drop any cached `getComments` page for this feed. Without this, the
+      // dio cache interceptor would serve the previous (stale) page on the
+      // next open of the comment sheet and the just-added comment wouldn't
+      // appear until the cache TTL elapsed.
+      try {
+        await _apiService
+            .clearCacheEntry('/api/feed/comments/getComment?feedId=$feedId');
+      } catch (_) {}
+
       return ApiHelper.handleResponse(response);
     } catch (e) {
       throw ApiHelper.handleError(e);
@@ -122,9 +145,6 @@ class FeedRepository {
   Future<Map<String, dynamic>> getComments(String feedId,
       {int page = 1, int limit = 10}) async {
     try {
-      print(
-          '🔍 Repository: Fetching comments for feedId: $feedId, page: $page, limit: $limit');
-
       final response = await _apiService.get(
         '/api/feed/comments/getComment',
         queryParameters: {
@@ -134,23 +154,15 @@ class FeedRepository {
         },
       );
 
-      print('📊 Repository: Raw API response: ${response.data}');
       final data = ApiHelper.handleResponse(response);
-      print('📄 Repository: Parsed response data: $data');
 
-      // Verify the response structure
       if (data == null) {
-        print('⚠️ Repository: Received null data from API');
         throw Exception('Invalid response: null data');
       }
 
-      // Check for the "No comments found" response format
+      // Alternate "no comments found" envelope shipped by the backend.
       if (data.containsKey('message') && data.containsKey('comments')) {
-        print(
-            'ℹ️ Repository: Using alternate response format (message + comments)');
         final List<CommentModel> comments = [];
-
-        // Only try to parse comments if they exist and are not empty
         if (data['comments'] is List && (data['comments'] as List).isNotEmpty) {
           comments.addAll((data['comments'] as List)
               .map((comment) => CommentModel.fromJson(comment))
@@ -171,23 +183,17 @@ class FeedRepository {
         };
       }
 
-      // Original format check for "docs" field
+      // Standard mongoose-paginate envelope.
       if (!data.containsKey('docs')) {
-        print('⚠️ Repository: Response missing "docs" field: ${data.keys}');
         throw Exception('Invalid response format: missing docs');
       }
-
-      if (!(data['docs'] is List)) {
-        print(
-            '⚠️ Repository: "docs" is not a list: ${data['docs'].runtimeType}');
+      if (data['docs'] is! List) {
         throw Exception('Invalid response format: docs is not a list');
       }
 
       final List<CommentModel> comments = (data['docs'] as List)
           .map((comment) => CommentModel.fromJson(comment))
           .toList();
-
-      print('✅ Repository: Successfully parsed ${comments.length} comments');
 
       return {
         'comments': comments,
@@ -202,7 +208,6 @@ class FeedRepository {
         'nextPage': data['nextPage'],
       };
     } catch (e) {
-      print('❌ Repository: Error fetching comments: $e');
       throw ApiHelper.handleError(e);
     }
   }
@@ -212,7 +217,7 @@ class FeedRepository {
       {int page = 1, int limit = 10}) async {
     try {
       final response = await _apiService.get(
-        '/api/feed/feeds/feeds/random',
+        '/api/feed/feeds/random',
         queryParameters: {'page': page, 'limit': limit},
       );
 
@@ -230,55 +235,50 @@ class FeedRepository {
     }
   }
 
-  // Get recommended feeds for user
+  // Get recommended feeds for user.
+  //
+  // The backend has shipped two response shapes: a flat `{ feeds, pagination }`
+  // and a nested `{ data: { feeds, pagination } }`. Older code switched
+  // between them at the *envelope* level — if `data.data` existed, BOTH
+  // feeds and pagination were read from there; otherwise both from root.
+  // That coupling broke on transitional responses where one field was at
+  // root and the other nested (or one was missing). This version resolves
+  // each field independently with explicit fallbacks.
   Future<Map<String, dynamic>> getRecommendedFeeds(String userId,
       {int page = 1, int limit = 10}) async {
     try {
-      print('FeedRepository: Fetching recommended feeds for userId: $userId, page: $page');
-
       final response = await _apiService.get(
         '/api/feed/feeds/user/$userId/recommended',
         queryParameters: {'page': page, 'limit': limit},
       );
 
-      print('FeedRepository: Got response with status: ${response.statusCode}');
-
       final data = ApiHelper.handleResponse(response);
-      print('FeedRepository: Parsed response keys: ${data.keys}');
+      final inner = data['data'] is Map ? data['data'] as Map : null;
 
-      // Handle the nested structure: the feeds are inside data.feeds
-      final feedsData =
-          data['data'] != null ? data['data']['feeds'] : data['feeds'];
+      dynamic readEither(String key) {
+        if (data[key] != null) return data[key];
+        return inner?[key];
+      }
 
+      final feedsData = readEither('feeds');
       if (feedsData == null) {
-        print('FeedRepository: No feeds data found in response');
-        // Return empty result if no feeds are found
         return {
           'feeds': <FeedModel>[],
           'pagination': {'hasMore': false},
-          'recommendationType': null
+          'recommendationType': null,
         };
       }
 
-      print('FeedRepository: Found ${(feedsData as List).length} feeds');
-
-      final List<FeedModel> feeds =
-          feedsData.map((feed) => FeedModel.fromJson(feed)).toList();
-
-      final pagination = data['data'] != null
-          ? data['data']['pagination']
-          : data['pagination'];
-      final recommendationType = data['data'] != null
-          ? data['data']['recommendationType']
-          : data['recommendationType'];
+      final List<FeedModel> feeds = (feedsData as List)
+          .map((feed) => FeedModel.fromJson(feed))
+          .toList();
 
       return {
         'feeds': feeds,
-        'pagination': pagination ?? {'hasMore': false},
-        'recommendationType': recommendationType,
+        'pagination': readEither('pagination') ?? {'hasMore': false},
+        'recommendationType': readEither('recommendationType'),
       };
     } catch (e) {
-      print('FeedRepository: Error fetching recommended feeds: $e');
       throw ApiHelper.handleError(e);
     }
   }
@@ -327,11 +327,30 @@ class FeedRepository {
 
   /// Fetch all feed IDs liked by a user.
   /// Used to restore `isLiked` UI state on app restart.
+  ///
+  /// The backend returns Like docs with the `feed` field either as a raw
+  /// ObjectId string OR as a populated object. We pull the id from whichever
+  /// shape arrives so backend-side populate changes don't silently drop
+  /// liked entries from the restored set. Also tolerates `feedId` as an
+  /// alternate field name used in some endpoints.
   Future<Set<String>> getUserLikedFeedIds(String userId) async {
     try {
       final likedFeedIds = <String>{};
       var page = 1;
       var hasNextPage = true;
+
+      String? extractFeedId(dynamic doc) {
+        if (doc is! Map) return null;
+        for (final key in const ['feed', 'feedId']) {
+          final field = doc[key];
+          if (field is String && field.isNotEmpty) return field;
+          if (field is Map) {
+            final id = field['_id'] ?? field['id'];
+            if (id != null) return id.toString();
+          }
+        }
+        return null;
+      }
 
       while (hasNextPage) {
         final response = await _apiService.get(
@@ -350,20 +369,8 @@ class FeedRepository {
         }
 
         for (final item in docs) {
-          if (item is! Map) continue;
-
-          final feedField = item['feed'];
-          if (feedField is String && feedField.isNotEmpty) {
-            likedFeedIds.add(feedField);
-            continue;
-          }
-
-          if (feedField is Map) {
-            final feedId = feedField['_id'] ?? feedField['id'];
-            if (feedId != null) {
-              likedFeedIds.add(feedId.toString());
-            }
-          }
+          final id = extractFeedId(item);
+          if (id != null) likedFeedIds.add(id);
         }
 
         hasNextPage = data['hasNextPage'] == true;
@@ -371,9 +378,8 @@ class FeedRepository {
       }
 
       return likedFeedIds;
-    } catch (e) {
+    } catch (_) {
       // Silent fail: don't block feed loading if liked-feeds sync fails.
-      print('Error fetching user liked feed IDs: $e');
       return <String>{};
     }
   }

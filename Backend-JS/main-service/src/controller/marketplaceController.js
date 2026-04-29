@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const MarketplaceProduct = require("../model/MarketplaceProduct");
 const User = require("../model/User");
+const { notify } = require("../utils/notificationClient");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -163,6 +164,20 @@ exports.createProduct = async (req, res) => {
     const product = new MarketplaceProduct(productData);
     await product.save();
 
+    // Confirm to the seller that their listing is live. Fire-and-forget
+    // through the notification client so a notification-svc outage can't
+    // unwind the create.
+    notify({
+      userId: user._id.toString(),
+      title: 'Listing published',
+      message: `“${product.title}” is now live in the marketplace.`,
+      type: 'marketplace.product.created',
+      data: {
+        productId: product._id,
+        title: product.title,
+      },
+    });
+
     res.status(201).json({
       success: true,
       data: product,
@@ -230,7 +245,10 @@ exports.deleteProduct = async (req, res) => {
     }
 
     // Check if the user is the seller or an admin
-    if (product.sellerInfo.userId.toString() !== req.user._id.toString() && req.user.accountType !== "marketplace" || req.user.accountType !== "admin") {
+    const userId = req.user._id.toString();
+    const isOwner = product.sellerInfo.userId.toString() === userId;
+    const isAdmin = req.user.accountType === "admin";
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({
         success: false,
         message: "You are not authorized to delete this product",
@@ -437,6 +455,36 @@ exports.searchProducts = async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+// Default category catalog. Used as a fallback when the live aggregate
+// returns nothing (empty catalog state) so the mobile picker is never blank.
+const DEFAULT_MARKETPLACE_CATEGORIES = [
+  "Farm Equipment",
+  "Seeds",
+  "Fertilizers",
+  "Pesticides",
+  "Irrigation",
+  "Harvesting Tools",
+  "Storage",
+  "Livestock",
+];
+
+// List marketplace categories. Driven off the catalog so adding a new
+// category server-side flows through to the mobile filter without a client
+// release. The mobile client also uses this as the picker for add-product.
+exports.getCategories = async (req, res) => {
+  try {
+    const aggregated = await MarketplaceProduct.distinct("category", {
+      category: { $exists: true, $ne: null, $ne: "" },
+    });
+    const merged = Array.from(
+      new Set([...DEFAULT_MARKETPLACE_CATEGORIES, ...aggregated])
+    ).sort((a, b) => a.localeCompare(b));
+    res.status(200).json({ success: true, data: merged });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

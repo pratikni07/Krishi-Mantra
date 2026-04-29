@@ -326,16 +326,22 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   }
 
   List<Widget> _buildCategoryChips() {
-    final categories = [
-      'Farm Equipment',
-      'Seeds',
-      'Fertilizers',
-      'Pesticides',
-      'Irrigation',
-      'Harvesting Tools',
-      'Storage',
-      'Livestock',
-    ];
+    // Server-driven list with a defensive fallback so the chip row still
+    // renders something while the first request is in flight or if the
+    // categories endpoint is unreachable.
+    final fromServer = _controller.categories;
+    final categories = fromServer.isNotEmpty
+        ? fromServer.toList()
+        : <String>[
+            'Farm Equipment',
+            'Seeds',
+            'Fertilizers',
+            'Pesticides',
+            'Irrigation',
+            'Harvesting Tools',
+            'Storage',
+            'Livestock',
+          ];
 
     return categories.map((category) {
       final isSelected = _controller.selectedCategory.value == category;

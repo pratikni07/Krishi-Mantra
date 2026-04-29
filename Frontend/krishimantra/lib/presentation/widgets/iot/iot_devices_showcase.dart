@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/utils/responsive_utils.dart';
 import '../../../routes/app_routes.dart';
 
@@ -25,17 +26,21 @@ class IoTDevicesShowcase extends StatelessWidget {
               children: [
                 const Text(
                   'IoT Devices',
+                  // Use the actual app token, not the never-defined
+                  // `AppColors.textPrimary` that the rest of the codebase
+                  // doesn't have — that mismatch is what made this widget
+                  // a colour island when first added.
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: AppColors.textDark,
                   ),
                 ),
-                Text(
+                const Text(
                   'Register Now',
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.primary,
+                    color: AppColors.green,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -104,13 +109,9 @@ class IoTDevicesShowcase extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: gradient,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          // Use the centralised shadow tokens — `withOpacity` is deprecated
+          // for precision-loss reasons in the Color API.
+          boxShadow: AppShadows.medium,
         ),
         child: Stack(
           children: [
@@ -137,7 +138,7 @@ class IoTDevicesShowcase extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -163,7 +164,7 @@ class IoTDevicesShowcase extends StatelessWidget {
                     subtitle,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                     ),
                   ),
                   const Spacer(),

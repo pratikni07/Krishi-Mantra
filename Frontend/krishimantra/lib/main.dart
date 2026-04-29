@@ -9,6 +9,7 @@ import 'core/config/app_config.dart';
 import 'core/utils/app_logger.dart';
 import 'core/utils/engagement_observer.dart';
 import 'data/services/engagement_service.dart';
+import 'data/services/push_notification_service.dart';
 import 'dependency_injection.dart';
 import 'presentation/screens/splash/splash_screen.dart';
 import 'routes/app_routes.dart';
@@ -122,6 +123,26 @@ void main() {
       // Critical dependencies should be checked in the splash screen
     }
 
+    // Initialise the FCM SDK + register the background handler before
+    // any push can land. Permission and token registration happen later
+    // in the post-auth path (splash) where we know who the token belongs
+    // to. If Firebase isn't configured (no google-services.json /
+    // GoogleService-Info.plist), this throws and we log + continue —
+    // push is degraded but the rest of the app still works.
+    try {
+      final pushService = PushNotificationService();
+      Get.put<PushNotificationService>(pushService, permanent: true);
+      await pushService.initialiseSdk();
+      logger.i('FCM SDK initialised', tag: 'Push');
+    } catch (e, stack) {
+      logger.w(
+        'FCM SDK initialisation failed; push disabled.',
+        tag: 'Push',
+        error: e,
+        stackTrace: stack,
+      );
+    }
+
     runApp(const MyApp());
   }, (error, stack) {
     // Handle uncaught async errors
@@ -163,7 +184,7 @@ class _MyAppState extends State<MyApp> {
     final themeService = Get.put(ThemeService());
 
     return GetMaterialApp(
-      title: 'KrishiMantra',
+      title: 'Krishi Mantra',
       debugShowCheckedModeBanner: false,
       theme: ThemeService.lightTheme,
       darkTheme: ThemeService.darkTheme,

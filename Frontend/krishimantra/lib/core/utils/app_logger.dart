@@ -70,7 +70,7 @@ class AppLogger {
       developer.log(
         logMessage,
         time: DateTime.now(),
-        name: tag ?? 'KrishiMantra',
+        name: tag ?? 'Krishi Mantra',
         error: error,
         stackTrace: stackTrace,
       );

@@ -3,10 +3,17 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const logger = require("./logger");
+const redis = require("../config/redis");
 
 // Import sample data
 const sampleReels = require("./sampleReels.json");
 const adminConsultantUsers = require("./adminConsultantUsers.json");
+
+// Distributed lock for the cluster-wide cron — see autoPostScheduler.js
+// for the rationale. TTL slightly under the 3-minute cadence so the slot
+// re-opens for the next interval without overlapping with a healthy run.
+const LOCK_KEY = "reel:autoreel:cron:lock";
+const LOCK_TTL_SECONDS = 160; // cron is every 3 minutes (180s)
 
 class AutoReelScheduler {
   constructor() {
@@ -21,15 +28,39 @@ class AutoReelScheduler {
     logger.info("Starting auto reel scheduler...");
     logger.info(`Using base URL: ${this.baseUrl}`);
 
-    // Schedule the cron job to run every 3 minutes
-    // Format: '*/3 * * * *' (runs every 3 minutes)
+    // Schedule the cron job to run every 3 minutes. The Redis lock below
+    // ensures only one replica actually posts per tick, even when the
+    // service runs under PM2 cluster mode or k8s replica > 1.
     cron.schedule("*/3 * * * *", () => {
-      this.createRandomReel()
-        .then(() => logger.info("Auto reel created successfully"))
+      this.runWithLock()
+        .then((didRun) => {
+          if (didRun) logger.info("Auto reel created successfully");
+        })
         .catch((err) => logger.error("Error creating auto reel:", err));
     });
 
     logger.info("Auto reel scheduler initialized - will post every 3 minutes");
+  }
+
+  /**
+   * Try to claim the Redis lock; if another replica beat us to it, skip.
+   * Falls through to running without the lock on Redis outage so a single
+   * Redis hiccup doesn't pause auto-content forever.
+   */
+  async runWithLock() {
+    try {
+      const acquired = await redis.set(LOCK_KEY, process.pid, "EX", LOCK_TTL_SECONDS, "NX");
+      if (!acquired) {
+        logger.debug(
+          "Auto reel: another replica holds the lock, skipping this tick"
+        );
+        return false;
+      }
+    } catch (e) {
+      logger.warn("Auto reel lock acquire failed, running unlocked:", e.message);
+    }
+    await this.createRandomReel();
+    return true;
   }
 
   /**

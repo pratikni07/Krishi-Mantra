@@ -4,9 +4,30 @@
  */
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const subscriptionController = require('../controller/SubscriptionController');
 const { auth, optionalAuth, internalAuth, adminAuth } = require('../middlewares/auth');
+
+/**
+ * Per-user rate limit on the Stripe-touching endpoints. Without this, a
+ * compromised account or buggy client can burn the project's Stripe
+ * quota (and rack up real charges) by hammering payment-intent creation.
+ * Keyed on userId from the verified JWT — `auth` runs first so req.user
+ * is populated by the time we reach `keyGenerator`.
+ */
+const paymentIntentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    (req.user && (req.user._id || req.user.id) || req.ip).toString(),
+  message: {
+    success: false,
+    message: 'Too many payment requests. Please wait a moment and try again.',
+  },
+});
 
 /**
  * Public routes
@@ -46,13 +67,13 @@ router.get('/payments', auth, subscriptionController.getPaymentHistory);
 router.get('/feature/:feature', auth, subscriptionController.checkFeatureAccess);
 
 // Create checkout session (for web)
-router.post('/checkout', auth, subscriptionController.createCheckoutSession);
+router.post('/checkout', auth, paymentIntentLimiter, subscriptionController.createCheckoutSession);
 
 // Create payment intent (for mobile apps)
-router.post('/payment-intent', auth, subscriptionController.createPaymentIntent);
+router.post('/payment-intent', auth, paymentIntentLimiter, subscriptionController.createPaymentIntent);
 
 // Confirm payment and activate subscription (for mobile apps)
-router.post('/confirm-payment', auth, subscriptionController.confirmPayment);
+router.post('/confirm-payment', auth, paymentIntentLimiter, subscriptionController.confirmPayment);
 
 // Cancel subscription
 router.post('/cancel', auth, subscriptionController.cancelSubscription);
@@ -72,10 +93,10 @@ router.get('/iot/addons', optionalAuth, subscriptionController.getIotAddons);
 router.get('/iot/my-addons', auth, subscriptionController.getUserIotAddons);
 
 // Create payment intent for IoT add-on (mobile)
-router.post('/iot/payment-intent', auth, subscriptionController.createIotAddonPaymentIntent);
+router.post('/iot/payment-intent', auth, paymentIntentLimiter, subscriptionController.createIotAddonPaymentIntent);
 
 // Confirm IoT add-on payment and activate (mobile)
-router.post('/iot/confirm-payment', auth, subscriptionController.confirmIotAddonPayment);
+router.post('/iot/confirm-payment', auth, paymentIntentLimiter, subscriptionController.confirmIotAddonPayment);
 
 // Cancel IoT add-on subscription
 router.post('/iot/cancel', auth, subscriptionController.cancelIotAddon);

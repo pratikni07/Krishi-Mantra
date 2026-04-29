@@ -33,6 +33,31 @@ class _MarketPlaceProductDetailScreenState
   final TextEditingController _commentController = TextEditingController();
   Map<String, YoutubePlayerController> _youtubeControllers = {};
 
+  /// Launch the device dialer for [contactNumber]. If the number is missing
+  /// (older listings sometimes omit it) or `launch` rejects the URL, surface
+  /// a snackbar instead of crashing the screen with a null-deref or an
+  /// unhandled PlatformException — both of which the previous direct
+  /// `launch("tel:${...['contactNumber']}")` could throw.
+  Future<void> _callSeller(dynamic contactNumber) async {
+    final raw = contactNumber?.toString().trim() ?? '';
+    if (raw.isEmpty) {
+      Get.snackbar('Unavailable', 'No phone number listed for this seller.');
+      return;
+    }
+    // Strip everything except digits and a leading + so the dialer doesn't
+    // get confused by spaces/hyphens that some listings include.
+    final cleaned = raw.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (cleaned.isEmpty) {
+      Get.snackbar('Unavailable', 'Seller phone number is invalid.');
+      return;
+    }
+    try {
+      await launch('tel:$cleaned');
+    } catch (_) {
+      Get.snackbar('Error', 'Could not start a phone call from this device.');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,10 +74,39 @@ class _MarketPlaceProductDetailScreenState
     super.dispose();
   }
 
-  Widget _buildMediaCarousel(List<dynamic> media) {
-    final items = media.map((m) {
-      if (m['type'] == 'video' && m['isYoutubeVideo']) {
-        final videoId = YoutubePlayer.convertUrlToId(m['url']);
+  /// Render a price range tolerant of missing fields. Older listings can
+  /// ship without a currency, with one bound, or without `priceRange`
+  /// entirely; the previous direct subscript-chain crashed on any of those.
+  String _formatPriceRange(dynamic priceRange) {
+    if (priceRange is! Map) return 'Price on request';
+    final currency = (priceRange['currency'] ?? '').toString().trim();
+    final min = priceRange['min'];
+    final max = priceRange['max'];
+    if (min == null && max == null) return 'Price on request';
+    final prefix = currency.isEmpty ? '' : '$currency ';
+    if (min != null && max != null && min != max) {
+      return '$prefix$min - $max';
+    }
+    return '$prefix${min ?? max}';
+  }
+
+  Widget _buildMediaCarousel(dynamic media) {
+    // Listings can ship with `media: null`, missing entirely, or with
+    // entries lacking `type`/`url`. Defaults below give us an empty list +
+    // skipped-bad-entries instead of a `noSuchMethod` on `[]`.
+    final List<dynamic> mediaList =
+        (media is List) ? media : <dynamic>[];
+
+    final items = <Widget>[];
+    for (final raw in mediaList) {
+      if (raw is! Map) continue;
+      final m = Map<String, dynamic>.from(raw);
+      final type = m['type']?.toString();
+      final url = m['url']?.toString();
+      if (url == null || url.isEmpty) continue;
+
+      if (type == 'video' && m['isYoutubeVideo'] == true) {
+        final videoId = YoutubePlayer.convertUrlToId(url);
         if (videoId != null) {
           _youtubeControllers[videoId] = YoutubePlayerController(
             initialVideoId: videoId,
@@ -62,7 +116,7 @@ class _MarketPlaceProductDetailScreenState
               showLiveFullscreenButton: false,
             ),
           );
-          return ClipRRect(
+          items.add(ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: YoutubePlayer(
               controller: _youtubeControllers[videoId]!,
@@ -73,22 +127,35 @@ class _MarketPlaceProductDetailScreenState
                 handleColor: AppColors.green,
               ),
             ),
-          );
+          ));
+          continue;
         }
+        // Fall through to image rendering for invalid YouTube URLs.
       }
-      return ClipRRect(
+
+      items.add(ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: CachedNetworkImage(
-          imageUrl: m['url'],
+          imageUrl: url,
           fit: BoxFit.cover,
           width: double.infinity,
-          placeholder: (context, url) => Center(
+          placeholder: (context, _) => Center(
             child: CircularProgressIndicator(color: AppColors.green),
           ),
-          errorWidget: (context, url, error) => Icon(Icons.error),
+          errorWidget: (context, _, __) => Icon(Icons.error),
         ),
+      ));
+    }
+
+    if (items.isEmpty) {
+      return Container(
+        height: 300,
+        color: Colors.grey[200],
+        alignment: Alignment.center,
+        child: Icon(Icons.image_not_supported,
+            size: 48, color: Colors.grey[500]),
       );
-    }).toList();
+    }
 
     return Stack(
       children: [
@@ -196,8 +263,8 @@ class _MarketPlaceProductDetailScreenState
       floatingActionButton: Container(
         margin: EdgeInsets.only(bottom: 16),
         child: FloatingActionButton.extended(
-          onPressed: () => launch(
-              "tel:${_controller.productDetails['sellerInfo']['contactNumber']}"),
+          onPressed: () => _callSeller(
+              _controller.productDetails['sellerInfo']?['contactNumber']),
           backgroundColor: AppColors.green,
           icon: Icon(Icons.phone, color: Colors.white),
           label: Text(
@@ -249,7 +316,7 @@ class _MarketPlaceProductDetailScreenState
                     ),
                     SizedBox(height: 8),
                     Text(
-                      '${product['priceRange']['currency']} ${product['priceRange']['min']} - ${product['priceRange']['max']}',
+                      _formatPriceRange(product['priceRange']),
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -354,21 +421,25 @@ class _MarketPlaceProductDetailScreenState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                product['sellerInfo']['userName'],
+                                (product['sellerInfo']?['userName'] ??
+                                        'Unknown seller')
+                                    .toString(),
                                 style: TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.bold),
                               ),
                               SizedBox(height: 4),
                               Text(
-                                product['sellerInfo']['contactNumber'],
+                                (product['sellerInfo']?['contactNumber'] ??
+                                        'No number listed')
+                                    .toString(),
                                 style: TextStyle(color: Colors.grey[600]),
                               ),
                             ],
                           ),
                         ),
                         TextButton(
-                          onPressed: () => launch(
-                              "tel:${product['sellerInfo']['contactNumber']}"),
+                          onPressed: () => _callSeller(
+                              product['sellerInfo']?['contactNumber']),
                           style: TextButton.styleFrom(
                             backgroundColor: AppColors.green,
                             padding: EdgeInsets.symmetric(

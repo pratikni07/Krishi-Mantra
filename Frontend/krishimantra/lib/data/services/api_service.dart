@@ -14,15 +14,19 @@ import '../../core/constants/api_constants.dart';
 import '../../core/config/app_config.dart';
 import '../../core/utils/app_logger.dart';
 import '../../core/utils/cached_api_handler.dart';
+import 'SocketService.dart';
 
-/// Thread-safe token refresh lock
+/// Thread-safe token refresh lock — single-flight refresh and in-flight
+/// gating. `synchronized` returns the same Future to all concurrent callers
+/// so only one refresh runs at a time. `awaitInFlight` lets new outbound
+/// requests wait for an in-progress refresh before reading the token, so
+/// they never send the about-to-be-replaced one.
 class TokenRefreshLock {
   Completer<bool>? _completer;
   bool _isRefreshing = false;
 
-  /// Returns true if token was refreshed successfully
+  /// Returns true if token was refreshed successfully.
   Future<bool> synchronized(Future<bool> Function() refreshOperation) async {
-    // If already refreshing, wait for the result
     if (_isRefreshing && _completer != null) {
       logger.d('Waiting for ongoing token refresh', tag: 'Auth');
       return _completer!.future;
@@ -30,17 +34,32 @@ class TokenRefreshLock {
 
     _isRefreshing = true;
     _completer = Completer<bool>();
+    final c = _completer!;
 
     try {
       final result = await refreshOperation();
-      _completer!.complete(result);
+      if (!c.isCompleted) c.complete(result);
       return result;
     } catch (e) {
-      _completer!.completeError(e);
+      if (!c.isCompleted) c.complete(false);
       return false;
     } finally {
       _isRefreshing = false;
       _completer = null;
+    }
+  }
+
+  /// Wait for any in-progress refresh to finish, then return. Used by the
+  /// outbound interceptor so a request firing mid-refresh doesn't read the
+  /// old token from cache and immediately 401.
+  Future<void> awaitInFlight() async {
+    if (_isRefreshing && _completer != null) {
+      try {
+        await _completer!.future;
+      } catch (_) {
+        // Refresh failures are propagated via the request that triggered
+        // them; this caller just needs to know the lock is released.
+      }
     }
   }
 
@@ -206,7 +225,15 @@ class ApiService {
       );
     }
 
-    // Add auth token
+    // If a refresh is currently running, wait for it before reading the
+    // token. Otherwise a request firing mid-refresh sends the soon-to-be-
+    // replaced token, hits 401, and triggers a second refresh — the exact
+    // race the lock is meant to prevent. The refresh endpoint itself must
+    // bypass this gate or it would deadlock against itself.
+    if (options.path != ApiConstants.REFRESH_TOKEN) {
+      await _tokenRefreshLock.awaitInFlight();
+    }
+
     final token = _accessToken ?? await _secureStorage.read(key: 'auth_token');
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
@@ -273,9 +300,14 @@ class ApiService {
       );
 
       if (response.statusCode == 200 && response.data['token'] != null) {
-        final newToken = response.data['token'];
-        await _secureStorage.write(key: 'auth_token', value: newToken);
+        final newToken = response.data['token'] as String;
+        // Update the in-memory cache FIRST so any request that resolves
+        // its `awaitInFlight` gate at exactly this moment reads the new
+        // token, not the old one. Persistence to secure storage follows;
+        // `_handleRequest` falls back to storage only when the in-memory
+        // copy is null.
         _accessToken = newToken;
+        await _secureStorage.write(key: 'auth_token', value: newToken);
 
         // Server rotates the refresh token on every use — persist the
         // new one so the next refresh doesn't replay the consumed token
@@ -284,6 +316,16 @@ class ApiService {
         if (newRefresh != null) {
           await _secureStorage.write(key: 'refresh_token', value: newRefresh as String);
         }
+
+        // Reconnect the websocket with the new token. The handshake reads
+        // `auth.token` once at dial time, so without this the socket keeps
+        // talking to the server with the dead token until the next manual
+        // disconnect — consultant-chat goes silently dead post-refresh.
+        try {
+          if (Get.isRegistered<SocketService>()) {
+            unawaited(Get.find<SocketService>().restartWithFreshToken());
+          }
+        } catch (_) {}
 
         logger.i('Token refreshed successfully', tag: 'Auth');
         return true;

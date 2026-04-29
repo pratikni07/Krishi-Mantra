@@ -25,9 +25,9 @@ exports.verifyOTP = Joi.object({
 
 exports.signupWithPhone = Joi.object({
   phoneNo,
-  name: Joi.string().trim().min(1).max(100).required(),
-  firstName: Joi.string().trim().max(50).optional(),
-  lastName: Joi.string().trim().max(50).optional(),
+  firstName: Joi.string().trim().min(1).max(50).required(),
+  lastName: Joi.string().trim().min(1).max(50).required(),
+  name: Joi.string().trim().min(1).max(100).optional(),
   image: Joi.string().uri({ scheme: ['http', 'https'] }).max(2048).optional(),
 });
 

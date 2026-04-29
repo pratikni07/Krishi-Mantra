@@ -45,6 +45,15 @@ const chatSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    // Canonical participant pair for direct chats — `min(userId)|max(userId)`.
+    // Combined with a unique partial index this turns "create or fetch the
+    // direct chat between A and B" into a race-free upsert: two concurrent
+    // chat:create:direct calls can't produce two Chat docs because the
+    // second insert collides on this key. Null for group chats.
+    directChatKey: {
+      type: String,
+      index: true,
+    },
   },
   { timestamps: true }
 );
@@ -54,6 +63,24 @@ chatSchema.index({ 'participants.userId': 1, lastMessageAt: -1 }); // Get user's
 chatSchema.index({ 'participants.userId': 1, type: 1 }); // Filter user's chats by type
 chatSchema.index({ type: 1, updatedAt: -1 }); // Get chats by type
 chatSchema.index({ 'participants.userId': 1, isActive: 1, lastMessageAt: -1 }); // Active chats for user
+
+// Unique sparse partial index on the canonical pair — only enforced on
+// direct chats with the key set, so legacy rows and group chats are
+// unaffected.
+chatSchema.index(
+  { directChatKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: 'direct', directChatKey: { $exists: true } },
+  }
+);
+
+// Helper: build the canonical key for a direct chat between two userIds.
+chatSchema.statics.buildDirectKey = function (userId1, userId2) {
+  const a = String(userId1);
+  const b = String(userId2);
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+};
 
 // Static method to find direct chat between two users
 chatSchema.statics.findDirectChat = async function(userId1, userId2) {

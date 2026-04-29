@@ -1042,6 +1042,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> with TranslationMix
   }) {
     return GestureDetector(
       onTap: onTap,
+      // Default deferToChild only registers taps on opaque pixels (the
+      // icon circle), so taps on the label text fall through. Opaque
+      // makes the whole Column bounds tappable.
+      behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

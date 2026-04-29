@@ -43,6 +43,12 @@ class FeedController extends BaseController {
   final Set<String> _likedFeedIds = <String>{};
   bool _likedFeedIdsLoaded = false;
 
+  // The feedId backing the current `comments` list. When the active feed
+  // changes (user opens a different post's comment sheet), we use this to
+  // invalidate the list — without it, comments from the previous feed would
+  // briefly render under the new one until pagination overwrote them.
+  String? _commentsFeedId;
+
   FeedController(this._feedRepository, this._userService);
 
   @override
@@ -97,65 +103,54 @@ class FeedController extends BaseController {
   // Get comments for a feed
   Future<void> getComments(String feedId, {bool refresh = false}) async {
     try {
-      if (refresh) {
+      // Invalidate the cached list when the feed switches. Without this,
+      // opening post B right after post A would briefly show A's comments
+      // until the new page response replaced them — and worse, an
+      // `addComment` call interleaving the switch could attribute the new
+      // comment to the wrong feed.
+      final feedChanged = _commentsFeedId != null && _commentsFeedId != feedId;
+      if (refresh || feedChanged) {
         commentCurrentPage.value = 1;
         hasMoreComments.value = true;
         comments.clear();
       }
+      _commentsFeedId = feedId;
 
       if (!hasMoreComments.value) return;
 
       isLoadingComments.value = true;
-      print(
-          '⭐️ Starting to fetch comments for feed: $feedId, page: ${commentCurrentPage.value}');
 
       await handleAsync<void>(
         () async {
-          try {
-            final result = await _feedRepository.getComments(
-              feedId,
-              page: commentCurrentPage.value,
-              limit: limit,
-            );
+          final result = await _feedRepository.getComments(
+            feedId,
+            page: commentCurrentPage.value,
+            limit: limit,
+          );
 
-            print('📄 Received comment response: $result');
+          // Clear any previous errors since we got a successful response
+          if (hasError) {
+            setLoaded();
+          }
 
-            // Clear any previous errors since we got a successful response
-            if (hasError) {
-              setLoaded();
-            }
+          if (result.containsKey('comments') && result['comments'] is List) {
+            final newComments = result['comments'] as List<CommentModel>;
+            comments.addAll(newComments);
+          }
 
-            // Parse the comments from the result
-            if (result.containsKey('comments') && result['comments'] is List) {
-              final newComments = result['comments'] as List<CommentModel>;
-              print('✅ Found ${newComments.length} comments');
-              comments.addAll(newComments);
-            } else {
-              print('⚠️ No comments found in result or invalid format');
-            }
+          totalComments.value = result['totalDocs'] as int? ?? 0;
+          hasMoreComments.value = result['hasNextPage'] as bool? ?? false;
 
-            totalComments.value = result['totalDocs'] as int? ?? 0;
-            hasMoreComments.value = result['hasNextPage'] as bool? ?? false;
-
-            print(
-                '📊 Total comments: ${totalComments.value}, hasMore: ${hasMoreComments.value}');
-
-            if (hasMoreComments.value) {
-              commentCurrentPage.value++;
-            }
-          } catch (e) {
-            print('🚨 Inner error processing comments: $e');
-            rethrow;
+          if (hasMoreComments.value) {
+            commentCurrentPage.value++;
           }
         },
         showLoading: false,
       );
-    } catch (e) {
-      print('❌ Error loading comments: $e');
-      // Error is already handled by the handleAsync method
+    } catch (_) {
+      // Error already surfaced via handleAsync.
     } finally {
       isLoadingComments.value = false;
-      print('🏁 Finished loading comments attempt');
     }
   }
 
@@ -220,11 +215,38 @@ class FeedController extends BaseController {
         'profilePhoto': userData.image,
       };
 
-      final success = await _feedRepository.addLike(feedId, likeData);
+      Map<String, dynamic> response;
+      try {
+        response = await _feedRepository.addLike(feedId, likeData);
+      } catch (e) {
+        // Only roll back the optimistic UI for definite failures (4xx /
+        // server rejection). Timeouts and connection errors leave the
+        // optimistic state in place because the like may have actually
+        // committed; the next refetch reconciles.
+        if (_isDefiniteFailure(e)) {
+          _revertLikeInAllFeedLists(feedId, previousLikeStates);
+        }
+        rethrow;
+      }
 
-      if (!success) {
+      if (response['success'] != true) {
         _revertLikeInAllFeedLists(feedId, previousLikeStates);
         throw Exception('Failed to like post');
+      }
+
+      // Reconcile against the server's authoritative count + isLiked so
+      // concurrent likes from other devices don't make our local count
+      // drift. The server is the source of truth on count; isLiked from
+      // the server should equal our optimistic toggle but we trust it
+      // anyway.
+      final serverCount = response['likeCount'];
+      final serverIsLiked = response['isLiked'];
+      if (serverCount is int || serverIsLiked is bool) {
+        _reconcileLikeInAllFeedLists(
+          feedId,
+          serverCount is int ? serverCount : null,
+          serverIsLiked is bool ? serverIsLiked : null,
+        );
       }
 
       // Track engagement
@@ -242,6 +264,20 @@ class FeedController extends BaseController {
       // Just log the error or show a minimal indicator
       setError(e);
     }
+  }
+
+  /// True if this error means the server definitely did not commit. 4xx and
+  /// "plain" exceptions count; timeouts, connection errors, and circuit
+  /// breaker rejects are ambiguous and we should NOT roll back the UI.
+  bool _isDefiniteFailure(Object error) {
+    final s = error.toString().toLowerCase();
+    if (s.contains('timeout') ||
+        s.contains('connection') ||
+        s.contains('circuit breaker') ||
+        s.contains('socketexception')) {
+      return false;
+    }
+    return true;
   }
 
   FeedModel? _findFeedInAllLists(String feedId) {
@@ -282,6 +318,34 @@ class FeedController extends BaseController {
 
     update(); // Needed for GetBuilder screens like Home
     return touched;
+  }
+
+  /// Apply the server's authoritative like count (and isLiked) across every
+  /// list that holds this feed. This is what closes the loop on the
+  /// optimistic toggle — without it, count drift accumulates whenever any
+  /// other device likes the same post.
+  void _reconcileLikeInAllFeedLists(
+    String feedId,
+    int? serverCount,
+    bool? serverIsLiked,
+  ) {
+    void reconcileInList(RxList<FeedModel> list) {
+      final index = list.indexWhere((feed) => feed.id == feedId);
+      if (index == -1) return;
+      final feed = list[index];
+      final next = feed.copyWithServerLikeState(
+        likeCount: serverCount,
+        isLiked: serverIsLiked,
+      );
+      list[index] = next;
+    }
+
+    reconcileInList(topFeeds);
+    reconcileInList(recommendedFeeds);
+    reconcileInList(feeds);
+    reconcileInList(randomFeeds);
+
+    update();
   }
 
   void _revertLikeInAllFeedLists(
@@ -364,17 +428,12 @@ class FeedController extends BaseController {
             limit: limit,
           );
 
-          print(
-              'FeedController: Got result with ${result['feeds']?.length ?? 0} feeds');
-
           // Safely handle the feeds list which might be null
           final feedsList = result['feeds'];
           if (feedsList != null) {
             final newFeeds = (feedsList as List<FeedModel>);
             _applyLikedState(newFeeds);
             recommendedFeeds.addAll(newFeeds);
-            print(
-                'FeedController: Added ${newFeeds.length} feeds, total: ${recommendedFeeds.length}');
           }
 
           // Update pagination
@@ -385,9 +444,8 @@ class FeedController extends BaseController {
         showLoading: recommendedFeeds.isEmpty,
         isRefresh: refresh,
       );
-    } catch (e) {
-      print('FeedController: Error fetching recommended feeds: $e');
-      // Error is already handled by handleAsync
+    } catch (_) {
+      // Error already surfaced via handleAsync.
     } finally {
       isRecommendedLoading.value = false;
     }
@@ -442,7 +500,15 @@ class FeedController extends BaseController {
 
   Future<void> fetchFeedsByTag(String tagName, {bool refresh = false}) async {
     try {
-      if (refresh) {
+      // If the user switched to a different tag, treat that as a refresh
+      // even if the caller didn't pass refresh: true. Without this, a tag
+      // switch after the prior tag's pagination was exhausted would bail
+      // at the `!hasMoreRecommendedFeeds` guard below and never fetch the
+      // new tag's first page — selecting a tag silently did nothing.
+      final tagChanged = selectedTag.value != tagName;
+      final shouldReset = refresh || tagChanged;
+
+      if (shouldReset) {
         recommendedCurrentPage.value = 1;
         hasMoreRecommendedFeeds.value = true;
         recommendedFeeds.clear();
@@ -451,7 +517,7 @@ class FeedController extends BaseController {
       if (!hasMoreRecommendedFeeds.value) return;
       isRecommendedLoading.value = true;
       selectedTag.value = tagName;
-      await _ensureLikedFeedIdsLoaded(forceRefresh: refresh);
+      await _ensureLikedFeedIdsLoaded(forceRefresh: shouldReset);
 
       final result = await _feedRepository.getFeedsByTag(
         tagName,

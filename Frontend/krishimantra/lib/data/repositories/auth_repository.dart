@@ -18,9 +18,6 @@ class AuthRepository {
   // Traditional email/password login
   Future<UserModel> login(String email, String password) async {
     try {
-      print('🔍 Starting login in repository');
-      print('📝 Request data: email=$email, password=***');
-
       final response = await _apiService.post(
         ApiConstants.LOGIN,
         data: {
@@ -31,11 +28,6 @@ class AuthRepository {
 
       final Map<String, dynamic> responseData = response.data;
 
-      print('🔍 Checking response format');
-      if (!responseData.containsKey('success')) print('❌ Missing success key');
-      if (!responseData.containsKey('token')) print('❌ Missing token key');
-      if (!responseData.containsKey('user')) print('❌ Missing user key');
-
       if (!responseData.containsKey('success') ||
           !responseData.containsKey('token') ||
           !responseData.containsKey('user')) {
@@ -43,35 +35,21 @@ class AuthRepository {
       }
 
       final token = responseData['token'] as String;
-      print('🎟️ Token received: ${token.substring(0, 10)}...');
-
       final userData = responseData['user'] as Map<String, dynamic>;
-      print('👤 User data received: $userData');
-
-      // Add token to user data
       userData['token'] = token;
 
-      print('💾 Storing auth token');
       await _storage.write(key: 'auth_token', value: token);
 
       if (responseData['refreshToken'] != null) {
         await _storage.write(key: 'refresh_token', value: responseData['refreshToken'] as String);
       }
 
-      print('💾 Storing user data');
       await _storage.write(key: 'user_data', value: json.encode(userData));
 
-      print('🏗️ Creating UserModel');
-      final userModel = UserModel.fromJson(userData);
-      print('✅ UserModel created: $userModel');
-
-      return userModel;
-    } catch (e, stackTrace) {
-      print('⚠️ Login error in repository: $e');
-      print('📚 Stack trace: $stackTrace');
+      return UserModel.fromJson(userData);
+    } catch (e) {
       if (e is dio.DioException) {
         final response = e.response?.data;
-        print('🌐 Dio error response: $response');
         if (response != null && response['message'] != null) {
           throw Exception(response['message']);
         }
@@ -207,23 +185,43 @@ class AuthRepository {
     }
   }
 
-  // Logout
+  // Logout. Best-effort backend revoke followed by local-state cleanup.
+  // The backend call is wrapped because if the server is unreachable we
+  // still want to clear local creds and route the user back to login —
+  // skipping that would leave them stuck on a "logout failed" screen
+  // with stale auth state.
   Future<void> logout() async {
+    final refreshToken = await _storage.read(key: 'refresh_token');
     try {
-      await _clearAuthToken();
+      await _apiService.post(
+        ApiConstants.LOGOUT,
+        data: refreshToken != null ? {'refreshToken': refreshToken} : {},
+      );
     } catch (e) {
-      throw ApiHelper.handleError(e);
+      // Don't throw — local cleanup must still run.
+      print('logout: backend revoke failed (continuing): $e');
+    }
+    await _storage.deleteAll();
+  }
+
+  /// Validate the cached access token by hitting a cheap protected
+  /// endpoint. Returns true if the server accepts the token, false
+  /// otherwise. The interceptor handles refresh-and-retry transparently
+  /// for 401s, so a `false` here means the user really is logged out
+  /// (refresh also failed, network down, etc.).
+  Future<bool> validateToken() async {
+    try {
+      final response = await _apiService.get(ApiConstants.AUTH_ME);
+      return response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300;
+    } catch (_) {
+      return false;
     }
   }
 
   // Helper Methods
   Future<void> _saveAuthToken(String token) async {
-    final storage = FlutterSecureStorage();
-    await storage.write(key: 'auth_token', value: token);
-  }
-
-  Future<void> _clearAuthToken() async {
-    final storage = FlutterSecureStorage();
-    await storage.delete(key: 'auth_token');
+    await _storage.write(key: 'auth_token', value: token);
   }
 }

@@ -148,6 +148,32 @@ class RedisClient {
   }
 
   /**
+   * Atomic SET-if-absent with TTL. Returns true iff this caller acquired
+   * the key (it was previously unset). Use this for distributed locks
+   * and per-event dedupe — one-and-only-one semantics that the regular
+   * `set` doesn't expose. Maps to redis `SET key val EX ttl NX` which
+   * either inserts and returns 'OK' or returns null on contention.
+   *
+   * @param {string} key
+   * @param {string} value
+   * @param {number} ttlSeconds
+   * @returns {Promise<boolean>}
+   */
+  async setIfAbsent(key, value, ttlSeconds) {
+    try {
+      if (!(await this._ensureConnection())) return false;
+      const result = await this.client.set(key, value, {
+        EX: ttlSeconds,
+        NX: true,
+      });
+      return result === 'OK';
+    } catch (error) {
+      logger.warn(`Redis SET NX error for key "${key}":`, error.message);
+      return false;
+    }
+  }
+
+  /**
    * Set value with expiry
    * @param {string} key - Cache key
    * @param {number} seconds - TTL in seconds

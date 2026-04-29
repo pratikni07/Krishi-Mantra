@@ -22,7 +22,6 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _authController = Get.find<AuthController>();
@@ -33,7 +32,6 @@ class _SignupScreenState extends State<SignupScreen> {
   // Translatable text
   String completeProfileText = 'Complete Your Profile';
   String provideDetailsText = 'Please provide your details';
-  String fullNameText = 'Full Name';
   String firstNameText = 'First Name';
   String lastNameText = 'Last Name';
   String phoneNumberText = 'Phone Number';
@@ -60,7 +58,6 @@ class _SignupScreenState extends State<SignupScreen> {
     final translations = await Future.wait([
       _languageService.translate('Complete Your Profile'),
       _languageService.translate('Please provide your details'),
-      _languageService.translate('Full Name'),
       _languageService.translate('First Name'),
       _languageService.translate('Last Name'),
       _languageService.translate('Phone Number'),
@@ -76,17 +73,16 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() {
       completeProfileText = translations[0];
       provideDetailsText = translations[1];
-      fullNameText = translations[2];
-      firstNameText = translations[3];
-      lastNameText = translations[4];
-      phoneNumberText = translations[5];
-      requiredFieldText = translations[6];
-      uploadPhotoText = translations[7];
-      continueText = translations[8];
-      takePhotoText = translations[9];
-      chooseFromGalleryText = translations[10];
-      cancelText = translations[11];
-      optionalText = translations[12];
+      firstNameText = translations[2];
+      lastNameText = translations[3];
+      phoneNumberText = translations[4];
+      requiredFieldText = translations[5];
+      uploadPhotoText = translations[6];
+      continueText = translations[7];
+      takePhotoText = translations[8];
+      chooseFromGalleryText = translations[9];
+      cancelText = translations[10];
+      optionalText = translations[11];
     });
   }
 
@@ -264,39 +260,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 SizedBox(height: AppSizes.paddingXXL),
 
-                // Full Name Field
-                TextFormField(
-                  controller: _nameController,
-                  style: TextStyle(
-                    fontSize: AppSizes.fontL,
-                    color: AppColors.textDark,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: fullNameText,
-                    labelStyle: const TextStyle(color: AppColors.textGrey),
-                    prefixIcon: Icon(Icons.person, color: AppColors.green, size: AppSizes.iconM),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
-                      borderSide: const BorderSide(color: AppColors.borderLight),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSizes.radiusXL),
-                      borderSide: const BorderSide(color: AppColors.green, width: 2),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return requiredFieldText;
-                    }
-                    return null;
-                  },
-                ),
-
-                SizedBox(height: AppSizes.paddingL),
-
                 // First Name Field
                 TextFormField(
                   controller: _firstNameController,
@@ -470,7 +433,6 @@ class _SignupScreenState extends State<SignupScreen> {
       }
 
       final success = await _authController.signupWithPhone(
-        name: _nameController.text.trim(),
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         phoneNo: widget.phoneNumber,
@@ -492,7 +454,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
     super.dispose();

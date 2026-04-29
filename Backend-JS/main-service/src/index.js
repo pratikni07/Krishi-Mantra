@@ -11,6 +11,11 @@ const statusMonitor = require('express-status-monitor');
 const setupEnvironment = require('./config/environment');
 setupEnvironment();
 
+if (!process.env.JWT_SECRET) {
+  console.error('[main-service] JWT_SECRET not set. Refusing to start.');
+  process.exit(1);
+}
+
 // Import utilities
 const logger = require('./utils/logger');
 const { RATE_LIMIT, HTTP_STATUS } = require('./utils/constants');
@@ -274,6 +279,26 @@ const startServer = async () => {
         logger.info('Action-card cron started');
       } catch (err) {
         logger.warn('Action-card cron failed to start', { error: err.message });
+      }
+    }
+
+    // Subscription expiry reminders + per-period usage counter resets.
+    // Both are guarded by a Redis lock per tick so multi-replica deploys
+    // don't fan out duplicate notifications or double-reset counters.
+    // Disable per-environment via env vars when running disposable
+    // ephemeral instances (CI, test, ad-hoc shells).
+    if (!/^(0|false|no|off)$/i.test(String(process.env.SUBSCRIPTION_CRONS_ENABLED || 'true').trim())) {
+      try {
+        const expiryCron = require('./scripts/subscriptionExpiryCron');
+        expiryCron.init();
+      } catch (err) {
+        logger.warn('Subscription expiry cron failed to start', { error: err.message });
+      }
+      try {
+        const usageResetCron = require('./scripts/usageResetCron');
+        usageResetCron.init();
+      } catch (err) {
+        logger.warn('Usage reset cron failed to start', { error: err.message });
       }
     }
 

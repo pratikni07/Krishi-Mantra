@@ -1,5 +1,6 @@
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
+import 'dart:math';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
 
@@ -54,6 +55,11 @@ class SocketService with WidgetsBindingObserver {
   final _aiAnalyzingController = StreamController<Map<String, dynamic>>.broadcast();
   final _messageLimitController = StreamController<Map<String, dynamic>>.broadcast();
   final _notificationController = StreamController<Map<String, dynamic>>.broadcast();
+  // Cross-device chat unread reconciliation. Server emits this to every
+  // socket the reader has open (not just the chat room) when they read
+  // messages, so a chat-list screen on a sibling device updates its
+  // badge without refetching. See P4.21 in the implementation plan.
+  final _chatUnreadController = StreamController<Map<String, dynamic>>.broadcast();
 
   // Getters for streams
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
@@ -69,6 +75,7 @@ class SocketService with WidgetsBindingObserver {
   Stream<Map<String, dynamic>> get aiAnalyzingStream => _aiAnalyzingController.stream;
   Stream<Map<String, dynamic>> get messageLimitStream => _messageLimitController.stream;
   Stream<Map<String, dynamic>> get notificationStream => _notificationController.stream;
+  Stream<Map<String, dynamic>> get chatUnreadStream => _chatUnreadController.stream;
 
   // Getters
   bool get isConnected => _connectionState == SocketConnectionState.connected;
@@ -122,6 +129,37 @@ class SocketService with WidgetsBindingObserver {
       _connectionStateController.add(state);
       logger.d('Socket state changed to: $state', tag: 'Socket');
     }
+  }
+
+  /// Start the socket only after a user/token is available. Returns silently
+  /// if no user is loaded yet — this lets the splash call it unconditionally
+  /// without crashing on first boot. Pair with [restartWithFreshToken] when
+  /// the access token rotates.
+  Future<bool> start() async {
+    if (_isDisposed) return false;
+    final user = await _userService.getUser();
+    if (user == null || user.token.isEmpty) {
+      logger.d('Socket start skipped: no user/token yet', tag: 'Socket');
+      return false;
+    }
+    if (isConnected) return true;
+    try {
+      await initialize();
+      return isConnected;
+    } catch (e) {
+      logger.w('Socket start failed: $e', tag: 'Socket');
+      return false;
+    }
+  }
+
+  /// Tear down the existing socket and reconnect with the latest token.
+  /// Call this after a successful access-token refresh so the websocket
+  /// handshake doesn't keep replaying the dead one.
+  Future<bool> restartWithFreshToken() async {
+    if (_isDisposed) return false;
+    _reconnectionAttempts = 0;
+    await _cleanupSocket();
+    return start();
   }
 
   Future<void> initialize() async {
@@ -389,6 +427,16 @@ class SocketService with WidgetsBindingObserver {
         _notificationController.add(Map<String, dynamic>.from(data));
       }
     });
+
+    // Cross-device chat unread sync — server emits per-user (not per-room)
+    // when this user marks messages as read on any device. The chat-list
+    // screen subscribes via [chatUnreadStream] to keep badges consistent
+    // across phone + tablet without a list refetch.
+    socket?.on('chat:unread:update', (data) {
+      if (data is Map) {
+        _chatUnreadController.add(Map<String, dynamic>.from(data));
+      }
+    });
   }
 
   void _scheduleReconnection({bool immediate = false}) {
@@ -421,6 +469,29 @@ class SocketService with WidgetsBindingObserver {
 
   bool isSocketConnected() => socket?.connected ?? false;
 
+  /// Refresh handshake auth from the latest UserService snapshot. The socket
+  /// only sends the values stored in `io.options['auth']` and the extra
+  /// headers when it dials — so if the access token rotated since the last
+  /// connect, we have to write the new one before triggering a reconnect.
+  /// Without this the reconnect would replay the dead token and the
+  /// handshake would 401 silently, dropping consultant chat post-refresh.
+  Future<void> _applyFreshAuth() async {
+    if (socket == null) return;
+    try {
+      final user = await _userService.getUser();
+      if (user == null) return;
+      // socket_io_client exposes io.options as a Map; mutate in place.
+      final auth = {'userId': user.id, 'token': user.token};
+      socket!.io.options?['auth'] = auth;
+      final extra = <String, String>{
+        'Authorization': 'Bearer ${user.token}',
+      };
+      socket!.io.options?['extraHeaders'] = extra;
+    } catch (e) {
+      logger.w('Failed to refresh socket handshake auth: $e', tag: 'Socket');
+    }
+  }
+
   Future<bool> forceConnect() async {
     if (_isDisposed) return false;
 
@@ -431,6 +502,7 @@ class SocketService with WidgetsBindingObserver {
       }
 
       if (!socket!.connected) {
+        await _applyFreshAuth();
         socket!.disconnect();
         await Future.delayed(const Duration(milliseconds: 300));
         socket!.connect();
@@ -547,6 +619,21 @@ class SocketService with WidgetsBindingObserver {
     }
   }
 
+  static final _idRandom = Random.secure();
+
+  /// Generate a per-message idempotency token. Combined with `sender` on the
+  /// server it's enforced unique by a partial index, so if a retry replays
+  /// the same id the server returns the original message instead of writing
+  /// a duplicate. Stable enough that we don't need the `uuid` package — a
+  /// microsecond timestamp + 96 bits of randomness collides at astronomical
+  /// rates per single sender.
+  String _generateClientMessageId() {
+    final ts = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+    final r1 = _idRandom.nextInt(1 << 32).toRadixString(36);
+    final r2 = _idRandom.nextInt(1 << 32).toRadixString(36);
+    return 'cmid-$ts-$r1$r2';
+  }
+
   Future<bool> sendMessage(String chatId, Map<String, dynamic> messageData) async {
     try {
       final user = await _userService.getUser();
@@ -555,12 +642,19 @@ class SocketService with WidgetsBindingObserver {
         return false;
       }
 
+      // Use the caller's id if it provided one (so a retry of the same
+      // logical message stays idempotent across multiple sendMessage
+      // invocations); otherwise mint a fresh one.
+      final clientMessageId =
+          (messageData['clientMessageId'] as String?) ?? _generateClientMessageId();
+
       return _sendRequest('message:send', {
         'chatId': chatId,
         'content': messageData['content'],
         'mediaType': messageData['mediaType'] ?? 'text',
         'mediaUrl': messageData['mediaUrl'] ?? '',
         'userId': user.id,
+        'clientMessageId': clientMessageId,
         'timestamp': DateTime.now().toIso8601String(),
       });
     } catch (e) {

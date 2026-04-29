@@ -26,6 +26,8 @@ router.post('/events', requireAdminOrInternal, notificationController.processDom
 
 // Per-user routes: caller must be that user (or an admin).
 router.get('/users/:userId/notifications', requireSelfOrAdmin, notificationController.getUserNotifications);
+router.get('/users/:userId/notifications/unread-count', requireSelfOrAdmin, notificationController.getUnreadCount);
+router.patch('/users/:userId/notifications/read-all', requireSelfOrAdmin, notificationController.markAllAsRead);
 router.patch('/users/:userId/notifications/:notificationId/read', requireSelfOrAdmin, notificationController.markAsRead);
 router.patch('/users/:userId/notifications/:notificationId/interaction', requireSelfOrAdmin, notificationController.trackInteraction);
 
@@ -34,5 +36,11 @@ router.put('/users/:userId/preferences', requireSelfOrAdmin, notificationControl
 router.patch('/users/:userId/preferences/mute', requireSelfOrAdmin, notificationController.mute);
 router.patch('/users/:userId/preferences/unmute', requireSelfOrAdmin, notificationController.unmute);
 router.post('/users/:userId/notifications/test', requireSelfOrAdmin, notificationController.sendTestNotification);
+
+// Push-token lifecycle. Mobile clients hit `register` on cold start (after
+// permission is granted) and `unregister` on logout. Both are scoped to the
+// authenticated user so a hijacked id can't redirect another user's pushes.
+router.put('/users/:userId/push-token', requireSelfOrAdmin, notificationController.registerPushToken);
+router.delete('/users/:userId/push-token', requireSelfOrAdmin, notificationController.unregisterPushToken);
 
 module.exports = router;

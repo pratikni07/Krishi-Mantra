@@ -4,6 +4,21 @@ const queueService = require('./queue.service');
 const redis = require('../config/redis');
 const logger = require('../utils/logger');
 const { CACHE_TTL, CACHE_KEYS, PAGINATION } = require('../utils/constants');
+const { sanitizeTitle, sanitizeBody } = require('../utils/sanitize');
+
+/**
+ * Apply sanitisation + length caps to a notification payload before it's
+ * persisted. Centralised here so every entry point — REST create, bulk
+ * create, domain-event templating, websocket push — benefits without
+ * each caller having to remember to scrub user-generated text.
+ */
+function sanitizePayload(data) {
+  if (!data || typeof data !== 'object') return data;
+  const out = { ...data };
+  if (out.title !== undefined) out.title = sanitizeTitle(out.title);
+  if (out.body !== undefined) out.body = sanitizeBody(out.body);
+  return out;
+}
 
 /**
  * Notification Service
@@ -17,14 +32,15 @@ class NotificationService {
    */
   async createNotification(data) {
     try {
-      const notification = new Notification(data);
+      const sanitized = sanitizePayload(data);
+      const notification = new Notification(sanitized);
       await notification.save();
 
       // Send to queue for processing
       await queueService.sendToNotificationQueue(notification);
 
       // Invalidate user notifications cache
-      await redis.del(`${CACHE_KEYS.USER_NOTIFICATIONS}${data.userId}`);
+      await redis.del(`${CACHE_KEYS.USER_NOTIFICATIONS}${sanitized.userId}`);
 
       return notification;
     } catch (error) {
@@ -40,13 +56,14 @@ class NotificationService {
    */
   async createBulkNotifications(notifications) {
     try {
-      const createdNotifications = await Notification.insertMany(notifications);
+      const sanitizedList = notifications.map(sanitizePayload);
+      const createdNotifications = await Notification.insertMany(sanitizedList);
 
       // Send to batch processing
       await queueService.sendToBatchQueue(createdNotifications);
 
       // Invalidate caches for affected users
-      const userIds = [...new Set(notifications.map((n) => n.userId))];
+      const userIds = [...new Set(sanitizedList.map((n) => n.userId))];
       await Promise.all(
         userIds.map((userId) => redis.del(`${CACHE_KEYS.USER_NOTIFICATIONS}${userId}`))
       );

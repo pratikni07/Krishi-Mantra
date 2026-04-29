@@ -28,6 +28,7 @@ class MessageService {
       mediaType,
       mediaUrl,
       mediaMetadata,
+      clientMessageId,
     } = messageData;
 
     // Check if chat exists
@@ -50,33 +51,59 @@ class MessageService {
         throw new Error("Only admins can send messages");
       }
     }
-    const message = await Message.create({
-      chatId,
-      sender,
-      senderName: senderName || senderInfo.userName,
-      senderPhoto: senderPhoto || senderInfo.profilePhoto,
-      content,
-      mediaType: mediaType || "text",
-      mediaUrl,
-      mediaMetadata,
-      deliveredTo: [
-        {
-          userId: sender,
-          userName: senderName || senderInfo.userName,
-          profilePhoto: senderPhoto || senderInfo.profilePhoto,
-          deliveredAt: new Date(),
-        },
-      ],
-      // Mark as read by sender immediately
-      readBy: [
-        {
-          userId: sender,
-          userName: senderName || senderInfo.userName,
-          profilePhoto: senderPhoto || senderInfo.profilePhoto,
-          readAt: new Date(),
-        },
-      ],
-    });
+
+    // Idempotency: if the client tagged this with a UUID and we already
+    // persisted that one, return the existing message rather than
+    // creating a duplicate. Pre-check + unique partial index on
+    // (sender, clientMessageId) gives belt-and-braces — pre-check
+    // covers the common case, the unique index catches the race.
+    if (clientMessageId) {
+      const existing = await Message.findOne({ sender, clientMessageId }).lean();
+      if (existing) {
+        return Message.hydrate(existing);
+      }
+    }
+
+    let message;
+    try {
+      message = await Message.create({
+        chatId,
+        sender,
+        senderName: senderName || senderInfo.userName,
+        senderPhoto: senderPhoto || senderInfo.profilePhoto,
+        content,
+        mediaType: mediaType || "text",
+        mediaUrl,
+        mediaMetadata,
+        clientMessageId,
+        deliveredTo: [
+          {
+            userId: sender,
+            userName: senderName || senderInfo.userName,
+            profilePhoto: senderPhoto || senderInfo.profilePhoto,
+            deliveredAt: new Date(),
+          },
+        ],
+        // Mark as read by sender immediately
+        readBy: [
+          {
+            userId: sender,
+            userName: senderName || senderInfo.userName,
+            profilePhoto: senderPhoto || senderInfo.profilePhoto,
+            readAt: new Date(),
+          },
+        ],
+      });
+    } catch (err) {
+      // Lost the race — another concurrent send for the same
+      // clientMessageId already won. Return the winner instead of
+      // bubbling up the duplicate-key error.
+      if (err && err.code === 11000 && clientMessageId) {
+        const existing = await Message.findOne({ sender, clientMessageId }).lean();
+        if (existing) return Message.hydrate(existing);
+      }
+      throw err;
+    }
 
     // Increment unread count for all OTHER participants (not the sender)
     const unreadIncrements = {};

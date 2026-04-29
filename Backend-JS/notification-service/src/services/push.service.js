@@ -1,21 +1,37 @@
 const https = require('https');
 const logger = require('../utils/logger');
+const fcm = require('./fcm.provider');
+const UserPrefs = require('../models/user.model');
 
 /**
- * Custom Push Notification Service
- * This service can be integrated with any push provider or
- * implemented as a direct solution
+ * Push Notification Service
+ *
+ * Default provider is FCM when firebase-admin credentials are configured;
+ * otherwise falls back to webpush/onesignal/custom shims as before. The
+ * fallback path is kept so dev environments and tests continue to "succeed"
+ * without a real push backend.
+ *
+ * On invalid-token responses from FCM the service clears the dead token
+ * from `UserNotificationPreferences` so the next send doesn't re-attempt
+ * a known-bad recipient — without this, uninstalled devices would
+ * accumulate and waste FCM quota indefinitely.
  */
 class PushNotificationService {
   constructor() {
     this.providers = {
+      fcm: this._sendFCM.bind(this),
       webpush: this._sendWebPush.bind(this),
       onesignal: this._sendOneSignal.bind(this),
       custom: this._sendCustomPush.bind(this)
     };
-    
-    // Default provider - can be changed based on config
-    this.defaultProvider = 'webpush';
+
+    // Resolve at construction so subsequent sends don't re-check the env
+    // every call. FCM is preferred when available, with webpush as a
+    // dev-safe fallback.
+    this.defaultProvider =
+      process.env.PUSH_PROVIDER ||
+      (fcm.isAvailable() ? 'fcm' : 'webpush');
+    logger.info(`Push provider: ${this.defaultProvider}`);
   }
 
   /**
@@ -27,18 +43,66 @@ class PushNotificationService {
    */
   async sendPush(notification, recipient, provider = null) {
     const providerName = provider || this.defaultProvider;
-    
+
     if (!this.providers[providerName]) {
       logger.error(`Unknown push provider: ${providerName}`);
       return false;
     }
-    
+
     try {
       return await this.providers[providerName](notification, recipient);
     } catch (error) {
       logger.error(`Error sending push with ${providerName}:`, error);
       return false;
     }
+  }
+
+  /**
+   * FCM via firebase-admin. Real delivery, not a stub. On invalid-token
+   * responses we drop the dead token from preferences so the next send
+   * doesn't waste a call.
+   */
+  async _sendFCM(notification, recipient) {
+    const { token, userId, platform } = recipient || {};
+    if (!token) {
+      logger.debug(`FCM: no token for user ${userId}; skipping`);
+      return false;
+    }
+
+    const result = await fcm.sendToToken({
+      token,
+      title: notification.title,
+      body: notification.body,
+      data: notification.data || {},
+      category: notification.category,
+    });
+
+    if (result.ok) {
+      logger.debug(`FCM: delivered ${result.messageId} to ${userId} (${platform || 'unknown'})`);
+      return true;
+    }
+
+    if (result.invalidToken && userId) {
+      try {
+        await UserPrefs.updateOne(
+          { userId, 'channels.push.token': token },
+          {
+            $set: {
+              'channels.push.token': null,
+              'channels.push.platform': null,
+              'channels.push.enabled': false,
+            },
+          }
+        );
+        logger.info(`FCM: cleared invalid token for user ${userId}`);
+      } catch (clearErr) {
+        logger.warn(`FCM: failed to clear invalid token for ${userId}: ${clearErr.message}`);
+      }
+    } else {
+      logger.warn(`FCM: send failed for ${userId} (${result.error}, retryable=${result.retryable})`);
+    }
+
+    return false;
   }
 
   /**

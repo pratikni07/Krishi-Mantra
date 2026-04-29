@@ -8,6 +8,7 @@ const User = require('../model/User');
 const UserDetail = require('../model/UserDetail');
 const WhatsAppOTP = require('../model/WhatsappOTP');
 const RefreshToken = require('../model/RefreshToken');
+const { recordAuthEvent } = require('../model/AuthAuditLog');
 const mailSender = require('../utils/mailSender');
 const { sendOTP: sendSMSOTP } = require('../utils/smsSender');
 const { passwordUpdated } = require('../mail/templates/passwordUpdate');
@@ -219,6 +220,12 @@ exports.initiateAuth = asyncHandler(async (req, res) => {
   const gate = await otpRateLimit.checkAndConsume('initiate', phoneNo);
   if (!gate.allowed) {
     res.set('Retry-After', String(gate.retryAfterSec));
+    recordAuthEvent('auth.otp.rate_limited', {
+      req,
+      phoneNo,
+      success: false,
+      reason: 'initiate-rate-limit',
+    });
     return res.status(HTTP_STATUS.TOO_MANY_REQUESTS || 429).json({
       success: false,
       message: 'Too many OTP requests for this number. Please try again later.',
@@ -263,6 +270,12 @@ exports.initiateAuth = asyncHandler(async (req, res) => {
     logger.error(`Failed to send OTP via SMS to ${phoneNo}:`, smsError.message);
     // SMS failed but OTP is still saved, admin can manually send if needed
   }
+
+  recordAuthEvent('auth.otp.requested', {
+    req,
+    phoneNo,
+    metadata: { isRegistered, smsSent },
+  });
 
   return res.status(HTTP_STATUS.OK).json({
     success: true,
@@ -335,6 +348,12 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
   const gate = await otpRateLimit.checkAndConsume('verify', phoneNo);
   if (!gate.allowed) {
     res.set('Retry-After', String(gate.retryAfterSec));
+    recordAuthEvent('auth.otp.rate_limited', {
+      req,
+      phoneNo,
+      success: false,
+      reason: 'verify-rate-limit',
+    });
     return res.status(HTTP_STATUS.TOO_MANY_REQUESTS || 429).json({
       success: false,
       message: 'Too many verification attempts for this number. Please try again later.',
@@ -349,10 +368,13 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
   const recentOtp = await WhatsAppOTP.findOne(query)
     .sort({ createdAt: -1 });
 
-
-
   if (!recentOtp) {
-
+    recordAuthEvent('auth.otp.verify.failed', {
+      req,
+      phoneNo,
+      success: false,
+      reason: 'no-otp-record',
+    });
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
       message: 'No OTP found. Please request a new one.',
@@ -362,6 +384,12 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
   // Check OTP expiry (10 minutes)
   const otpAge = Date.now() - new Date(recentOtp.createdAt).getTime();
   if (otpAge > OTP_CONFIG.EXPIRY_MINUTES * 60 * 1000) {
+    recordAuthEvent('auth.otp.verify.failed', {
+      req,
+      phoneNo,
+      success: false,
+      reason: 'otp-expired',
+    });
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
       message: 'OTP has expired. Please request a new one.',
@@ -370,6 +398,12 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
 
   // Verify OTP
   if (recentOtp.otp !== otp) {
+    recordAuthEvent('auth.otp.verify.failed', {
+      req,
+      phoneNo,
+      success: false,
+      reason: 'otp-mismatch',
+    });
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
       message: 'Invalid OTP. Please try again.',
@@ -378,13 +412,17 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
 
   // Mark OTP as verified
   recentOtp.isVerified = true;
+  recentOtp.verifiedAt = new Date();
   await recentOtp.save();
 
   // Check if user exists
   const user = await User.findOne({ phoneNo }).populate('additionalDetails');
 
   if (user) {
-    // Existing user - login
+    // Existing user - login. Consume the OTP so it can't be reused.
+    recentOtp.consumedAt = new Date();
+    await recentOtp.save();
+
     const { token, refreshToken } = await issueTokenPair(
       user,
       {
@@ -399,6 +437,12 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
     delete userResponse.password;
     userResponse.token = token;
 
+    recordAuthEvent('auth.login.success', {
+      req,
+      userId: user._id,
+      phoneNo,
+    });
+
     return res.cookie('token', token, getCookieOptions())
       .status(HTTP_STATUS.OK)
       .json({
@@ -410,7 +454,13 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
       });
   }
 
-  // New user - needs registration
+  // New user - needs registration. Don't consume the OTP yet — signupWithPhone
+  // will consume it when it completes.
+  recordAuthEvent('auth.otp.verify.success', {
+    req,
+    phoneNo,
+    metadata: { needsSignup: true },
+  });
   return res.status(HTTP_STATUS.OK).json({
     success: true,
     isRegistered: false,
@@ -423,28 +473,54 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
  * Signup with phone
  */
 exports.signupWithPhone = asyncHandler(async (req, res) => {
-  const { name, firstName, lastName, phoneNo, image } = req.body;
+  const { firstName, lastName, phoneNo, image } = req.body;
 
   // Validate required fields
-  if (!name || !phoneNo) {
+  if (!firstName || !lastName || !phoneNo) {
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
-      message: 'Name and Phone Number are required',
+      message: 'First name, last name and phone number are required',
     });
   }
 
-  // Verify phone was OTP-verified recently
+  // Derive the full name from firstName + lastName so callers don't have
+  // to send a redundant `name` field. If a `name` is explicitly provided
+  // it's ignored — firstName/lastName are the source of truth now.
+  const trimmedFirst = firstName.trim();
+  const trimmedLast = lastName.trim();
+  const name = `${trimmedFirst} ${trimmedLast}`;
+
+  // Find the most recent verified, unconsumed OTP for this phone. We
+  // intentionally do NOT filter by `purpose` here — a user who started in
+  // a "login" flow but turned out not to exist must be able to proceed
+  // to signup with the same OTP they just verified. The verification
+  // itself is the proof of phone ownership; the original `purpose` was
+  // only a UI hint at issue time.
+  //
+  // Window aligns with verifyOTP's 10-minute expiry rather than the
+  // previous 30-minute carve-out, so signup can't accept an OTP that
+  // verifyOTP would already reject as expired.
   const verifiedOtp = await WhatsAppOTP.findOne({
     phoneNo,
     isVerified: true,
-    purpose: 'signup',
-    createdAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) },
+    consumedAt: null,
+    createdAt: { $gt: new Date(Date.now() - OTP_CONFIG.EXPIRY_MINUTES * 60 * 1000) },
   }).sort({ createdAt: -1 });
 
   if (!verifiedOtp) {
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
       message: 'Phone verification required before signup.',
+    });
+  }
+
+  // Defense-in-depth: the verified OTP must belong to the same phone
+  // we're signing up. The query above already filters by phone, but
+  // re-check explicitly so a future query refactor can't silently drop it.
+  if (verifiedOtp.phoneNo !== phoneNo) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'Phone verification mismatch.',
     });
   }
 
@@ -457,14 +533,28 @@ exports.signupWithPhone = asyncHandler(async (req, res) => {
     });
   }
 
+  // Consume the OTP atomically so a duplicate signup request can't
+  // race past this check.
+  const consumed = await WhatsAppOTP.findOneAndUpdate(
+    { _id: verifiedOtp._id, consumedAt: null },
+    { consumedAt: new Date() },
+    { new: true }
+  );
+  if (!consumed) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'OTP already consumed. Please request a new one.',
+    });
+  }
+
   // Create user details
   const profileDetails = await UserDetail.create({});
 
   // Create user
   const user = await User.create({
     name,
-    firstName: firstName || '',
-    lastName: lastName || '',
+    firstName: trimmedFirst,
+    lastName: trimmedLast,
     phoneNo,
     additionalDetails: profileDetails._id,
     image: image || `https://api.dicebear.com/6.x/initials/png?seed=${encodeURIComponent(name)}&backgroundColor=00897b,00acc1,039be5&backgroundType=solid`,
@@ -491,6 +581,12 @@ exports.signupWithPhone = asyncHandler(async (req, res) => {
 
   const userResponse = user.toObject();
   delete userResponse.password;
+
+  recordAuthEvent('auth.signup.success', {
+    req,
+    userId: user._id,
+    phoneNo,
+  });
 
   return res.cookie('token', token, getCookieOptions())
     .status(HTTP_STATUS.CREATED)
@@ -523,6 +619,12 @@ exports.adminLogin = asyncHandler(async (req, res) => {
     .populate('additionalDetails');
 
   if (!admin) {
+    recordAuthEvent('auth.login.failed', {
+      req,
+      success: false,
+      reason: 'admin-not-found',
+      metadata: { email },
+    });
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({
       success: false,
       message: 'Invalid credentials or unauthorized access',
@@ -531,6 +633,12 @@ exports.adminLogin = asyncHandler(async (req, res) => {
 
   // Verify password exists
   if (!admin.password) {
+    recordAuthEvent('auth.login.failed', {
+      req,
+      userId: admin._id,
+      success: false,
+      reason: 'admin-no-password',
+    });
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({
       success: false,
       message: 'Please use the password reset flow to set up your password',
@@ -540,6 +648,12 @@ exports.adminLogin = asyncHandler(async (req, res) => {
   // Verify password
   const isPasswordValid = await bcrypt.compare(password, admin.password);
   if (!isPasswordValid) {
+    recordAuthEvent('auth.login.failed', {
+      req,
+      userId: admin._id,
+      success: false,
+      reason: 'admin-bad-password',
+    });
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({
       success: false,
       message: 'Invalid credentials',
@@ -560,6 +674,12 @@ exports.adminLogin = asyncHandler(async (req, res) => {
   const adminResponse = admin.toObject();
   delete adminResponse.password;
   adminResponse.token = token;
+
+  recordAuthEvent('auth.login.success', {
+    req,
+    userId: admin._id,
+    metadata: { adminLogin: true },
+  });
 
   return res.cookie('token', token, getCookieOptions())
     .status(HTTP_STATUS.OK)
@@ -668,13 +788,36 @@ exports.refreshToken = asyncHandler(async (req, res) => {
  */
 exports.logout = asyncHandler(async (req, res) => {
   const presented = req.body?.refreshToken;
+  let revokedFor;
   if (presented) {
     const hash = RefreshToken.hashToken(presented);
-    await RefreshToken.updateOne(
+    const result = await RefreshToken.findOneAndUpdate(
       { tokenHash: hash, revokedAt: null },
       { revokedAt: new Date() }
-    );
+    ).lean();
+    revokedFor = result?.userId;
   }
+  recordAuthEvent('auth.logout', {
+    req,
+    userId: revokedFor,
+    metadata: { hadRefreshToken: !!presented },
+  });
   res.clearCookie('token');
   return res.status(HTTP_STATUS.OK).json({ success: true, message: 'Logged out' });
+});
+
+/**
+ * Cheap protected endpoint the splash uses to confirm the cached access
+ * token is still valid before navigating into the authed UI. Returns the
+ * authenticated user's id + accountType (no DB lookup) so it stays fast.
+ */
+exports.getMe = asyncHandler(async (req, res) => {
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    user: {
+      id: req.user._id || req.user.id,
+      accountType: req.user.accountType,
+      phoneNo: req.user.phoneNo,
+    },
+  });
 });

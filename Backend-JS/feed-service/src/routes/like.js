@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const LikeController = require("../controller/likeController");
+const { auth } = require("../middlewares/auth");
 
 // Toggle Like (Create/Remove)
-router.post("/toggle", LikeController.toggleLike);
+router.post("/toggle", auth, LikeController.toggleLike);
 
 // Get Likes for a Specific Feed
 router.get("/feed/:feedId", LikeController.getFeedLikes);

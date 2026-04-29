@@ -212,18 +212,27 @@ class CropCalendarController {
       const { cropId, month } = req.params;
       const cacheKey = `calendar_${cropId}_${month}`;
 
-      const cachedCalendar = await redis.get(cacheKey);
+      let cachedCalendar = null;
+      try {
+        cachedCalendar = await redis.get(cacheKey);
+      } catch (e) {
+        console.warn("Redis read failed for calendar:", e.message);
+      }
       if (cachedCalendar) {
-        return res.json({
-          success: true,
-          data: JSON.parse(cachedCalendar),
-        });
+        return res.json({ success: true, data: JSON.parse(cachedCalendar) });
       }
 
-      const calendar = await CropCalendar.findOne({ cropId, month })
-        .populate("cropId")
-        .populate("activities.activityId")
-        .lean();
+      // Single-flight regeneration. Without this, a thundering herd of N
+      // concurrent requests for the same calendar (all see cache miss at
+      // once, e.g. right after Redis evicts the key) all hit Mongo +
+      // populate two collections + write back independently. Sharing the
+      // in-flight Promise collapses them into one DB hit; the rest just
+      // await the result.
+      const calendar = await CropCalendarController._regenCalendar(
+        cropId,
+        month,
+        cacheKey
+      );
 
       if (!calendar) {
         return res.status(404).json({
@@ -232,14 +241,44 @@ class CropCalendarController {
         });
       }
 
-      await redis.setex(cacheKey, 3600, JSON.stringify(calendar));
-      res.json({
-        success: true,
-        data: calendar,
-      });
+      res.json({ success: true, data: calendar });
     } catch (error) {
       CropCalendarController.handleErrors(res, error);
     }
+  }
+
+  /// In-process map of in-flight regen Promises, keyed by cacheKey.
+  /// Cleared as soon as the underlying Mongo query resolves so a later
+  /// cache miss kicks off a fresh regeneration.
+  static async _regenCalendar(cropId, month, cacheKey) {
+    if (!CropCalendarController._inflight) {
+      CropCalendarController._inflight = new Map();
+    }
+    const inflight = CropCalendarController._inflight;
+    const existing = inflight.get(cacheKey);
+    if (existing) return existing;
+
+    const promise = (async () => {
+      try {
+        const calendar = await CropCalendar.findOne({ cropId, month })
+          .populate("cropId")
+          .populate("activities.activityId")
+          .lean();
+
+        if (calendar) {
+          try {
+            await redis.setex(cacheKey, 3600, JSON.stringify(calendar));
+          } catch (e) {
+            console.warn("Redis write failed for calendar:", e.message);
+          }
+        }
+        return calendar;
+      } finally {
+        inflight.delete(cacheKey);
+      }
+    })();
+    inflight.set(cacheKey, promise);
+    return promise;
   }
 
   // REGION OPERATIONS
@@ -263,34 +302,49 @@ class CropCalendarController {
       const { regionId, cropId } = req.params;
       const cacheKey = `region_mod_${regionId}_${cropId}`;
 
-      const cachedMods = await redis.get(cacheKey);
+      let cachedMods = null;
+      try {
+        cachedMods = await redis.get(cacheKey);
+      } catch (e) {
+        console.warn("Redis read failed for region modifications:", e.message);
+      }
       if (cachedMods) {
-        return res.json({
-          success: true,
-          data: JSON.parse(cachedMods),
-        });
+        return res.json({ success: true, data: JSON.parse(cachedMods) });
       }
 
-      const modifications = await Region.findOne(
+      // Return ALL cropCalendarModifications entries that match this
+      // cropId. The previous query used Mongo's positional `$` projection
+      // which only ever returns the *first* matching subdocument, so a
+      // region with multiple modification rows for the same crop (e.g. one
+      // per growth stage) silently dropped everything past the first.
+      const region = await Region.findOne(
         {
           _id: regionId,
           "cropCalendarModifications.cropCalendarId": cropId,
         },
-        { "cropCalendarModifications.$": 1 }
+        { cropCalendarModifications: 1 }
       ).lean();
 
-      if (!modifications) {
+      if (!region) {
         return res.status(404).json({
           success: false,
           message: "Modifications not found",
         });
       }
 
-      await redis.setex(cacheKey, 3600, JSON.stringify(modifications));
-      res.json({
-        success: true,
-        data: modifications,
-      });
+      const all = (region.cropCalendarModifications || []).filter(
+        (mod) => String(mod.cropCalendarId) === String(cropId)
+      );
+
+      const payload = { regionId, cropId, modifications: all };
+
+      try {
+        await redis.setex(cacheKey, 3600, JSON.stringify(payload));
+      } catch (e) {
+        console.warn("Redis write failed for region modifications:", e.message);
+      }
+
+      res.json({ success: true, data: payload });
     } catch (error) {
       CropCalendarController.handleErrors(res, error);
     }
@@ -300,10 +354,10 @@ class CropCalendarController {
   static async searchCrops(req, res) {
     try {
       const { search, season, page = 1, limit = 20 } = req.query;
-      
+
       // Generate a unique cache key based on search parameters
       const cacheKey = `crops:search:${search || ""}:${season || ""}:${page}:${limit}`;
-      
+
       // Try to get from cache but don't fail if Redis is down
       let cachedResult = null;
       try {
@@ -311,18 +365,27 @@ class CropCalendarController {
       } catch (error) {
         console.warn("Redis error when getting search results:", error.message);
       }
-      
+
       if (cachedResult) {
         return res.json(JSON.parse(cachedResult));
       }
 
+      // Escape regex metacharacters and cap length so user input can't
+      // craft a catastrophically backtracking pattern (ReDoS) — the
+      // previous version compiled `new RegExp(search, "i")` directly,
+      // letting a single malicious query lock a worker for seconds.
+      const safeSearch =
+        typeof search === "string" && search.trim()
+          ? search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 100)
+          : null;
+
       // Build query based on provided parameters
       const query = {
         status: "active",
-        ...(search && {
+        ...(safeSearch && {
           $or: [
-            { name: new RegExp(search, "i") },
-            { scientificName: new RegExp(search, "i") },
+            { name: { $regex: safeSearch, $options: "i" } },
+            { scientificName: { $regex: safeSearch, $options: "i" } },
           ],
         }),
         ...(season && { "seasons.type": season }),

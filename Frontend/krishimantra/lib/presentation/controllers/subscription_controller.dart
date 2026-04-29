@@ -23,6 +23,13 @@ class SubscriptionController extends GetxController {
   final isFreePlan = true.obs;
   final error = Rxn<String>();
 
+  // Per-section error state. Setting these surfaces an inline error+retry
+  // banner on the relevant subscription UI panel instead of silently
+  // leaving stale (or zeroed) values, which previously made it look like
+  // the user had no usage data when in fact the API had failed.
+  final usageStatsError = Rxn<String>();
+  final currentSubscriptionError = Rxn<String>();
+
   // Selected billing cycle
   final selectedBillingCycle = 'monthly'.obs;
 
@@ -35,18 +42,12 @@ class SubscriptionController extends GetxController {
   void onInit() {
     super.onInit();
     _initializeStripe();
-    // Skip auth-required boot fetches when no user is signed in. Without
-    // this, an anonymous app start (sitting on the phone-OTP screen) hits
-    // 401 → triggers the global auth-failure handler → bounces back to
-    // /phone, which races with the user's tap on "Continue".
-    _bootIfAuthenticated();
-  }
-
-  Future<void> _bootIfAuthenticated() async {
-    if (!await _isAuthenticated()) return;
-    loadPlans();
-    loadCurrentSubscription();
-    loadIotAddons();
+    // Don't fetch anything on init. Subscription data is only relevant
+    // once the user opens the subscription screen — kicking off
+    // auth-required calls at app boot can race with the auth flow
+    // (especially the phone-OTP screen) and cause 401s, refresh loops,
+    // or unwanted re-routes via the global auth-failure handler.
+    // Each consumer screen should call refreshAll() explicitly.
   }
 
   /// Initialize Stripe
@@ -87,10 +88,13 @@ class SubscriptionController extends GetxController {
     return token != null;
   }
 
-  /// Load current user's subscription
+  /// Load current user's subscription. Errors are now surfaced via
+  /// `currentSubscriptionError` so the UI can render a retry affordance
+  /// instead of silently leaving the previous (possibly empty) state.
   Future<void> loadCurrentSubscription() async {
     try {
       if (!await _isAuthenticated()) return;
+      currentSubscriptionError.value = null;
 
       final result = await _repository.getCurrentSubscription();
 
@@ -101,19 +105,23 @@ class SubscriptionController extends GetxController {
       // Also load usage stats
       await loadUsageStats();
     } catch (e) {
-      print('Error loading current subscription: $e');
+      currentSubscriptionError.value =
+          "Couldn't load your subscription. Tap retry.";
     }
   }
 
-  /// Load usage stats
+  /// Load usage stats. Errors set `usageStatsError` so the UI shows an
+  /// inline retry instead of falling back to hardcoded "free tier" counts.
   Future<void> loadUsageStats() async {
     try {
       if (!await _isAuthenticated()) return;
+      usageStatsError.value = null;
 
       final stats = await _repository.getUsageStats();
       usageStats.value = stats;
     } catch (e) {
-      print('Error loading usage stats: $e');
+      usageStatsError.value =
+          "Couldn't load usage stats. Tap retry.";
     }
   }
 
@@ -300,13 +308,19 @@ class SubscriptionController extends GetxController {
     }
   }
 
-  /// Check if user can access a feature
+  /// Check if user can access a feature.
+  ///
+  /// Defaults to DENY on error. Allowing on error means any failure of the
+  /// subscription API hands premium features to free users — a paywall
+  /// bypass. The cost of denying on a transient failure is a momentary
+  /// "unavailable" state for legitimate paying users; the cost of allowing
+  /// on error is unbounded revenue leak.
   Future<bool> canAccessFeature(String feature) async {
     try {
       final result = await _repository.checkFeatureAccess(feature);
       return result['allowed'] ?? false;
     } catch (e) {
-      return true; // Default to allowed on error
+      return false;
     }
   }
 

@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(go test *)",
+      "Bash(docker compose *)",
+      "Bash(MQTT_DEVICE_USERNAME=d MQTT_DEVICE_PASSWORD=p MQTT_CONSUMER_USERNAME=c MQTT_CONSUMER_PASSWORD=p docker compose -f docker-compose.iot.yml config)",
+      "Bash(plutil -lint /Users/pratik/Desktop/development/Krishi-Mantra/Frontend/krishimantra/ios/Runner/Info.plist)",
+      "Bash(dart analyze *)",
+      "Bash(node -c __TRACKED_VAR__/src/index.js)",
+      "Bash(node -c __TRACKED_VAR__/index.js)",
+      "Bash(set -e)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(nc -zv 10.124.164.124 27018)",
+      "Bash(nc -zv 10.124.164.124 6380)",
+      "Bash(nc -zv 10.124.164.124 5673)",
+      "Bash([ -d \"$d/node_modules\" ])",
+      "Bash(pm2 flush *)",
+      "Read(//Users/pratik/.pm2/logs/**)",
+      "Bash(pm2 reset *)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(brew list *)",
+      "Bash([ -f \"/Users/pratik/Desktop/development/Krishi-Mantra/Backend-JS/$svc/src/index.js\" ])"
+    ],
+    "additionalDirectories": [
+      "/private/tmp"
+    ]
+  }
+}

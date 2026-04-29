@@ -5,6 +5,7 @@ import 'package:krishimantra/presentation/controllers/marketplace_controller.dar
 import 'package:krishimantra/data/services/language_service.dart';
 import 'package:krishimantra/core/utils/error_handler.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'dart:io';
 
 class AddProductScreen extends StatefulWidget {
@@ -143,17 +144,54 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _youtubeUrls.removeAt(index);
     });
   }
-  
+
+  /// Validate a price field. Empty → required-error; non-numeric → friendly
+  /// error; negative → rejected. Returning a message instead of letting the
+  /// previous `int.parse` throw a FormatException at submit time means the
+  /// user sees the actual problem under the field, not an unrecoverable
+  /// crash after they've spent time filling the form.
+  String? _validatePrice(String? value, {required String label}) {
+    if (value == null || value.trim().isEmpty) {
+      return requiredFieldText;
+    }
+    final n = int.tryParse(value.trim());
+    if (n == null) return 'Enter a number for $label price';
+    if (n < 0) return 'Price cannot be negative';
+    return null;
+  }
+
+  /// Validate a YouTube URL the user pasted. Empty entries are dropped at
+  /// submit time, but anything non-empty must parse to a video id —
+  /// otherwise the carousel later silently renders nothing for that slot.
+  bool _isValidYoutubeUrl(String url) {
+    if (url.trim().isEmpty) return false;
+    return YoutubePlayer.convertUrlToId(url) != null;
+  }
+
   Future<void> _saveProduct() async {
-    if (_formKey.currentState!.validate()) {
+    if (!_formKey.currentState!.validate()) return;
+
+    final minPrice = int.tryParse(_minPriceController.text.trim());
+    final maxPrice = int.tryParse(_maxPriceController.text.trim());
+    if (minPrice == null || maxPrice == null) {
+      // Validators above should have caught this; defence in depth.
+      Get.snackbar('Invalid prices', 'Please enter numeric min and max prices.');
+      return;
+    }
+    if (maxPrice < minPrice) {
+      Get.snackbar('Invalid range', 'Max price cannot be lower than min price.');
+      return;
+    }
+
+    {
       // Prepare product data
       final productData = {
         'title': _titleController.text,
         'shortDescription': _shortDescController.text,
         'detailedDescription': _detailedDescController.text,
         'priceRange': {
-          'min': int.parse(_minPriceController.text),
-          'max': int.parse(_maxPriceController.text),
+          'min': minPrice,
+          'max': maxPrice,
           'currency': 'INR'
         },
         'contactNumber': _contactController.text,
@@ -163,17 +201,27 @@ class _AddProductScreenState extends State<AddProductScreen> {
         'tags': _tagsController.text.split(',').map((tag) => tag.trim()).where((tag) => tag.isNotEmpty).toList(),
       };
       
-      // Filter out empty YouTube URLs
-      final validYoutubeUrls = _youtubeUrls.where((url) => url.isNotEmpty).toList();
-      
+      // Filter to YouTube URLs that actually parse to a video id. Bad
+      // URLs would otherwise be persisted and render as a blank slot in the
+      // carousel — surface them up front instead.
+      final youtubeEntries = _youtubeUrls.where((url) => url.isNotEmpty).toList();
+      final invalid = youtubeEntries.where((url) => !_isValidYoutubeUrl(url)).toList();
+      if (invalid.isNotEmpty) {
+        Get.snackbar(
+          'Invalid YouTube link',
+          'These links are not recognized: ${invalid.join(', ')}',
+        );
+        return;
+      }
+
       // Add product
       final success = await _controller.addProduct(
-        productData, 
-        _selectedImages, 
+        productData,
+        _selectedImages,
         _selectedVideos,
-        validYoutubeUrls
+        youtubeEntries,
       );
-      
+
       if (success) {
         Get.back(); // Go back to marketplace screen
       }
@@ -452,12 +500,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return requiredFieldText;
-                          }
-                          return null;
-                        },
+                        validator: (value) => _validatePrice(value, label: 'min'),
                       ),
                     ),
                     SizedBox(width: 16),
@@ -469,12 +512,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return requiredFieldText;
-                          }
-                          return null;
-                        },
+                        validator: (value) => _validatePrice(value, label: 'max'),
                       ),
                     ),
                   ],
