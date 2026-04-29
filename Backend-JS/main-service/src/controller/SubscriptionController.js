@@ -9,6 +9,7 @@ const UserDetail = require('../model/UserDetail');
 const stripeConfig = require('../config/stripe');
 const logger = require('../utils/logger');
 const redis = require('../config/redis');
+const engagementEmitter = require('../utils/engagementEmitter');
 
 const { HTTP_STATUS, CACHE_TTL } = require('../utils/constants');
 
@@ -316,6 +317,22 @@ const confirmPayment = async (req, res) => {
 
     logger.info(`Subscription activated for user ${userId}: ${plan.name}`);
 
+    // Authoritative revenue event. Source of truth for the analytics
+    // dashboard — the FE-emitted version is opportunistic for funnels.
+    engagementEmitter.emit({
+      userId: String(userId),
+      eventName: 'subscription_purchase',
+      eventCategory: 'commerce',
+      properties: {
+        planName: plan.name,
+        billingCycle,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+        paymentIntentId,
+        source: 'server',
+      },
+    });
+
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: 'Subscription activated successfully',
@@ -390,6 +407,18 @@ const cancelSubscription = async (req, res) => {
 
     logger.info(`Subscription cancelled for user ${userId}`);
 
+    engagementEmitter.emit({
+      userId: String(userId),
+      eventName: 'subscription_cancel_confirmed',
+      eventCategory: 'commerce',
+      properties: {
+        planName: subscription.planName,
+        cancelImmediately: !!cancelImmediately,
+        reason: reason || null,
+        source: 'server',
+      },
+    });
+
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: cancelImmediately
@@ -438,6 +467,16 @@ const resumeSubscription = async (req, res) => {
 
     // Clear cache
     await redis.del(`subscription:user:${userId}`);
+
+    engagementEmitter.emit({
+      userId: String(userId),
+      eventName: 'subscription_resume',
+      eventCategory: 'commerce',
+      properties: {
+        planName: subscription.planName,
+        source: 'server',
+      },
+    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -1300,6 +1339,21 @@ const confirmIotAddonPayment = async (req, res) => {
 
     logger.info(`IoT add-on activated for user ${userId}: ${addon.name}`);
 
+    engagementEmitter.emit({
+      userId: String(userId),
+      eventName: 'subscription_purchase',
+      eventCategory: 'commerce',
+      properties: {
+        type: 'iot_addon',
+        addonName: addon.name,
+        billingCycle,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+        paymentIntentId,
+        source: 'server',
+      },
+    });
+
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: 'IoT add-on activated successfully',
@@ -1362,6 +1416,19 @@ const cancelIotAddon = async (req, res) => {
     await redis.del(`iot:user:${userId}`);
 
     logger.info(`IoT add-on cancelled for user ${userId}: ${addonName}`);
+
+    engagementEmitter.emit({
+      userId: String(userId),
+      eventName: 'subscription_cancel_confirmed',
+      eventCategory: 'commerce',
+      properties: {
+        type: 'iot_addon',
+        addonName,
+        cancelImmediately: !!cancelImmediately,
+        reason: reason || null,
+        source: 'server',
+      },
+    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,

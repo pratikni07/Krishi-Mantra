@@ -7,6 +7,7 @@ import '../../../core/utils/language_helper.dart';
 import '../../../data/models/consultant_model.dart';
 import '../../../data/models/message_model.dart';
 import '../../../data/services/UserService.dart';
+import '../../../data/services/engagement_service.dart';
 import '../../../data/services/language_service.dart';
 import '../../controllers/message_controller.dart';
 import '../../widgets/app_header.dart';
@@ -806,6 +807,19 @@ class _ChatListScreenState extends State<ChatListScreen> with TranslationMixin {
   }
 
   Future<void> _createDirectChat(Consultant consultant) async {
+    // Tapping a consultant card is the "interest" signal even if a chat
+    // already exists with them — it still answers "who is the user pulling
+    // toward today?" Fire before any branching so we capture every tap.
+    EngagementService().trackEvent(
+      EventName.consultantProfileView,
+      eventCategory: EventCategory.communication,
+      properties: {
+        'contentId': consultant.id,
+        'contentType': 'consultant',
+        'source': 'directory',
+      },
+    );
+
     try {
       // Log the consultant for debugging
       if (kDebugMode) {
@@ -848,6 +862,22 @@ class _ChatListScreenState extends State<ChatListScreen> with TranslationMixin {
           participantName: consultant.userName,
           participantProfilePhoto: consultant.profilePhotoId,
         );
+
+        // Only fire `consultant_chat_request` for genuinely new chats. Re-
+        // entering an existing thread is engagement, not a request — those
+        // get captured by the chat_open / chat_message_send events.
+        if (chat != null && chat.id.isNotEmpty) {
+          EngagementService().trackEvent(
+            EventName.consultantChatRequest,
+            eventCategory: EventCategory.communication,
+            properties: {
+              'contentId': consultant.id,
+              'contentType': 'consultant',
+              'chatId': chat.id,
+              'source': 'directory',
+            },
+          );
+        }
       }
 
       Get.back(); // Close loading dialog

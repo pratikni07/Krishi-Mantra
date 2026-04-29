@@ -3,10 +3,12 @@ import 'package:get/get.dart';
 import '../../data/models/crop_model.dart';
 import '../../data/models/crop_calendar_model.dart';
 import '../../data/repositories/crop_repository.dart';
+import '../../data/services/engagement_service.dart';
 import '../screens/cropcalendar/crop_detail_screen.dart';
 
 class CropController extends GetxController {
   final CropRepository _cropRepository;
+  final EngagementService _engagement = EngagementService();
 
   CropController(this._cropRepository);
 
@@ -86,6 +88,15 @@ class CropController extends GetxController {
       print('[CropController] Calendar fetched successfully');
       cropCalendar.value = calendar;
       isLoadingCalendar.value = false;
+      _engagement.trackEvent(
+        EventName.cropCalendarView,
+        eventCategory: EventCategory.content,
+        properties: {
+          'contentId': cropId,
+          'contentType': 'crop',
+          if (crop != null) 'cropName': crop.name,
+        },
+      );
       // Navigate to detail screen after successful fetch
       print('[CropController] Navigating to CropDetailScreen...');
       Get.to(() => const CropDetailScreen());
@@ -104,7 +115,7 @@ class CropController extends GetxController {
       clearSearch();
       return;
     }
-    
+
     try {
       isLoading.value = true;
       error.value = '';
@@ -112,12 +123,22 @@ class CropController extends GetxController {
         search: search,
         season: season,
       );
-      
+
       if (result.isEmpty) {
         error.value = 'No crops found matching your search';
       }
-      
+
       searchResults.assignAll(result);
+      _engagement.trackEvent(
+        'search_query',
+        eventCategory: EventCategory.content,
+        properties: {
+          'searchType': 'crop',
+          'searchQuery': search,
+          'season': season,
+          'resultsCount': result.length,
+        },
+      );
     } catch (e) {
       error.value = e.toString().replaceFirst('Exception: ', '');
       Get.snackbar('Error', error.value, duration: const Duration(seconds: 3));

@@ -5,10 +5,12 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../../data/models/subscription_model.dart';
 import '../../data/repositories/subscription_repository.dart';
+import '../../data/services/engagement_service.dart';
 
 class SubscriptionController extends GetxController {
   final SubscriptionRepository _repository;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final EngagementService _engagement = EngagementService();
 
   SubscriptionController(this._repository);
 
@@ -132,10 +134,28 @@ class SubscriptionController extends GetxController {
       isProcessingPayment.value = true;
       error.value = null;
 
+      _engagement.trackEvent(
+        EventName.subscriptionPlanSelected,
+        eventCategory: EventCategory.commerce,
+        properties: {
+          'planName': plan.name,
+          'billingCycle': selectedBillingCycle.value,
+        },
+      );
+
       // Create payment intent
       final paymentData = await _repository.createPaymentIntent(
         planName: plan.name,
         billingCycle: selectedBillingCycle.value,
+      );
+
+      _engagement.trackEvent(
+        EventName.subscriptionCheckoutStart,
+        eventCategory: EventCategory.commerce,
+        properties: {
+          'planName': plan.name,
+          'billingCycle': selectedBillingCycle.value,
+        },
       );
 
       // Initialize payment sheet
@@ -166,6 +186,19 @@ class SubscriptionController extends GetxController {
       currentSubscription.value = result['subscription'];
       currentPlan.value = result['plan'];
       isFreePlan.value = false;
+
+      // FE-side purchase event. Source of truth for revenue analytics is
+      // the server-side equivalent fired from main-service/SubscriptionController
+      // — this is opportunistic, useful for funnels and conversion timing.
+      _engagement.trackEvent(
+        EventName.subscriptionPurchase,
+        eventCategory: EventCategory.commerce,
+        properties: {
+          'planName': plan.name,
+          'billingCycle': selectedBillingCycle.value,
+          'source': 'mobile',
+        },
+      );
 
       Get.snackbar(
         'Success',
@@ -220,6 +253,15 @@ class SubscriptionController extends GetxController {
     try {
       isLoading.value = true;
 
+      _engagement.trackEvent(
+        EventName.subscriptionCancelStart,
+        eventCategory: EventCategory.commerce,
+        properties: {
+          'cancelImmediately': cancelImmediately,
+          if (reason != null) 'reason': reason,
+        },
+      );
+
       final subscription = await _repository.cancelSubscription(
         cancelImmediately: cancelImmediately,
         reason: reason,
@@ -231,6 +273,14 @@ class SubscriptionController extends GetxController {
         isFreePlan.value = true;
         currentPlan.value = plans.firstWhereOrNull((p) => p.isDefault);
       }
+
+      _engagement.trackEvent(
+        EventName.subscriptionCancelConfirmed,
+        eventCategory: EventCategory.commerce,
+        properties: {
+          'cancelImmediately': cancelImmediately,
+        },
+      );
 
       Get.snackbar(
         'Success',
@@ -262,6 +312,11 @@ class SubscriptionController extends GetxController {
 
       final subscription = await _repository.resumeSubscription();
       currentSubscription.value = subscription;
+
+      _engagement.trackEvent(
+        EventName.subscriptionResume,
+        eventCategory: EventCategory.commerce,
+      );
 
       Get.snackbar(
         'Success',
@@ -463,6 +518,17 @@ class SubscriptionController extends GetxController {
         billingCycle: selectedBillingCycle.value,
       );
 
+      _engagement.trackEvent(
+        EventName.subscriptionPurchase,
+        eventCategory: EventCategory.commerce,
+        properties: {
+          'type': 'iot_addon',
+          'addonName': addon.name,
+          'billingCycle': selectedBillingCycle.value,
+          'source': 'mobile',
+        },
+      );
+
       Get.snackbar(
         'Success',
         'Successfully subscribed to ${addon.displayName}!',
@@ -513,9 +579,29 @@ class SubscriptionController extends GetxController {
     try {
       isLoading.value = true;
 
+      _engagement.trackEvent(
+        EventName.subscriptionCancelStart,
+        eventCategory: EventCategory.commerce,
+        properties: {
+          'type': 'iot_addon',
+          'addonName': addonName,
+          'cancelImmediately': cancelImmediately,
+        },
+      );
+
       await _repository.cancelIotAddon(
         addonName: addonName,
         cancelImmediately: cancelImmediately,
+      );
+
+      _engagement.trackEvent(
+        EventName.subscriptionCancelConfirmed,
+        eventCategory: EventCategory.commerce,
+        properties: {
+          'type': 'iot_addon',
+          'addonName': addonName,
+          'cancelImmediately': cancelImmediately,
+        },
       );
 
       Get.snackbar(

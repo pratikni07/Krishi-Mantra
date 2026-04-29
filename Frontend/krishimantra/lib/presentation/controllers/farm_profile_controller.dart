@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/models/farm_profile.dart';
 import '../../data/repositories/farm_profile_repository.dart';
+import '../../data/services/engagement_service.dart';
 
 /// Holds the in-progress onboarding state across the 4 steps, persists a
 /// local draft to SharedPreferences so users can resume if they close the app,
@@ -14,6 +15,8 @@ class FarmProfileController extends GetxController {
   static const String draftKey = 'farm_profile_draft_v1';
 
   final FarmProfileRepository _repo;
+  final EngagementService _engagement = EngagementService();
+  DateTime? _onboardingStartedAt;
 
   FarmProfileController(this._repo);
 
@@ -82,27 +85,76 @@ class FarmProfileController extends GetxController {
   }
 
   void setStep(int step) {
+    final previous = currentStep.value;
     currentStep.value = step.clamp(0, maxStep.value);
+    _maybeRecordStepCompletion(previous, currentStep.value);
   }
 
   void nextStep() {
-    if (currentStep.value < maxStep.value) currentStep.value += 1;
+    if (currentStep.value < maxStep.value) {
+      _maybeRecordStepCompletion(currentStep.value, currentStep.value + 1);
+      currentStep.value += 1;
+    }
   }
 
   void previousStep() {
     if (currentStep.value > 0) currentStep.value -= 1;
   }
 
+  void _maybeRecordStepCompletion(int from, int to) {
+    if (to <= from) return;
+    _onboardingStartedAt ??= DateTime.now();
+    _engagement.trackEvent(
+      EventName.onboardingStepCompleted,
+      eventCategory: EventCategory.system,
+      properties: {
+        'step': from,
+        'stepName': _stepName(from),
+      },
+    );
+  }
+
+  String _stepName(int step) {
+    switch (step) {
+      case 0:
+        return 'basics';
+      case 1:
+        return 'farm';
+      case 2:
+        return 'crops';
+      case 3:
+        return 'review';
+      default:
+        return 'unknown';
+    }
+  }
+
   void addCropToDraft(CropEntry crop) {
     final next = [...draft.value.crops, crop];
     updateDraft((c) => c.copyWith(crops: next));
+    _engagement.trackEvent(
+      EventName.farmCropAdded,
+      eventCategory: EventCategory.engagement,
+      properties: {
+        'contentType': 'farm',
+        'cropId': crop.cropId,
+      },
+    );
   }
 
   void removeCropFromDraft(int index) {
     final next = [...draft.value.crops];
     if (index >= 0 && index < next.length) {
-      next.removeAt(index);
+      final removed = next.removeAt(index);
       updateDraft((c) => c.copyWith(crops: next));
+      _engagement.trackEvent(
+        EventName.farmCropRemoved,
+        eventCategory: EventCategory.engagement,
+        properties: {
+          'contentType': 'farm',
+          'cropId': removed.cropId,
+        },
+      );
     }
   }
 
@@ -152,6 +204,20 @@ class FarmProfileController extends GetxController {
         crops: savedCrops,
         onboardingStatus: 'completed',
       );
+
+      final totalSeconds = _onboardingStartedAt != null
+          ? DateTime.now().difference(_onboardingStartedAt!).inSeconds
+          : null;
+      _engagement.trackEvent(
+        EventName.onboardingCompleted,
+        eventCategory: EventCategory.system,
+        properties: {
+          'cropCount': savedCrops.length,
+          if (totalSeconds != null) 'totalSeconds': totalSeconds,
+        },
+      );
+      _onboardingStartedAt = null;
+
       await _clearDraft();
       return true;
     } catch (e) {

@@ -40,8 +40,23 @@ const createRateLimiter = (options = {}) => {
 
   return async (req, res, next) => {
     try {
-      // Get identifier (user ID or IP)
-      const identifier = req.body?.userId || req.params?.userId || req.ip || 'anonymous';
+      // Bypass for internal service-to-service traffic. The X-Service-Token
+      // header is validated upstream by requireInternalService — but we
+      // also check the secret here so that mounting order can't accidentally
+      // expose us. Internal traffic is auth-bound, not abuse-prone.
+      const svcToken = req.header('x-service-token');
+      if (svcToken && svcToken === process.env.INTERNAL_SERVICE_SECRET) {
+        return next();
+      }
+
+      // Get identifier (user ID or IP). Prefer the gateway-injected user id
+      // when present so the limiter is per-user, not per-shared-IP.
+      const identifier =
+        req.header('x-user-id') ||
+        req.body?.userId ||
+        req.params?.userId ||
+        req.ip ||
+        'anonymous';
       const key = `${keyPrefix}:${identifier}`;
 
       let current;

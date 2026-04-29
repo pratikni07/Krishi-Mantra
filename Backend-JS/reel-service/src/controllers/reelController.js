@@ -3,6 +3,23 @@ const ReelService = require("../services/reelService");
 const TagService = require("../services/tagService");
 const RecommendationService = require("../services/recommendationService");
 const catchAsync = require("../utils/catchAsync");
+const engagementEmitter = require("../utils/engagementEmitter");
+
+// interactionType (from /reels/interaction) -> engagement event name.
+// Only types in this map produce a parallel engagement event; unknown
+// types are kept out of the analytics stream so no garbage names hit the
+// Mongoose enum.
+const REEL_INTERACTION_EVENT_MAP = {
+  view: { name: "reel_view", category: "content" },
+  like: { name: "reel_like", category: "engagement" },
+  unlike: { name: "reel_unlike", category: "engagement" },
+  comment: { name: "reel_comment", category: "social" },
+  share: { name: "reel_share", category: "social" },
+  swipe: { name: "reel_swipe", category: "navigation" },
+  complete: { name: "reel_watch_complete", category: "engagement" },
+  watch_complete: { name: "reel_watch_complete", category: "engagement" },
+  skip: { name: "reel_skip", category: "navigation" },
+};
 
 class ReelController {
   static createReel = async (req, res) => {
@@ -320,6 +337,23 @@ class ReelController {
       reelId,
       interactionType
     );
+
+    // Bridge to engagement-service. Tagged with source='interaction-log'
+    // so analytics can de-duplicate against FE-emitted reel events.
+    const mapped = REEL_INTERACTION_EVENT_MAP[interactionType];
+    if (mapped) {
+      engagementEmitter.emit({
+        userId: String(userId),
+        eventName: mapped.name,
+        eventCategory: mapped.category,
+        properties: {
+          contentId: String(reelId),
+          contentType: "reel",
+          interactionType,
+          source: "interaction-log",
+        },
+      });
+    }
 
     res.json({
       status: "success",

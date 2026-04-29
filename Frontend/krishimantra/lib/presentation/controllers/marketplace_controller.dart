@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../data/repositories/marketplace_repository.dart';
 import '../../data/services/UserService.dart';
+import '../../data/services/engagement_service.dart';
 import 'presigned_url_controller.dart';
 import 'base_controller.dart';
 import 'dart:async';
@@ -12,6 +13,7 @@ class MarketplaceController extends BaseController {
   final UserService _userService = Get.find<UserService>();
   final PresignedUrlController _presignedUrlController =
       Get.find<PresignedUrlController>();
+  final EngagementService _engagement = EngagementService();
 
   final RxList<dynamic> marketplaceProducts = <dynamic>[].obs;
   final Rx<dynamic> selectedProduct = Rx<dynamic>(null);
@@ -99,6 +101,7 @@ class MarketplaceController extends BaseController {
             await _marketplaceRepository.getProductDetails(productId);
         if (response['success'] == true) {
           productDetails.value = response['data'];
+          _engagement.trackProductView(productId);
         } else {
           throw Exception(
               response['message'] ?? 'Failed to fetch product details');
@@ -133,6 +136,15 @@ class MarketplaceController extends BaseController {
       List<File> imageFiles,
       List<File> videoFiles,
       List<String> youtubeUrls) async {
+    _engagement.trackEvent(
+      EventName.marketplaceCreateStarted,
+      eventCategory: EventCategory.commerce,
+      properties: {
+        'imageCount': imageFiles.length,
+        'videoCount': videoFiles.length,
+        'youtubeCount': youtubeUrls.length,
+      },
+    );
     return await handleAsync<bool>(() async {
           // Get user ID
           final userId = await _userService.getUserId();
@@ -171,6 +183,13 @@ class MarketplaceController extends BaseController {
 
           // Send request to API
           await _marketplaceRepository.addMarketplaceProduct(productData);
+          _engagement.trackEvent(
+            EventName.marketplaceCreateCompleted,
+            eventCategory: EventCategory.commerce,
+            properties: {
+              'mediaCount': media.length,
+            },
+          );
           return true;
         }, showLoading: true) ??
         false;
@@ -236,6 +255,14 @@ class MarketplaceController extends BaseController {
         });
 
         comments.insert(0, newComment);
+        _engagement.trackEvent(
+          EventName.marketplaceComment,
+          eventCategory: EventCategory.social,
+          properties: {
+            'contentId': productId,
+            'contentType': 'product',
+          },
+        );
       } else {
         throw Exception(response['message'] ?? 'Failed to add comment');
       }
@@ -312,6 +339,12 @@ class MarketplaceController extends BaseController {
         if (response['success'] == true) {
           marketplaceProducts.value =
               List<Map<String, dynamic>>.from(response['data']);
+          // Only emit when the user typed a query; the no-keyword call is the
+          // initial product list, not a search.
+          final q = (keyword ?? searchTerm.value).trim();
+          if (q.isNotEmpty) {
+            _engagement.trackProductSearch(q, marketplaceProducts.length);
+          }
         } else {
           throw Exception(response['message'] ?? 'Failed to search products');
         }

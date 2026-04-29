@@ -6,6 +6,7 @@ import '../../data/models/user_model.dart';
 import '../../data/models/otp_response_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/services/UserService.dart';
+import '../../data/services/engagement_service.dart';
 import '../../data/services/feature_flag_service.dart';
 import '../../routes/app_routes.dart';
 import 'farm_profile_controller.dart';
@@ -15,6 +16,7 @@ class AuthController extends GetxController {
   final _storage = const FlutterSecureStorage();
   final AuthRepository _authRepository;
   final UserService _userService = Get.find<UserService>();
+  final EngagementService _engagement = EngagementService();
   final isPasswordVisible = false.obs;
   final Rx<UserModel?> user = Rx<UserModel?>(null);
   final RxBool isLoading = false.obs;
@@ -64,7 +66,13 @@ class AuthController extends GetxController {
       final userData = await _storage.read(key: 'user_data');
 
       if (token != null && userData != null) {
-        user.value = UserModel.fromJson(json.decode(userData));
+        final restored = UserModel.fromJson(json.decode(userData));
+        user.value = restored;
+        // Restore the engagement session for a returning user. init() is
+        // idempotent — if the session is already live it no-ops.
+        if (restored.id != null) {
+          await _engagement.init(restored.id!);
+        }
         await navigateAfterAuth();
       } else {
         Get.offAllNamed(AppRoutes.PHONE_NUMBER);
@@ -90,6 +98,19 @@ class AuthController extends GetxController {
           key: 'user_data',
           value: json.encode(userJson),
         );
+
+        // Start the engagement session and emit user_login. init() must run
+        // after the token is in storage so the session-start API call carries
+        // the Authorization header set by the Dio interceptor.
+        if (result.id != null) {
+          await _engagement.init(result.id!);
+          _engagement.trackEvent(
+            EventName.userLogin,
+            eventCategory: EventCategory.system,
+            properties: {'method': 'password'},
+          );
+        }
+
         await navigateAfterAuth();
         return true;
       } else {
@@ -172,6 +193,17 @@ class AuthController extends GetxController {
         if (response['refreshToken'] != null) {
           await _storage.write(key: 'refresh_token', value: response['refreshToken'] as String);
         }
+
+        // Phone-OTP login of an existing account. Start the session and
+        // record the login.
+        if (userModel.id != null) {
+          await _engagement.init(userModel.id!);
+          _engagement.trackEvent(
+            EventName.userLogin,
+            eventCategory: EventCategory.system,
+            properties: {'method': 'phone'},
+          );
+        }
       }
 
       return result;
@@ -228,6 +260,16 @@ class AuthController extends GetxController {
         await _storage.write(key: 'refresh_token', value: response['refreshToken'] as String);
       }
 
+      // New account created — start session and record the signup.
+      if (userModel.id != null) {
+        await _engagement.init(userModel.id!);
+        _engagement.trackEvent(
+          EventName.userSignup,
+          eventCategory: EventCategory.system,
+          properties: {'withImage': imageFile != null},
+        );
+      }
+
       return true;
     } catch (e) {
       Get.snackbar(
@@ -280,6 +322,16 @@ class AuthController extends GetxController {
   Future<void> logout() async {
     try {
       isLoading.value = true;
+
+      // Record the logout and close the engagement session BEFORE clearing
+      // local storage — endSession() flushes pending events and POSTs to
+      // sessions/end, both of which need the JWT still in storage.
+      _engagement.trackEvent(
+        EventName.userLogout,
+        eventCategory: EventCategory.system,
+      );
+      await _engagement.endSession();
+
       await _authRepository.logout();
       await _storage.deleteAll();
       await _userService.clearAllData();

@@ -2,6 +2,8 @@ const Chat = require("../models/chat.model");
 const User = require("../models/user.model");
 const MessageService = require("../services/message.service");
 const chatRoomCache = require("../utils/chatRoomCache");
+const engagementEmitter = require("../utils/engagementEmitter");
+const mainServiceClient = require("../utils/mainServiceClient");
 
 class ChatController {
   async createDirectChat(req, res) {
@@ -47,6 +49,30 @@ class ChatController {
       });
 
       await chatRoomCache.invalidate([userId, participantId]);
+
+      // Authoritative consultant-request signal. Look up the participant's
+      // account type via main-service (cached). Only emit when this is
+      // genuinely a user→consultant chat. Fire-and-forget — never block the
+      // response on analytics.
+      mainServiceClient
+        .getAccountType(participantId)
+        .then((accountType) => {
+          if (accountType !== "consultant") return;
+          return engagementEmitter.emit({
+            userId: String(userId),
+            eventName: "consultant_chat_request",
+            eventCategory: "communication",
+            properties: {
+              contentId: String(participantId),
+              contentType: "consultant",
+              chatId: String(chat._id),
+              source: "server",
+            },
+          });
+        })
+        .catch(() => {
+          // Already logged inside the helper; do not surface to user.
+        });
 
       // Add otherParticipants for the requesting user (filter out their own participant entry)
       const chatResponse = chat.toObject();

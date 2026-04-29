@@ -172,6 +172,32 @@ exports.getUserByPage = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Internal: lightweight account-type lookup. Returns just `{ accountType }`
+ * for service-to-service calls (e.g. message-svc detecting whether a chat
+ * participant is a consultant). Cheap, no populate, no PII.
+ */
+exports.getAccountTypeInternal = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: 'User id required',
+    });
+  }
+  const user = await User.findById(id).select('accountType').lean();
+  if (!user) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
+      success: false,
+      message: 'User not found',
+    });
+  }
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    accountType: user.accountType,
+  });
+});
+
+/**
  * Get user by ID
  */
 exports.getUserById = asyncHandler(async (req, res) => {

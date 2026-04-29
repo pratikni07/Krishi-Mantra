@@ -9,12 +9,16 @@ class EngagementNavigatorObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
+    // Close the prior screen-time window before opening the new screen.
+    _engagementService.markScreenExit();
     _trackScreenView(route);
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
+    // The popped route is what the user was on. Close its window first.
+    _engagementService.markScreenExit();
     if (previousRoute != null) {
       _trackScreenView(previousRoute);
     }
@@ -23,8 +27,21 @@ class EngagementNavigatorObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    _engagementService.markScreenExit();
     if (newRoute != null) {
       _trackScreenView(newRoute);
+    }
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    // didRemove fires for offstage removals (e.g. routes removed below the
+    // current top). Close the active window so we don't credit time after the
+    // screen is gone.
+    _engagementService.markScreenExit();
+    if (previousRoute != null) {
+      _trackScreenView(previousRoute);
     }
   }
 

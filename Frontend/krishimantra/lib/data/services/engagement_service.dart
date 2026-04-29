@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -26,6 +27,7 @@ class EventCategory {
 class EventName {
   // Navigation events
   static const String screenView = 'screen_view';
+  static const String screenExit = 'screen_exit';
   static const String appOpen = 'app_open';
   static const String appClose = 'app_close';
   static const String appBackground = 'app_background';
@@ -78,6 +80,42 @@ class EventName {
   static const String userLogout = 'user_logout';
   static const String userSignup = 'user_signup';
   static const String userProfileUpdate = 'user_profile_update';
+
+  // Consultant events
+  static const String consultantDirectoryView = 'consultant_directory_view';
+  static const String consultantProfileView = 'consultant_profile_view';
+  static const String consultantChatRequest = 'consultant_chat_request';
+  static const String consultantChatAccepted = 'consultant_chat_accepted';
+  static const String consultantChatCompleted = 'consultant_chat_completed';
+  static const String consultantRatingSubmitted = 'consultant_rating_submitted';
+
+  // Marketplace extras
+  static const String marketplaceCreateStarted = 'marketplace_create_started';
+  static const String marketplaceCreateCompleted = 'marketplace_create_completed';
+  static const String marketplaceComment = 'marketplace_comment';
+
+  // Crop calendar / agronomy extras
+  static const String cropActivityView = 'crop_activity_view';
+  static const String cropShare = 'crop_share';
+
+  // Mandi
+  static const String mandiListView = 'mandi_list_view';
+  static const String mandiPriceCheck = 'mandi_price_check';
+
+  // Onboarding / farm profile
+  static const String onboardingStepCompleted = 'onboarding_step_completed';
+  static const String onboardingCompleted = 'onboarding_completed';
+  static const String farmCropAdded = 'farm_crop_added';
+  static const String farmCropRemoved = 'farm_crop_removed';
+
+  // Subscription
+  static const String subscriptionPlansView = 'subscription_plans_view';
+  static const String subscriptionPlanSelected = 'subscription_plan_selected';
+  static const String subscriptionCheckoutStart = 'subscription_checkout_start';
+  static const String subscriptionPurchase = 'subscription_purchase';
+  static const String subscriptionCancelStart = 'subscription_cancel_start';
+  static const String subscriptionCancelConfirmed = 'subscription_cancel_confirmed';
+  static const String subscriptionResume = 'subscription_resume';
 }
 
 /// Screen names for tracking
@@ -107,6 +145,65 @@ class ScreenName {
   static const String otp = 'otp';
   static const String language = 'language';
 }
+
+/// Mirror of the backend `event.model.js` enum. Events with names not in
+/// this set are silently rejected by Mongoose validation on the server,
+/// so emitting one is the same as throwing the event away.
+///
+/// Keep this list in sync with `Backend-JS/engagement-service/src/models/event.model.js`.
+/// Phase 8 of the observability plan replaces this with codegen from a
+/// shared YAML source of truth.
+const Set<String> _knownEventNames = <String>{
+  // Screen events
+  'screen_view', 'screen_exit',
+  // Feed events
+  'feed_view', 'feed_like', 'feed_unlike', 'feed_comment', 'feed_share',
+  'feed_save', 'feed_create', 'feed_delete', 'feed_scroll',
+  // Reel events
+  'reel_view', 'reel_like', 'reel_unlike', 'reel_comment', 'reel_share',
+  'reel_swipe', 'reel_watch_complete', 'reel_complete', 'reel_skip',
+  // Chat events
+  'chat_open', 'chat_message_send', 'chat_message_sent', 'chat_message_received',
+  'chat_message_read', 'group_create', 'group_join', 'group_leave',
+  // Consultant events
+  'consultant_directory_view', 'consultant_profile_view',
+  'consultant_chat_request', 'consultant_chat_accepted',
+  'consultant_chat_completed', 'consultant_rating_submitted',
+  // AI events
+  'ai_chat_start', 'ai_chat_message', 'ai_message_send', 'ai_image_analyze',
+  'ai_crop_scan',
+  // Marketplace events
+  'product_view', 'product_search', 'product_filter', 'product_share',
+  'product_add_cart', 'product_purchase', 'product_inquiry',
+  'marketplace_create_started', 'marketplace_create_completed',
+  'marketplace_comment',
+  // Company events
+  'company_view', 'company_search', 'company_contact',
+  // Crop calendar / agronomy
+  'crop_calendar_view', 'crop_activity_view', 'crop_share',
+  // Mandi
+  'mandi_list_view', 'mandi_price_check',
+  // Farm profile / onboarding
+  'onboarding_step_completed', 'onboarding_completed',
+  'farm_crop_added', 'farm_crop_removed',
+  // Subscription
+  'subscription_plans_view', 'subscription_plan_selected',
+  'subscription_checkout_start', 'subscription_purchase',
+  'subscription_cancel_start', 'subscription_cancel_confirmed',
+  'subscription_resume',
+  // Content / discovery
+  'scheme_view', 'weather_check', 'video_tutorial_view',
+  // Notifications
+  'notification_click', 'notification_dismiss', 'notification_received',
+  // Profile / user lifecycle
+  'profile_view', 'profile_edit', 'settings_change',
+  'login', 'logout',
+  'user_login', 'user_logout', 'user_signup', 'user_profile_update',
+  // App lifecycle
+  'app_open', 'app_close', 'app_background', 'app_foreground',
+  // Misc
+  'search_query', 'hashtag_click', 'error', 'custom',
+};
 
 /// Engagement Service for tracking user activities
 /// Designed for high throughput with batching and offline support
@@ -198,15 +295,31 @@ class EngagementService {
     }
   }
 
-  /// Load pending events from local storage
+  /// Load pending events from local storage. Only events whose `userId`
+  /// matches the current user are restored — events from a previous login
+  /// would otherwise be reattributed to the new user (the backend stamps
+  /// the trusted userId onto every event in a batch).
   Future<void> _loadPendingEvents() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final pendingJson = prefs.getString(_pendingEventsKey);
       if (pendingJson != null) {
         final List<dynamic> pending = json.decode(pendingJson);
-        _eventBuffer.addAll(pending.cast<Map<String, dynamic>>());
-        logger.i('Loaded ${pending.length} pending events', tag: 'Engagement');
+        final mine = pending
+            .cast<Map<String, dynamic>>()
+            .where((e) => e['userId'] == _userId)
+            .toList();
+        final dropped = pending.length - mine.length;
+        _eventBuffer.addAll(mine);
+        if (dropped > 0) {
+          logger.w(
+            'Dropped $dropped pending events for other users on user switch',
+            tag: 'Engagement',
+          );
+          // Persist the filtered list so we don't carry stale entries forever.
+          await _savePendingEvents();
+        }
+        logger.i('Loaded ${mine.length} pending events', tag: 'Engagement');
       }
     } catch (e) {
       logger.e('Failed to load pending events', tag: 'Engagement', error: e);
@@ -275,6 +388,11 @@ class EngagementService {
       logger.e('Failed to end session', tag: 'Engagement', error: e);
     } finally {
       _sessionId = null;
+      _userId = null;
+      _currentScreen = null;
+      _previousScreen = null;
+      _screenEnteredAt = null;
+      _isInitialized = false;
       _stopTimers();
     }
   }
@@ -286,6 +404,19 @@ class EngagementService {
     Map<String, dynamic>? properties,
   }) {
     if (_userId == null) return;
+
+    // Catch typos / drift from the backend enum during development.
+    // Non-fatal because Phase 2 of the observability plan still has to
+    // reconcile a number of pre-existing FE/BE drift cases. Once Phase 2
+    // lands, swap this for an `assert` so unknown names fail fast in dev.
+    if (kDebugMode && !_knownEventNames.contains(eventName)) {
+      logger.w(
+        'Engagement: emitting event "$eventName" not in backend enum — '
+        'will be silently rejected by Mongoose. Add it to the BE enum '
+        'and to _knownEventNames in engagement_service.dart.',
+        tag: 'Engagement',
+      );
+    }
 
     final event = {
       'userId': _userId,
@@ -325,20 +456,28 @@ class EngagementService {
     );
   }
 
+  /// Close the screen-time window for the current screen and emit a
+  /// `screen_exit` event with duration. Safe to call multiple times — only
+  /// fires once per screen entry. Called by the navigator observer on push/pop
+  /// and by the lifecycle observer when the app goes to background.
+  void markScreenExit() => _trackScreenTime();
+
   /// Track screen time for current screen
   void _trackScreenTime() {
     if (_currentScreen != null && _screenEnteredAt != null) {
       final duration = DateTime.now().difference(_screenEnteredAt!).inSeconds;
       if (duration > 0) {
         trackEvent(
-          'screen_time',
-          eventCategory: EventCategory.engagement,
+          EventName.screenExit,
+          eventCategory: EventCategory.navigation,
           properties: {
             'screenName': _currentScreen,
+            'previousScreen': _previousScreen,
             'duration': duration,
           },
         );
       }
+      _screenEnteredAt = null;
     }
   }
 
@@ -627,13 +766,22 @@ class EngagementService {
   void onAppLifecycleChange(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.paused:
+        // Close the active screen-time window before going to background so
+        // the duration isn't lost or inflated by background time.
+        _trackScreenTime();
         trackEvent(EventName.appBackground, eventCategory: EventCategory.navigation);
         _flushEvents();
         break;
       case AppLifecycleState.resumed:
+        // Reset the screen entry timestamp so post-resume time isn't credited
+        // to the pre-pause window.
+        if (_currentScreen != null) {
+          _screenEnteredAt = DateTime.now();
+        }
         trackEvent(EventName.appForeground, eventCategory: EventCategory.navigation);
         break;
       case AppLifecycleState.detached:
+        _trackScreenTime();
         endSession();
         break;
       default:

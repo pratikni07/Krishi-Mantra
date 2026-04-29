@@ -340,6 +340,32 @@ const internalAuth = async (req, res, next) => {
   }
 };
 
+/**
+ * Stronger internal service auth using a shared secret. Use this for new
+ * endpoints that expose user data to other services. The legacy `internalAuth`
+ * above only checks a header presence flag and should be migrated over time.
+ *
+ * Sender side must pass `X-Service-Token: $INTERNAL_SERVICE_SECRET`.
+ * Fails closed if the env var isn't configured.
+ */
+const requireInternalService = (req, res, next) => {
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (!secret) {
+    return res.status(HTTP_STATUS.FORBIDDEN).json({
+      success: false,
+      message: 'Server missing INTERNAL_SERVICE_SECRET; refusing internal request.',
+    });
+  }
+  const provided = req.header('x-service-token');
+  if (!provided || provided !== secret) {
+    return res.status(HTTP_STATUS.FORBIDDEN).json({
+      success: false,
+      message: 'Invalid or missing X-Service-Token.',
+    });
+  }
+  next();
+};
+
 module.exports = {
   auth,
   authorize,
@@ -349,6 +375,7 @@ module.exports = {
   isMarketplace,
   optionalAuth,
   internalAuth,
+  requireInternalService,
   adminAuth,
   iotServiceAuth,
 };

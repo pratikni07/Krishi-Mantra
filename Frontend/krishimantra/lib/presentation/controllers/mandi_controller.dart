@@ -2,11 +2,14 @@ import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import '../../data/services/mandi_service.dart';
 import '../../data/services/LocationService.dart';
+import '../../data/services/engagement_service.dart';
 import '../../data/msp_data.dart';
 
 class MandiController extends GetxController {
   final MandiService _mandiService = MandiService.getInstance();
   final LocationService _locationService = LocationService();
+  final EngagementService _engagement = EngagementService();
+  bool _firstLoadEmitted = false;
 
   final RxList<Map<String, dynamic>> allPrices = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> filteredPrices = <Map<String, dynamic>>[].obs;
@@ -56,10 +59,23 @@ class MandiController extends GetxController {
       );
 
       allPrices.value = prices;
-      
+
+      if (!_firstLoadEmitted) {
+        _engagement.trackEvent(
+          EventName.mandiListView,
+          eventCategory: EventCategory.content,
+          properties: {
+            'recordCount': prices.length,
+            if (selectedState.value.isNotEmpty) 'state': selectedState.value,
+            if (selectedDistrict.value.isNotEmpty) 'district': selectedDistrict.value,
+          },
+        );
+        _firstLoadEmitted = true;
+      }
+
       // 3. Update filter options based on available data
       _updateFilterOptions(prices);
-      
+
       // 4. Initial search application with resetting pagination
       currentPage.value = 1;
       hasMore.value = true;
@@ -119,10 +135,10 @@ class MandiController extends GetxController {
       final market = item['market'].toString().toLowerCase();
       final district = item['district'].toString().toLowerCase();
       final state = item['state'].toString().toLowerCase();
-      
-      return commodity.contains(q) || 
-             market.contains(q) || 
-             district.contains(q) || 
+
+      return commodity.contains(q) ||
+             market.contains(q) ||
+             district.contains(q) ||
              state.contains(q);
     }).toList();
 
@@ -138,6 +154,36 @@ class MandiController extends GetxController {
       filteredPrices.assignAll(results.sublist(0, endIndex));
       hasMore.value = true;
     }
+
+    // Only emit when this is a real user-typed search (skip the initial
+    // empty-query call that runs after every refreshPrices()).
+    if (resetPagination && query.trim().isNotEmpty) {
+      _engagement.trackEvent(
+        'search_query',
+        eventCategory: EventCategory.content,
+        properties: {
+          'searchType': 'mandi',
+          'searchQuery': query,
+          'resultsCount': results.length,
+        },
+      );
+    }
+  }
+
+  /// Called from the UI when a user taps a specific mandi-price row to view
+  /// details. Captures the "what are you actually checking" signal that the
+  /// list-level events miss.
+  void trackPriceCheck(Map<String, dynamic> record) {
+    _engagement.trackEvent(
+      EventName.mandiPriceCheck,
+      eventCategory: EventCategory.content,
+      properties: {
+        'commodity': record['commodity']?.toString(),
+        'state': record['state']?.toString(),
+        'district': record['district']?.toString(),
+        'market': record['market']?.toString(),
+      },
+    );
   }
 
   void loadMore() {

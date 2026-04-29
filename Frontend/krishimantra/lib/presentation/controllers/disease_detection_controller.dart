@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/models/disease_result.dart';
 import '../../data/services/disease_detection_service.dart';
+import '../../data/services/engagement_service.dart';
 
 class DiseaseDetectionController extends GetxController {
   final Rx<File?> selectedImage = Rx<File?>(null);
@@ -12,6 +13,7 @@ class DiseaseDetectionController extends GetxController {
   final RxList<DiseaseResult> scanHistory = <DiseaseResult>[].obs;
 
   final ImagePicker _picker = ImagePicker();
+  final EngagementService _engagement = EngagementService();
 
   Future<void> pickFromCamera() async {
     try {
@@ -55,6 +57,7 @@ class DiseaseDetectionController extends GetxController {
     if (selectedImage.value == null) return;
     isScanning.value = true;
     errorMessage.value = '';
+    final startedAt = DateTime.now();
     try {
       final service = await DiseaseDetectionService.getInstance();
       final detection = await service.detect(selectedImage.value!);
@@ -64,8 +67,27 @@ class DiseaseDetectionController extends GetxController {
           scanHistory.length < 20) {
         scanHistory.insert(0, detection);
       }
+      // Record only diagnostic metadata. Never log image bytes or paths.
+      _engagement.trackEvent(
+        EventName.aiCropScan,
+        eventCategory: EventCategory.ai,
+        properties: {
+          'success': true,
+          'isHealthy': detection.isHealthy,
+          'diseaseName': detection.diseaseName,
+          'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
     } catch (e) {
       errorMessage.value = 'Scan failed. Please try again.';
+      _engagement.trackEvent(
+        EventName.aiCropScan,
+        eventCategory: EventCategory.ai,
+        properties: {
+          'success': false,
+          'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
     } finally {
       isScanning.value = false;
     }

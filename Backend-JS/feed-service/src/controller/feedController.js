@@ -9,6 +9,19 @@ const {
   updateUserInterestForInteraction,
 } = require("../utils/interactionUtils");
 const notificationService = require("../services/notificationService");
+const engagementEmitter = require("../utils/engagementEmitter");
+
+// interactionType (from /feeds/user/interaction) -> engagement event name.
+// Only types in this map produce a parallel engagement event; unknown
+// types are kept out of the analytics stream so no garbage names hit the
+// Mongoose enum.
+const INTERACTION_EVENT_MAP = {
+  view: { name: "feed_view", category: "content" },
+  like: { name: "feed_like", category: "engagement" },
+  comment: { name: "feed_comment", category: "social" },
+  share: { name: "feed_share", category: "social" },
+  save: { name: "feed_save", category: "engagement" },
+};
 
 const FEED_CACHE_KEY = "feed:";
 const COMMENTS_CACHE_KEY = "comments:";
@@ -652,6 +665,23 @@ class FeedController {
       await userInterest.save();
       await redis.del(`${USER_INTEREST_CACHE_KEY}${userId}`);
       await redis.del(`${RECOMMENDED_FEEDS_CACHE_KEY}${userId}`);
+
+      // Bridge to engagement-service. Tagged with source='interaction-log'
+      // so analytics can de-duplicate against FE-emitted feed events.
+      const mapped = INTERACTION_EVENT_MAP[interactionType];
+      if (mapped) {
+        engagementEmitter.emit({
+          userId: String(userId),
+          eventName: mapped.name,
+          eventCategory: mapped.category,
+          properties: {
+            contentId: String(feedId),
+            contentType: "feed",
+            interactionType,
+            source: "interaction-log",
+          },
+        });
+      }
 
       res.json({ success: true });
     } catch (error) {

@@ -190,6 +190,26 @@ class SessionService {
   }
 
   /**
+   * Touch a session to keep it alive — bumps `lastActivity` and optionally
+   * records the user's current screen. Used by the heartbeat endpoint.
+   * Does NOT write an event row. Cheap per-session UPDATE only.
+   */
+  static async touchSession(sessionId, { currentScreen } = {}) {
+    try {
+      const update = { lastActivity: new Date() };
+      if (currentScreen) update.currentScreen = currentScreen;
+      await Session.updateOne(
+        { sessionId, isActive: true },
+        { $set: update }
+      );
+      return true;
+    } catch (error) {
+      logger.error('Error touching session:', error.message);
+      return false;
+    }
+  }
+
+  /**
    * Get session details
    */
   static async getSession(sessionId) {

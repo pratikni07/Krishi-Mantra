@@ -37,6 +37,7 @@ const eventSchema = new mongoose.Schema(
         'feed_save',
         'feed_create',
         'feed_delete',
+        'feed_scroll',
 
         // Reel events
         'reel_view',
@@ -46,19 +47,33 @@ const eventSchema = new mongoose.Schema(
         'reel_share',
         'reel_swipe',
         'reel_watch_complete',
+        'reel_complete',
+        'reel_skip',
 
         // Chat events
         'chat_open',
         'chat_message_send',
+        'chat_message_sent',
+        'chat_message_received',
         'chat_message_read',
         'group_create',
         'group_join',
         'group_leave',
 
+        // Consultant events (file 03 of the observability plan)
+        'consultant_directory_view',
+        'consultant_profile_view',
+        'consultant_chat_request',
+        'consultant_chat_accepted',
+        'consultant_chat_completed',
+        'consultant_rating_submitted',
+
         // AI events
         'ai_chat_start',
+        'ai_chat_message',
         'ai_message_send',
         'ai_image_analyze',
+        'ai_crop_scan',
 
         // Marketplace events
         'product_view',
@@ -67,26 +82,70 @@ const eventSchema = new mongoose.Schema(
         'product_share',
         'product_add_cart',
         'product_purchase',
+        'product_inquiry',
+        'marketplace_create_started',
+        'marketplace_create_completed',
+        'marketplace_comment',
 
         // Company events
         'company_view',
         'company_search',
         'company_contact',
 
-        // Other events
-        'search_query',
-        'hashtag_click',
+        // Crop calendar / agronomy events
+        'crop_calendar_view',
+        'crop_activity_view',
+        'crop_share',
+
+        // Mandi events
+        'mandi_list_view',
+        'mandi_price_check',
+
+        // Farm profile / onboarding events
+        'onboarding_step_completed',
+        'onboarding_completed',
+        'farm_crop_added',
+        'farm_crop_removed',
+
+        // Subscription events
+        'subscription_plans_view',
+        'subscription_plan_selected',
+        'subscription_checkout_start',
+        'subscription_purchase',
+        'subscription_cancel_start',
+        'subscription_cancel_confirmed',
+        'subscription_resume',
+
+        // Content / discovery
+        'scheme_view',
+        'weather_check',
+        'video_tutorial_view',
+
+        // Notifications
         'notification_click',
         'notification_dismiss',
+        'notification_received',
+
+        // Profile / user lifecycle
         'profile_view',
         'profile_edit',
         'settings_change',
         'login',
         'logout',
+        'user_login',
+        'user_logout',
+        'user_signup',
+        'user_profile_update',
+
+        // App lifecycle
         'app_open',
         'app_close',
         'app_background',
         'app_foreground',
+
+        // Misc
+        'search_query',
+        'hashtag_click',
         'error',
         'custom',
       ],
@@ -114,7 +173,23 @@ const eventSchema = new mongoose.Schema(
       contentId: String,
       contentType: {
         type: String,
-        enum: ['feed', 'reel', 'product', 'company', 'scheme', 'crop', 'chat', 'message', 'notification'],
+        enum: [
+          'feed',
+          'reel',
+          'product',
+          'company',
+          'scheme',
+          'crop',
+          'chat',
+          'message',
+          'notification',
+          'consultant',
+          'mandi',
+          'subscription',
+          'tutorial',
+          'farm',
+          'activity',
+        ],
       },
 
       // Screen tracking

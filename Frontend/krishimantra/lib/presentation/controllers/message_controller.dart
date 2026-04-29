@@ -388,6 +388,13 @@ class MessageController extends GetxController {
       final fetchedConsultants = await _messageRepository.getConsultants();
 
       consultants.value = fetchedConsultants;
+      _engagementService.trackEvent(
+        EventName.consultantDirectoryView,
+        eventCategory: EventCategory.communication,
+        properties: {
+          'resultsCount': fetchedConsultants.length,
+        },
+      );
     } catch (e) {
       consultantError.value = 'Failed to load consultants';
     } finally {

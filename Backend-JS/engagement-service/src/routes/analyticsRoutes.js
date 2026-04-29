@@ -10,6 +10,7 @@
 const express = require('express');
 const router = express.Router();
 const AnalyticsController = require('../controllers/analyticsController');
+const { requireAuthedUser, requireAdmin } = require('../middlewares/auth');
 
 // Dashboard
 router.get('/dashboard', AnalyticsController.getDashboard); // New flexible dashboard endpoint
@@ -30,6 +31,15 @@ router.get('/hourly', AnalyticsController.getHourlyPattern); // New hourly patte
 // User analytics
 router.get('/users/:userId', AnalyticsController.getUserAnalytics);
 router.get('/leaderboard', AnalyticsController.getLeaderboard);
+
+// Consultant leaderboard — admin-only because it exposes per-consultant
+// engagement counts across all users.
+router.get(
+  '/consultants/leaderboard',
+  requireAuthedUser,
+  requireAdmin,
+  AnalyticsController.getConsultantsLeaderboard
+);
 
 // Retention and churn
 router.get('/retention', AnalyticsController.getRetentionMetrics);
